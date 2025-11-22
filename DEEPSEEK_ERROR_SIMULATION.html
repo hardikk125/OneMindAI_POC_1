@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSeek Error Recovery Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .progress-bar { transition: width 0.5s ease-in-out; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-8">
+
+    <!-- Header -->
+    <header class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <div class="w-12 h-12 bg-[#0F172A] rounded-lg flex items-center justify-center text-white font-bold text-xl">DS</div>
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">DeepSeek Error Recovery</h1>
+                <p class="text-gray-600">Official DeepSeek API error codes with auto-recovery simulation</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Metrics Dashboard -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Total DeepSeek Errors</div>
+            <div class="text-3xl font-bold text-gray-900">7</div>
+            <div class="text-xs text-green-600 mt-1">Official API Errors</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Auto-Fixable</div>
+            <div class="text-3xl font-bold text-green-600">3</div>
+            <div class="text-xs text-gray-500 mt-1">429, 500, 503 (Retried)</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Manual Fix Required</div>
+            <div class="text-3xl font-bold text-orange-600">4</div>
+            <div class="text-xs text-gray-500 mt-1">400, 401, 402, 422</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Pricing</div>
+            <div class="text-2xl font-bold text-blue-600">$0.14-$0.28</div>
+            <div class="text-xs text-gray-500 mt-1">per 1M tokens (Ultra low!)</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Sidebar: Error Catalog -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- Auto-Fixable Errors -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-4 bg-green-50 border-b border-green-100 flex justify-between items-center">
+                    <h2 class="font-semibold text-green-800 flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Auto-Fixable (3)
+                    </h2>
+                    <span class="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">System Handles</span>
+                </div>
+                <div class="divide-y divide-gray-100">
+                    <button onclick="simulateAutoFix('DEEPSEEK_RATE_LIMIT', 429)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">429 - Rate Limit Reached</div>
+                            <div class="text-xs text-gray-500">Sending requests too quickly</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('DEEPSEEK_SERVER_ERROR', 500)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">500 - Server Error</div>
+                            <div class="text-xs text-gray-500">Server encounters an issue</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('DEEPSEEK_SERVER_OVERLOADED', 503)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">503 - Server Overloaded</div>
+                            <div class="text-xs text-gray-500">High traffic congestion</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manual Fix Errors -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-4 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
+                    <h2 class="font-semibold text-orange-800 flex items-center gap-2">
+                        <i data-lucide="alert-triangle" class="w-4 h-4"></i> Manual Fix (4)
+                    </h2>
+                    <span class="text-xs bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full">User Must Act</span>
+                </div>
+                <div class="divide-y divide-gray-100">
+                    <button onclick="simulateManualError('DEEPSEEK_INVALID_FORMAT')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">400 - Invalid Format</div>
+                            <div class="text-xs text-gray-500">Invalid request body format</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('DEEPSEEK_AUTH_FAILS')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">401 - Authentication Fails</div>
+                            <div class="text-xs text-gray-500">Wrong API key</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('DEEPSEEK_INSUFFICIENT_BALANCE')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">402 - Insufficient Balance</div>
+                            <div class="text-xs text-gray-500">Run out of balance</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('DEEPSEEK_INVALID_PARAMETERS')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">422 - Invalid Parameters</div>
+                            <div class="text-xs text-gray-500">Invalid request parameters</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- DeepSeek Info -->
+            <div class="bg-blue-50 rounded-xl shadow-sm border border-blue-200 p-4">
+                <h3 class="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                    <i data-lucide="info" class="w-4 h-4"></i> DeepSeek Platform
+                </h3>
+                <div class="text-xs text-blue-800 space-y-1">
+                    <p>🌐 <a href="https://platform.deepseek.com" target="_blank" class="underline">platform.deepseek.com</a></p>
+                    <p>📚 <a href="https://platform.deepseek.com/api-docs" target="_blank" class="underline">API Documentation</a></p>
+                    <p>💰 <a href="https://platform.deepseek.com/top_up" target="_blank" class="underline">Top Up Balance</a></p>
+                    <p>🔑 <a href="https://platform.deepseek.com/api_keys" target="_blank" class="underline">Manage API Keys</a></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Panel: Error Display -->
+        <div class="lg:col-span-2">
+            
+            <!-- Placeholder State -->
+            <div id="placeholderState" class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                <div class="text-6xl mb-4">🛡️</div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">DeepSeek Error Recovery System</h3>
+                <p class="text-gray-600 mb-6">Click any error on the left to see how it's handled</p>
+                <div class="flex gap-2 justify-center flex-wrap">
+                    <span class="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">✅ Auto-retry with backoff</span>
+                    <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">✅ Detailed error panels</span>
+                    <span class="px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">✅ Plain English explanations</span>
+                </div>
+            </div>
+
+            <!-- Error Panel (Hidden by default) -->
+            <div id="errorPanel" class="hidden bg-white rounded-xl shadow-sm border-2 border-orange-400 overflow-hidden">
+                <!-- Error Header -->
+                <div class="bg-orange-50 p-4 border-b border-orange-200 flex justify-between items-start">
+                    <div class="flex items-start gap-3">
+                        <span id="errorIcon" class="text-3xl">🔶</span>
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <h3 id="errorCode" class="font-bold text-gray-900 text-lg">ERROR_CODE</h3>
+                                <span id="errorBadge" class="px-2 py-0.5 bg-orange-200 text-orange-800 text-xs rounded-full font-medium">Medium</span>
+                            </div>
+                            <p class="text-sm text-gray-600">Provider: <span class="font-semibold text-[#0F172A]">DeepSeek</span></p>
+                        </div>
+                    </div>
+                    <button onclick="closePanel()" class="text-gray-400 hover:text-gray-600">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <!-- Plain English Explanation -->
+                <div class="p-4 bg-blue-50 border-b border-blue-100">
+                    <h4 class="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                        <i data-lucide="message-circle" class="w-4 h-4"></i> What's Happening
+                    </h4>
+                    <div class="text-sm text-blue-800 space-y-2">
+                        <p><strong>What it means:</strong> <span id="whatItMeans"></span></p>
+                        <p><strong>Why it happens:</strong> <span id="whyItHappens"></span></p>
+                        <p><strong>How it affects you:</strong> <span id="howItAffects"></span></p>
+                    </div>
+                </div>
+
+                <!-- Auto-Retry Timeline (for auto-fixable errors) -->
+                <div id="retryTimeline" class="hidden p-4 bg-green-50 border-b border-green-100">
+                    <h4 class="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Auto-Retry Timeline
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-800 font-bold text-sm">1</div>
+                            <div class="flex-1">
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="progress1" class="h-full bg-green-500 progress-bar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <span class="text-xs text-gray-600 w-16">Wait 1s</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-800 font-bold text-sm">2</div>
+                            <div class="flex-1">
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="progress2" class="h-full bg-green-500 progress-bar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <span class="text-xs text-gray-600 w-16">Wait 2s</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-800 font-bold text-sm">3</div>
+                            <div class="flex-1">
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="progress3" class="h-full bg-green-500 progress-bar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <span class="text-xs text-gray-600 w-16">Wait 4s</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-800 font-bold text-sm">4</div>
+                            <div class="flex-1">
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="progress4" class="h-full bg-green-500 progress-bar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <span class="text-xs text-gray-600 w-16">Wait 8s</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-green-700 mt-3 italic">⏱️ Total retry time: ~15 seconds with exponential backoff</p>
+                </div>
+
+                <!-- Fix Instructions (CELLAR MESSAGE) -->
+                <div id="fixInstructions" class="p-4">
+                    <h4 class="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                        <i data-lucide="wrench" class="w-4 h-4"></i> How to Fix
+                    </h4>
+                    
+                    <!-- Technical Steps -->
+                    <div class="mb-4">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-2">🔧 Technical Steps:</h5>
+                        <ol id="technicalFixes" class="list-decimal list-inside text-sm text-gray-600 space-y-1 ml-2">
+                        </ol>
+                    </div>
+                    
+                    <!-- Business Steps -->
+                    <div class="mb-4">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-2">💼 Business Steps:</h5>
+                        <ol id="businessFixes" class="list-decimal list-inside text-sm text-gray-600 space-y-1 ml-2">
+                        </ol>
+                    </div>
+                    
+                    <!-- Escalation -->
+                    <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <h5 class="text-xs font-semibold text-gray-700 mb-1">📞 Need Help?</h5>
+                        <p id="escalation" class="text-xs text-gray-600"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Error data based on DeepSeek official documentation
+        const errorData = {
+            // Auto-fixable errors
+            DEEPSEEK_RATE_LIMIT: {
+                code: 'DEEPSEEK_RATE_LIMIT',
+                icon: '🔶',
+                severity: 'Medium',
+                severityColor: 'orange',
+                retryable: true,
+                plainEnglish: {
+                    whatItMeans: 'Sending requests too quickly',
+                    whyItHappens: 'Exceeded DeepSeek rate limits',
+                    howItAffects: 'Temporarily blocked - will retry automatically'
+                },
+                tech: [
+                    'Reduce request frequency',
+                    'Implement exponential backoff (already done automatically)',
+                    'Consider request batching',
+                    'Monitor rate limit headers',
+                    'Temporarily switch to alternative providers (OpenAI, Claude)'
+                ],
+                biz: [
+                    'Sending requests too quickly',
+                    'System will retry automatically',
+                    'Consider upgrading plan for higher limits',
+                    'Temporarily use alternative AI providers'
+                ],
+                escalation: 'Contact DeepSeek support for higher rate limits'
+            },
+            DEEPSEEK_SERVER_ERROR: {
+                code: 'DEEPSEEK_SERVER_ERROR',
+                icon: '🔴',
+                severity: 'High',
+                severityColor: 'red',
+                retryable: true,
+                plainEnglish: {
+                    whatItMeans: 'DeepSeek server encountered an issue',
+                    whyItHappens: 'Internal server problem on DeepSeek side',
+                    howItAffects: 'Temporary issue - will retry automatically'
+                },
+                tech: [
+                    'Wait 1-2 minutes before retrying',
+                    'System will retry automatically',
+                    'Check DeepSeek status page',
+                    'If persists, contact DeepSeek support'
+                ],
+                biz: [
+                    'DeepSeek server is experiencing issues',
+                    'System will retry automatically',
+                    'Usually resolves within minutes',
+                    'Consider using alternative providers temporarily'
+                ],
+                escalation: 'If persists >10 minutes, contact DeepSeek support'
+            },
+            DEEPSEEK_SERVER_OVERLOADED: {
+                code: 'DEEPSEEK_SERVER_OVERLOADED',
+                icon: '🔴',
+                severity: 'High',
+                severityColor: 'red',
+                retryable: true,
+                plainEnglish: {
+                    whatItMeans: 'DeepSeek servers are overloaded',
+                    whyItHappens: 'High traffic on DeepSeek platform',
+                    howItAffects: 'Temporary congestion - will retry automatically'
+                },
+                tech: [
+                    'Wait 30-60 seconds before retrying',
+                    'System will retry automatically with backoff',
+                    'Peak usage hours may have longer waits',
+                    'Consider request scheduling during off-peak hours'
+                ],
+                biz: [
+                    'DeepSeek servers are experiencing high traffic',
+                    'System will retry automatically',
+                    'May take a few minutes to process',
+                    'Consider using alternative providers during peak hours'
+                ],
+                escalation: 'If consistently overloaded, contact DeepSeek about capacity'
+            },
+            
+            // Manual fix errors
+            DEEPSEEK_INVALID_FORMAT: {
+                code: 'DEEPSEEK_INVALID_FORMAT',
+                icon: '🔶',
+                severity: 'Medium',
+                severityColor: 'orange',
+                retryable: false,
+                plainEnglish: {
+                    whatItMeans: 'Your request format is incorrect',
+                    whyItHappens: 'The request body doesn\'t match DeepSeek API requirements',
+                    howItAffects: 'Request rejected - need to fix the format'
+                },
+                tech: [
+                    'Check request body format against DeepSeek API docs',
+                    'Verify JSON structure is valid',
+                    'Ensure all required fields are present',
+                    'Check parameter types match API requirements'
+                ],
+                biz: [
+                    'Request format needs correction',
+                    'Review DeepSeek API documentation',
+                    'Contact developer to fix request structure'
+                ],
+                escalation: 'Refer to DeepSeek API Docs: https://platform.deepseek.com/api-docs'
+            },
+            DEEPSEEK_AUTH_FAILS: {
+                code: 'DEEPSEEK_AUTH_FAILS',
+                icon: '🚨',
+                severity: 'Critical',
+                severityColor: 'red',
+                retryable: false,
+                plainEnglish: {
+                    whatItMeans: 'Authentication failed',
+                    whyItHappens: 'Wrong API key or invalid credentials',
+                    howItAffects: 'Cannot access DeepSeek API - need valid API key'
+                },
+                tech: [
+                    'Go to DeepSeek platform: https://platform.deepseek.com',
+                    'Navigate to API Keys section',
+                    'Create a new API key or verify existing one',
+                    'Update API key in application settings',
+                    'Ensure no extra spaces or characters in key'
+                ],
+                biz: [
+                    'API key is invalid or missing',
+                    'Go to Settings → DeepSeek API Key',
+                    'Enter valid API key from DeepSeek platform',
+                    'Save and retry request'
+                ],
+                escalation: 'If you don\'t have an API key, create one at https://platform.deepseek.com'
+            },
+            DEEPSEEK_INSUFFICIENT_BALANCE: {
+                code: 'DEEPSEEK_INSUFFICIENT_BALANCE',
+                icon: '🚨',
+                severity: 'Critical',
+                severityColor: 'red',
+                retryable: false,
+                plainEnglish: {
+                    whatItMeans: 'Account balance is zero',
+                    whyItHappens: 'You\'ve run out of credits',
+                    howItAffects: 'Cannot make requests - need to add funds'
+                },
+                tech: [
+                    'Go to DeepSeek platform: https://platform.deepseek.com',
+                    'Check account balance',
+                    'Navigate to Top up page',
+                    'Add funds to account',
+                    'Wait for payment confirmation'
+                ],
+                biz: [
+                    'Account has run out of credits',
+                    'Go to DeepSeek platform',
+                    'Add funds to continue using API',
+                    'Consider setting up auto-recharge'
+                ],
+                escalation: 'Top up at https://platform.deepseek.com/top_up'
+            },
+            DEEPSEEK_INVALID_PARAMETERS: {
+                code: 'DEEPSEEK_INVALID_PARAMETERS',
+                icon: '🔶',
+                severity: 'Medium',
+                severityColor: 'orange',
+                retryable: false,
+                plainEnglish: {
+                    whatItMeans: 'Request parameters are invalid',
+                    whyItHappens: 'One or more parameters don\'t match API requirements',
+                    howItAffects: 'Request rejected - need to fix parameters'
+                },
+                tech: [
+                    'Review error message for specific parameter issues',
+                    'Check DeepSeek API docs for parameter requirements',
+                    'Verify parameter types and values',
+                    'Ensure model name is correct (deepseek-chat or deepseek-coder)',
+                    'Check max_tokens, temperature are within valid ranges'
+                ],
+                biz: [
+                    'Request parameters need correction',
+                    'Review error message hints',
+                    'Contact developer to fix parameters'
+                ],
+                escalation: 'Refer to DeepSeek API Docs: https://platform.deepseek.com/api-docs'
+            }
+        };
+
+        function simulateAutoFix(errorCode, statusCode) {
+            const data = errorData[errorCode];
+            showErrorPanel(data);
+            
+            // Show retry timeline
+            document.getElementById('retryTimeline').classList.remove('hidden');
+            
+            // Animate retry attempts
+            animateRetries();
+        }
+
+        function simulateManualError(errorCode) {
+            const data = errorData[errorCode];
+            showErrorPanel(data);
+            
+            // Hide retry timeline for manual errors
+            document.getElementById('retryTimeline').classList.add('hidden');
+        }
+
+        function showErrorPanel(data) {
+            // Hide placeholder, show error panel
+            document.getElementById('placeholderState').classList.add('hidden');
+            document.getElementById('errorPanel').classList.remove('hidden');
+            
+            // Update header
+            document.getElementById('errorIcon').textContent = data.icon;
+            document.getElementById('errorCode').textContent = data.code;
+            document.getElementById('errorBadge').textContent = data.severity;
+            document.getElementById('errorBadge').className = `px-2 py-0.5 bg-${data.severityColor}-200 text-${data.severityColor}-800 text-xs rounded-full font-medium`;
+            
+            // Update plain English
+            document.getElementById('whatItMeans').textContent = data.plainEnglish.whatItMeans;
+            document.getElementById('whyItHappens').textContent = data.plainEnglish.whyItHappens;
+            document.getElementById('howItAffects').textContent = data.plainEnglish.howItAffects;
+            
+            // Populate lists
+            const techList = document.getElementById('technicalFixes');
+            techList.innerHTML = data.tech.map(t => `<li>${t}</li>`).join('');
+            
+            const bizList = document.getElementById('businessFixes');
+            bizList.innerHTML = data.biz.map(b => `<li>${b}</li>`).join('');
+            
+            document.getElementById('escalation').textContent = data.escalation;
+        }
+
+        function animateRetries() {
+            const delays = [1000, 2000, 4000, 8000];
+            let currentTime = 0;
+            
+            delays.forEach((delay, index) => {
+                setTimeout(() => {
+                    document.getElementById(`progress${index + 1}`).style.width = '100%';
+                }, currentTime);
+                currentTime += delay;
+            });
+            
+            // Reset after animation
+            setTimeout(() => {
+                for (let i = 1; i <= 4; i++) {
+                    document.getElementById(`progress${i}`).style.width = '0%';
+                }
+            }, currentTime + 1000);
+        }
+
+        function closePanel() {
+            document.getElementById('errorPanel').classList.add('hidden');
+            document.getElementById('placeholderState').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

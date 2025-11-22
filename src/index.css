@@ -1,0 +1,643 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Error Recovery Panel Animations */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-progress {
+  animation: progress 2s ease-in-out infinite;
+}
+
+/* Optional: hide horizontal tab scrollbar on supported browsers */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Custom scrollbar for streaming content */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Prose styling for markdown content */
+.prose {
+  color: #374151;
+  line-height: 1.6;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  color: #111827;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose h1 { font-size: 1.5em; }
+.prose h2 { font-size: 1.3em; }
+.prose h3 { font-size: 1.1em; }
+
+.prose p {
+  margin-bottom: 1em;
+}
+
+.prose ul, .prose ol {
+  margin-bottom: 1em;
+  padding-left: 1.5em;
+}
+
+.prose li {
+  margin-bottom: 0.25em;
+}
+
+.prose code {
+  background-color: #f3f4f6;
+  padding: 0.125em 0.25em;
+  border-radius: 0.25em;
+  font-size: 0.875em;
+  font-family: 'Courier New', monospace;
+}
+
+.prose pre {
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 1em;
+  border-radius: 0.5em;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.prose pre code {
+  background-color: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.prose blockquote {
+  border-left: 4px solid #d1d5db;
+  padding-left: 1em;
+  margin: 1em 0;
+  font-style: italic;
+  color: #6b7280;
+}
+
+.prose strong {
+  font-weight: 600;
+  color: #111827;
+}
+
+.prose em {
+  font-style: italic;
+}
+
+.prose a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.prose a:hover {
+  color: #1d4ed8;
+}
+
+/* Enhanced table styling */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.875em;
+  background: white;
+  border-radius: 0.5em;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.prose table thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.prose table th {
+  padding: 0.75em 1em;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #4c51bf;
+}
+
+.prose table td {
+  padding: 0.75em 1em;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.prose table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.prose table tbody tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.prose table tbody tr:hover {
+  background-color: #edf2f7;
+}
+
+.prose table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Responsive tables */
+.prose table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Table cell alignment */
+.prose table td,
+.prose table th {
+  white-space: nowrap;
+}
+
+.prose table td.wrap,
+.prose table th.wrap {
+  white-space: normal;
+}
+
+/* Enhanced markdown list styling */
+.prose ul {
+  list-style-type: disc;
+}
+
+.prose ol {
+  list-style-type: decimal;
+}
+
+.prose ul li::marker {
+  color: #6b7280;
+}
+
+.prose ol li::marker {
+  color: #6b7280;
+  font-weight: 600;
+}
+
+/* Table styling for markdown-content class */
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.875em;
+  background: white;
+  border-radius: 0.5em;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.markdown-content table thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.markdown-content table th {
+  padding: 0.75em 1em;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #4c51bf;
+}
+
+.markdown-content table td {
+  padding: 0.75em 1em;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.markdown-content table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.markdown-content table tbody tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.markdown-content table tbody tr:hover {
+  background-color: #edf2f7;
+}
+
+.markdown-content table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Responsive tables for markdown-content */
+.markdown-content table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Table cell alignment for markdown-content */
+.markdown-content table td,
+.markdown-content table th {
+  white-space: nowrap;
+}
+
+.markdown-content table td.wrap,
+.markdown-content table th.wrap {
+  white-space: normal;
+}
+
+/* Horizontal rule */
+.prose hr {
+  border: none;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d1d5db, transparent);
+  margin: 2em 0;
+}
+
+/* Inline code enhancement */
+.prose p > code {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.25em 0.5em;
+  border-radius: 0.25em;
+  font-weight: 500;
+}
+
+/* Blockquote enhancement */
+.prose blockquote {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-left: 4px solid #667eea;
+  padding: 1em 1.5em;
+  border-radius: 0.5em;
+  color: #4a5568;
+}
+
+/* Header enhancement */
+.prose h1,
+.prose h2,
+.prose h3 {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Math/inline formula styling */
+.prose .math-inline {
+  background: #f0f4f8;
+  padding: 0.125em 0.375em;
+  border-radius: 0.25em;
+  font-family: 'Courier New', monospace;
+  font-style: italic;
+}
+
+/* Highlight important text */
+.prose .highlight {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  padding: 0.125em 0.375em;
+  border-radius: 0.25em;
+  font-weight: 500;
+}
+
+/* Enhanced image rendering */
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  margin: 1rem 0;
+  transition: all 0.3s ease;
+}
+
+.markdown-content img:hover {
+  transform: scale(1.02);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* AI Generated image badge */
+.ai-generated-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Image loading state */
+.image-loading {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Image error state */
+.image-error {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border: 2px dashed #ef4444;
+  border-radius: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  color: #dc2626;
+}
+
+/* Image caption styling */
+.image-caption {
+  font-style: italic;
+  color: #6b7280;
+  text-align: center;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* Gallery view for multiple images */
+.image-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.image-gallery img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  border-radius: 0.75rem;
+}
+
+/* ===================================
+   Mermaid Chart Styling
+   =================================== */
+
+/* Chart container styling */
+.mermaid-chart-wrapper {
+  margin: 1.5rem 0;
+}
+
+.mermaid-chart-section {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mermaid SVG styling */
+.mermaid-chart-content svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+/* Improve mermaid diagram readability */
+.mermaid-chart-content .node rect,
+.mermaid-chart-content .node circle,
+.mermaid-chart-content .node ellipse,
+.mermaid-chart-content .node polygon {
+  stroke-width: 2px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.mermaid-chart-content .edgePath .path {
+  stroke-width: 2px;
+}
+
+.mermaid-chart-content .edgeLabel {
+  background-color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Flowchart specific styling */
+.mermaid-chart-content .flowchart-link {
+  stroke: #3b82f6;
+  stroke-width: 2px;
+}
+
+/* Sequence diagram styling */
+.mermaid-chart-content .actor {
+  stroke: #3b82f6;
+  fill: #eff6ff;
+}
+
+.mermaid-chart-content .messageLine0,
+.mermaid-chart-content .messageLine1 {
+  stroke: #3b82f6;
+  stroke-width: 1.5px;
+}
+
+/* Gantt chart styling */
+.mermaid-chart-content .grid .tick line {
+  stroke: #e5e7eb;
+}
+
+.mermaid-chart-content .taskText {
+  fill: #1f2937;
+  font-size: 11px;
+}
+
+/* Pie chart styling */
+.mermaid-chart-content .pieCircle {
+  stroke: white;
+  stroke-width: 2px;
+}
+
+.mermaid-chart-content .pieTitleText {
+  font-size: 16px;
+  font-weight: 600;
+  fill: #1f2937;
+}
+
+/* Git graph styling */
+.mermaid-chart-content .commit-id,
+.mermaid-chart-content .commit-msg {
+  font-size: 12px;
+  fill: #4b5563;
+}
+
+/* Responsive chart sizing */
+@media (max-width: 768px) {
+  .mermaid-chart-content svg {
+    font-size: 12px;
+  }
+  
+  .mermaid-chart-content .node text {
+    font-size: 11px;
+  }
+}
+
+/* Chart loading animation */
+.mermaid-chart-content:empty::before {
+  content: "📊 Rendering chart...";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Chart error state */
+.mermaid-chart-error {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 2px solid #fca5a5;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
+
+.mermaid-chart-error-title {
+  color: #dc2626;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.mermaid-chart-error-message {
+  color: #991b1b;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+/* Chart action buttons */
+.chart-action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: none;
+}
+
+.chart-action-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chart-action-button:active {
+  transform: translateY(0);
+}
+
+/* Chart info badge */
+.chart-info-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  color: #1e40af;
+  margin-top: 0.5rem;
+}
+
+/* ===================================
+   Moving Green Border Light Animation
+   =================================== */
+
+@keyframes greenPulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 0 2px rgba(16, 185, 129, 0.8),
+      0 0 0 4px rgba(16, 185, 129, 0.6),
+      0 0 0 6px rgba(16, 185, 129, 0.4),
+      0 0 0 8px rgba(16, 185, 129, 0.2);
+  }
+  50% {
+    box-shadow: 
+      0 0 0 3px rgba(16, 185, 129, 1),
+      0 0 0 6px rgba(16, 185, 129, 0.8),
+      0 0 0 9px rgba(16, 185, 129, 0.6),
+      0 0 0 12px rgba(16, 185, 129, 0.4);
+  }
+}
+
+.green-glow-animation {
+  animation: greenPulse 1.5s ease-in-out infinite !important;
+  border-color: rgba(16, 185, 129, 0.8) !important;
+  background-color: rgba(16, 185, 129, 0.05) !important;
+}
+
+/* ===================================
+   Multi-Error Display Animations
+   =================================== */
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}

@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Error Recovery Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .progress-bar { transition: width 0.5s ease-in-out; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-8">
+
+    <!-- Header -->
+    <header class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">G</div>
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Gemini Error Recovery</h1>
+                <p class="text-gray-600">Official Google Gemini API error codes with auto-recovery simulation</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Metrics Dashboard -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Total Gemini Errors</div>
+            <div class="text-3xl font-bold text-gray-900">9</div>
+            <div class="text-xs text-green-600 mt-1">Official API Errors</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Auto-Fixable</div>
+            <div class="text-3xl font-bold text-green-600">4</div>
+            <div class="text-xs text-gray-500 mt-1">429, 500, 503, 504</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Manual Fix Required</div>
+            <div class="text-3xl font-bold text-orange-600">5</div>
+            <div class="text-xs text-gray-500 mt-1">400 x2, 403, 404, Safety</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Provider</div>
+            <div class="text-2xl font-bold text-blue-600">Google AI</div>
+            <div class="text-xs text-gray-500 mt-1">Gemini 1.5 Pro/Flash</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Sidebar: Error Catalog -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- Auto-Fixable Errors -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-4 bg-green-50 border-b border-green-100 flex justify-between items-center">
+                    <h2 class="font-semibold text-green-800 flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Auto-Fixable (4)
+                    </h2>
+                    <span class="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">System Handles</span>
+                </div>
+                <div class="divide-y divide-gray-100">
+                    <button onclick="simulateAutoFix('GEMINI_RESOURCE_EXHAUSTED', 429)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">429 - Resource Exhausted</div>
+                            <div class="text-xs text-gray-500">Exceeded rate limit</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('GEMINI_INTERNAL', 500)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">500 - Internal Error</div>
+                            <div class="text-xs text-gray-500">Unexpected error on Google's side</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('GEMINI_UNAVAILABLE', 503)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">503 - Unavailable</div>
+                            <div class="text-xs text-gray-500">Service temporarily overloaded</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('GEMINI_DEADLINE_EXCEEDED', 504)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">504 - Deadline Exceeded ⭐</div>
+                            <div class="text-xs text-gray-500">Processing took too long</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manual Fix Errors -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-4 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
+                    <h2 class="font-semibold text-orange-800 flex items-center gap-2">
+                        <i data-lucide="alert-triangle" class="w-4 h-4"></i> Manual Fix (5)
+                    </h2>
+                    <span class="text-xs bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full">User Must Act</span>
+                </div>
+                <div class="divide-y divide-gray-100">
+                    <button onclick="simulateManualError('GEMINI_INVALID_ARGUMENT')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">400 - Invalid Argument</div>
+                            <div class="text-xs text-gray-500">Request body is malformed</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('GEMINI_FAILED_PRECONDITION')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">400 - Failed Precondition ⭐</div>
+                            <div class="text-xs text-gray-500">Billing not enabled</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('GEMINI_PERMISSION_DENIED')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">403 - Permission Denied</div>
+                            <div class="text-xs text-gray-500">API key lacks permissions</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('GEMINI_NOT_FOUND')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">404 - Not Found</div>
+                            <div class="text-xs text-gray-500">Resource not found</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('GEMINI_SAFETY_BLOCK')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <div>
+                            <div class="text-sm font-medium text-gray-700">Safety Block ⭐</div>
+                            <div class="text-xs text-gray-500">Content blocked by filters</div>
+                        </div>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Gemini Info -->
+            <div class="bg-blue-50 rounded-xl shadow-sm border border-blue-200 p-4">
+                <h3 class="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                    <i data-lucide="info" class="w-4 h-4"></i> Google AI Studio
+                </h3>
+                <div class="text-xs text-blue-800 space-y-1">
+                    <p>🌐 <a href="https://aistudio.google.com" target="_blank" class="underline">aistudio.google.com</a></p>
+                    <p>📚 <a href="https://ai.google.dev/api" target="_blank" class="underline">API Documentation</a></p>
+                    <p>🔑 <a href="https://aistudio.google.com/app/apikey" target="_blank" class="underline">API Keys</a></p>
+                    <p>📊 <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" class="underline">Rate Limits</a></p>
+                    <p>⭐ = Unique to Gemini</p>
+                </div>
+            </div>
+        </div>        
+        <!-- Main Panel: Error Display -->
+        <div class='lg:col-span-2'>
+            
+            <!-- Placeholder State -->
+            <div id='placeholderState' class='bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center'>
+                <div class='text-6xl mb-4'></div>
+                <h3 class='text-xl font-semibold text-gray-900 mb-2'>Gemini Error Recovery System</h3>
+                <p class='text-gray-600 mb-6'>Click any error on the left to see how it's handled</p>
+                <div class='flex gap-2 justify-center flex-wrap'>
+                    <span class='px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full'> Auto-retry with backoff</span>
+                    <span class='px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full'> Detailed error panels</span>
+                    <span class='px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full'> Plain English explanations</span>
+                </div>
+            </div>
+
+            <!-- Error Panel (Hidden by default) -->
+            <div id='errorPanel' class='hidden bg-white rounded-xl shadow-sm border-2 border-orange-400 overflow-hidden'>
+                <!-- Error Header -->
+                <div class='bg-orange-50 p-4 border-b border-orange-200 flex justify-between items-start'>
+                    <div class='flex items-start gap-3'>
+                        <span id='errorIcon' class='text-3xl'></span>
+                        <div>
+                            <div class='flex items-center gap-2 mb-1'>
+                                <h3 id='errorCode' class='font-bold text-gray-900 text-lg'>ERROR_CODE</h3>
+                                <span id='errorBadge' class='px-2 py-0.5 bg-orange-200 text-orange-800 text-xs rounded-full font-medium'>Medium</span>
+                            </div>
+                            <p class='text-sm text-gray-600'>Provider: <span class='font-semibold text-blue-600'>Google Gemini</span></p>
+                        </div>
+                    </div>
+                    <button onclick='closePanel()' class='text-gray-400 hover:text-gray-600'>
+                        <i data-lucide='x' class='w-5 h-5'></i>
+                    </button>
+                </div>
+
+                <!-- Plain English Explanation -->
+                <div class='p-4 bg-blue-50 border-b border-blue-100'>
+                    <h4 class='font-semibold text-blue-900 mb-2 flex items-center gap-2'>
+                        <i data-lucide='message-circle' class='w-4 h-4'></i> What's Happening
+                    </h4>
+                    <div class='text-sm text-blue-800 space-y-2'>
+                        <p><strong>What it means:</strong> <span id='whatItMeans'></span></p>
+                        <p><strong>Why it happens:</strong> <span id='whyItHappens'></span></p>
+                        <p><strong>How it affects you:</strong> <span id='howItAffects'></span></p>
+                    </div>
+                </div>
+
+                <!-- Auto-Retry Timeline (for auto-fixable errors) -->
+                <div id='retryTimeline' class='hidden p-4 bg-green-50 border-b border-green-100'>
+                    <h4 class='font-semibold text-green-900 mb-3 flex items-center gap-2'>
+                        <i data-lucide='refresh-cw' class='w-4 h-4'></i> Auto-Retry Timeline
+                    </h4>
+                    <div class='space-y-2'>
+                        <div class='flex items-center gap-3'>
+                            <div class='w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-800 font-bold text-sm'>1</div>
+                            <div class='flex-1'>
+                                <div class='h-2 bg-gray-200 rounded-full overflow-hidden'>
+                                    <div id='progress1' class='h-full bg-green-500 progress-bar' style='width: 0%'></div>
+                                </div>
+                            </div>
+                            <span class='text-xs text-gray-600 w-16'>Wait 1s</span>
+                        </div>
+                        <div class='flex items-center gap-3'>
+                            <div class='w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-800 font-bold text-sm'>2</div>
+                            <div class='flex-1'>
+                                <div class='h-2 bg-gray-200 rounded-full overflow-hidden'>
+                                    <div id='progress2' class='h-full bg-green-500 progress-bar' style='width: 0%'></div>
+                                </div>
+                            </div>
+                            <span class='text-xs text-gray-600 w-16'>Wait 2s</span>
+                        </div>
+                        <div class='flex items-center gap-3'>
+                            <div class='w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-800 font-bold text-sm'>3</div>
+                            <div class='flex-1'>
+                                <div class='h-2 bg-gray-200 rounded-full overflow-hidden'>
+                                    <div id='progress3' class='h-full bg-green-500 progress-bar' style='width: 0%'></div>
+                                </div>
+                            </div>
+                            <span class='text-xs text-gray-600 w-16'>Wait 4s</span>
+                        </div>
+                        <div class='flex items-center gap-3'>
+                            <div class='w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-800 font-bold text-sm'>4</div>
+                            <div class='flex-1'>
+                                <div class='h-2 bg-gray-200 rounded-full overflow-hidden'>
+                                    <div id='progress4' class='h-full bg-green-500 progress-bar' style='width: 0%'></div>
+                                </div>
+                            </div>
+                            <span class='text-xs text-gray-600 w-16'>Wait 8s</span>
+                        </div>
+                    </div>
+                    <p class='text-xs text-green-700 mt-3 italic'> Total retry time: ~15 seconds with exponential backoff</p>
+                </div>
+
+                <!-- Fix Instructions (CELLAR MESSAGE) -->
+                <div id='fixInstructions' class='p-4'>
+                    <h4 class='font-semibold text-gray-900 mb-3 flex items-center gap-2'>
+                        <i data-lucide='wrench' class='w-4 h-4'></i> How to Fix
+                    </h4>
+                    
+                    <!-- Technical Steps -->
+                    <div class='mb-4'>
+                        <h5 class='text-sm font-semibold text-gray-700 mb-2'> Technical Steps:</h5>
+                        <ol id='technicalFixes' class='list-decimal list-inside text-sm text-gray-600 space-y-1 ml-2'>
+                        </ol>
+                    </div>
+                    
+                    <!-- Business Steps -->
+                    <div class='mb-4'>
+                        <h5 class='text-sm font-semibold text-gray-700 mb-2'> Business Steps:</h5>
+                        <ol id='businessFixes' class='list-decimal list-inside text-sm text-gray-600 space-y-1 ml-2'>
+                        </ol>
+                    </div>
+                    
+                    <!-- Escalation -->
+                    <div class='p-3 bg-gray-50 rounded-lg border border-gray-200'>
+                        <h5 class='text-xs font-semibold text-gray-700 mb-1'> Need Help?</h5>
+                        <p id='escalation' class='text-xs text-gray-600'></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Error data based on Gemini official documentation
+        const errorData = {
+            // Auto-fixable errors
+            GEMINI_RESOURCE_EXHAUSTED: {
+                code: 'GEMINI_RESOURCE_EXHAUSTED',
+                icon: '🔶',
+                severity: 'Medium',
+                severityColor: 'orange',
+                retryable: true,
+                plainEnglish: {
+                    whatItMeans: 'Exceeded rate limit',
+                    whyItHappens: 'Sending too many requests per minute',
+                    howItAffects: 'Temporarily blocked - will retry automatically'
+                },
+                tech: [
+                    'Reduce request frequency',
+                    'Implement exponential backoff (done automatically)',
+                    'Check rate limits: https://ai.google.dev/gemini-api/docs/rate-limits',
+                    'Request quota increase if needed',
+                    'Consider request batching'
+                ],
+                biz: [
+                    'Sending requests too quickly',
+                    'System will retry automatically',
+                    'Consider upgrading plan for higher limits',
+                    'Request quota increase if needed'
+                ],
+                escalation: 'Request quota increase: https://ai.google.dev/gemini-api/docs/rate-limits#request-rate-limit-increase'
+            },
+            GEMINI_INTERNAL: {
+                code: 'GEMINI_INTERNAL',
+                icon: '🔴',
+                severity: 'High',
+                severityColor: 'red',
+                retryable: true,
+                plainEnglish: {
+                    whatItMeans: 'Unexpected error on Google\'s side',
+                    whyItHappens: 'Internal server issue or context too long',
+                    howItAffects: 'Temporary issue - will retry automatically'
+                },
+                tech: [
+                    'Reduce input context length',
+                    'Temporarily switch to Gemini 1.5 Flash (lighter model)',
+                    'Wait 1-2 minutes and retry',
+                    'System will retry automatically',
+                    'Report persistent issues via Google AI Studio feedback'
+                ],
+                biz: [
+                    'Google server experiencing issues',
+                    'System will retry automatically',
+                    'Usually resolves within minutes',
+                    'Consider using lighter model temporarily'
+                ],
+                escalation: 'If persists, report via "Send feedback" in Google AI Studio'
+            },
+            GEMINI_UNAVAILABLE: {
+                code: 'GEMINI_UNAVAILABLE',
+                icon: '🔴',
+                severity: 'High',
+                severityColor: 'red',
+                retryable: true,
+                plainEnglish: {
+                    whatItMeans: 'Service temporarily overloaded',
+                    whyItHappens: 'High traffic or capacity issues',
+                    howItAffects: 'Temporary congestion - will retry automatically'
+                },
+                tech: [
+                    'Temporarily switch to Gemini 1.5 Flash',
+                    'Wait 30-60 seconds and retry',
+                    'System will retry automatically with backoff',
+                    'Peak hours may have longer waits',
+                    'Report persistent issues via Google AI Studio feedback'
+                ],
+                biz: [
+                    'Gemini service temporarily overloaded',
+                    'System will retry automatically',
+                    'May take a few minutes to process',
+                    'Consider using during off-peak hours'
+                ],
+                escalation: 'If persists, report via "Send feedback" in Google AI Studio'
+            },
+            GEMINI_DEADLINE_EXCEEDED: {
+                code: 'GEMINI_DEADLINE_EXCEEDED',
+                icon: '🔴',
+                severity: 'High',
+                severityColor: 'red',
+                retryable: true,
+                plainEnglish: {
+                    whatItMeans: 'Processing took too long',
+                    whyItHappens: 'Prompt/context too large or timeout exceeded',
+                    howItAffects: 'Request timed out - will retry with longer timeout'
+                },
+                tech: [
+                    'Set larger timeout in client request',
+                    'Reduce prompt/context size',
+                    'System will retry with increased timeout',
+                    'Consider breaking large requests into smaller chunks',
+                    'Use streaming for long responses'
+                ],
+                biz: [
+                    'Request processing took too long',
+                    'System will retry with longer timeout',
+                    'Consider reducing input size',
+                    'Contact developer if issue persists'
+                ],
+                escalation: 'If persists with reasonable input, contact Google AI support'
+            },
+            
+            // Manual fix errors
+            GEMINI_INVALID_ARGUMENT: {
+                code: 'GEMINI_INVALID_ARGUMENT',
+                icon: '🔶',
+                severity: 'Medium',
+                severityColor: 'orange',
+                retryable: false,
+                plainEnglish: {
+                    whatItMeans: 'Your request format is incorrect',
+                    whyItHappens: 'Request body is malformed or has missing/invalid fields',
+                    howItAffects: 'Request rejected - need to fix the format'
+                },
+                tech: [
+                    'Check API reference for correct request format',
+                    'Verify all required fields are present',
+                    'Ensure using correct API version (/v1 or /v1beta)',
+                    'Validate parameter values (temperature: 0.0-1.0, candidate count: 1-8)',
+                    'Check for typos in request body'
+                ],
+                biz: [
+                    'Request format needs correction',
+                    'Review Gemini API documentation',
+                    'Contact developer to fix request structure',
+                    'Verify API version compatibility'
+                ],
+                escalation: 'Refer to Gemini API Docs: https://ai.google.dev/api'
+            },
+            GEMINI_FAILED_PRECONDITION: {
+                code: 'GEMINI_FAILED_PRECONDITION',
+                icon: '🚨',
+                severity: 'Critical',
+                severityColor: 'red',
+                retryable: false,
+                plainEnglish: {
+                    whatItMeans: 'Free tier not available or billing not enabled',
+                    whyItHappens: 'Free tier not supported in your region or billing not set up',
+                    howItAffects: 'Cannot use Gemini API - need to enable billing'
+                },
+                tech: [
+                    'Go to Google AI Studio: https://aistudio.google.com/app/apikey',
+                    'Enable billing on your project',
+                    'Set up a paid plan',
+                    'Verify region supports Gemini API',
+                    'Check billing status in Google Cloud Console'
+                ],
+                biz: [
+                    'Free tier not available in your region',
+                    'Billing needs to be enabled',
+                    'Go to Google AI Studio to set up billing',
+                    'Contact admin to enable paid plan'
+                ],
+                escalation: 'Set up billing at https://aistudio.google.com/app/apikey'
+            },
+            GEMINI_PERMISSION_DENIED: {
+                code: 'GEMINI_PERMISSION_DENIED',
+                icon: '🚨',
+                severity: 'Critical',
+                severityColor: 'red',
+                retryable: false,
+                plainEnglish: {
+                    whatItMeans: 'API key lacks required permissions',
+                    whyItHappens: 'Wrong API key or insufficient permissions',
+                    howItAffects: 'Cannot access Gemini API - need valid API key'
+                },
+                tech: [
+                    'Go to Google AI Studio: https://aistudio.google.com/app/apikey',
+                    'Verify API key is correct',
+                    'Check API key has required permissions',
+                    'For tuned models, ensure proper authentication',
+                    'Regenerate API key if needed'
+                ],
+                biz: [
+                    'API key is invalid or lacks permissions',
+                    'Go to Settings → Gemini API Key',
+                    'Enter valid API key from Google AI Studio',
+                    'Save and retry request'
+                ],
+                escalation: 'Create/verify API key at https://aistudio.google.com/app/apikey'
+            },
+            GEMINI_NOT_FOUND: {
+                code: 'GEMINI_NOT_FOUND',
+                icon: '🔶',
+                severity: 'Medium',
+                severityColor: 'orange',
+                retryable: false,
+                plainEnglish: {
+                    whatItMeans: 'Requested resource not found',
+                    whyItHappens: 'File, model, or resource doesn\'t exist',
+                    howItAffects: 'Request rejected - need to check resource path'
+                },
+                tech: [
+                    'Verify resource path is correct',
+                    'Check file references (image/audio/video) exist',
+                    'Ensure using supported model name',
+                    'Verify API version supports requested feature',
+                    'Check model list: https://ai.google.dev/gemini-api/docs/models/gemini'
+                ],
+                biz: [
+                    'Requested resource not found',
+                    'Check file paths and model names',
+                    'Contact developer to verify resource IDs',
+                    'Ensure using supported Gemini model'
+                ],
+                escalation: 'Refer to supported models: https://ai.google.dev/gemini-api/docs/models/gemini'
+            },
+            GEMINI_SAFETY_BLOCK: {
+                code: 'GEMINI_SAFETY_BLOCK',
+                icon: '🚨',
+                severity: 'High',
+                severityColor: 'red',
+                retryable: false,
+                plainEnglish: {
+                    whatItMeans: 'Content blocked by safety filters',
+                    whyItHappens: 'Content violates safety guidelines or terms of service',
+                    howItAffects: 'Request blocked - need to modify content'
+                },
+                tech: [
+                    'Review prompt content against safety guidelines',
+                    'Modify content to comply with policies',
+                    'Adjust safety settings in API call if appropriate',
+                    'Check terms of service: https://ai.google.dev/terms',
+                    'For BlockedReason.OTHER, content may violate ToS'
+                ],
+                biz: [
+                    'Content blocked by safety filters',
+                    'Review and modify prompt content',
+                    'Ensure compliance with Google policies',
+                    'Contact developer to adjust content'
+                ],
+                escalation: 'Review terms of service: https://ai.google.dev/terms'
+            }
+        };
+
+        function simulateAutoFix(errorCode, statusCode) {
+            const data = errorData[errorCode];
+            showErrorPanel(data);
+            
+            // Show retry timeline
+            document.getElementById('retryTimeline').classList.remove('hidden');
+            
+            // Animate retry attempts
+            animateRetries();
+        }
+
+        function simulateManualError(errorCode) {
+            const data = errorData[errorCode];
+            showErrorPanel(data);
+            
+            // Hide retry timeline for manual errors
+            document.getElementById('retryTimeline').classList.add('hidden');
+        }
+
+        function showErrorPanel(data) {
+            // Hide placeholder, show error panel
+            document.getElementById('placeholderState').classList.add('hidden');
+            document.getElementById('errorPanel').classList.remove('hidden');
+            
+            // Update header
+            document.getElementById('errorIcon').textContent = data.icon;
+            document.getElementById('errorCode').textContent = data.code;
+            document.getElementById('errorBadge').textContent = data.severity;
+            document.getElementById('errorBadge').className = `px-2 py-0.5 bg-${data.severityColor}-200 text-${data.severityColor}-800 text-xs rounded-full font-medium`;
+            
+            // Update plain English
+            document.getElementById('whatItMeans').textContent = data.plainEnglish.whatItMeans;
+            document.getElementById('whyItHappens').textContent = data.plainEnglish.whyItHappens;
+            document.getElementById('howItAffects').textContent = data.plainEnglish.howItAffects;
+            
+            // Populate lists
+            const techList = document.getElementById('technicalFixes');
+            techList.innerHTML = data.tech.map(t => `<li>${t}</li>`).join('');
+            
+            const bizList = document.getElementById('businessFixes');
+            bizList.innerHTML = data.biz.map(b => `<li>${b}</li>`).join('');
+            
+            document.getElementById('escalation').textContent = data.escalation;
+            
+            // Re-initialize Lucide icons
+            lucide.createIcons();
+        }
+
+        function animateRetries() {
+            const delays = [1000, 2000, 4000, 8000];
+            let currentTime = 0;
+            
+            delays.forEach((delay, index) => {
+                setTimeout(() => {
+                    document.getElementById(`progress${index + 1}`).style.width = '100%';
+                }, currentTime);
+                currentTime += delay;
+            });
+            
+            // Reset after animation
+            setTimeout(() => {
+                for (let i = 1; i <= 4; i++) {
+                    document.getElementById(`progress${i}`).style.width = '0%';
+                }
+            }, currentTime + 1000);
+        }
+
+        function closePanel() {
+            document.getElementById('errorPanel').classList.add('hidden');
+            document.getElementById('placeholderState').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
