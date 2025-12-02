@@ -1152,7 +1152,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     // If using proxy, route through backend
     if (useProxy) {
       try {
-        const proxyUrl = import.meta.env.VITE_PROXY_URL || 'http://localhost:3002';
+        const proxyUrl = import.meta.env.VITE_PROXY_URL || (import.meta.env.PROD ? '' : 'http://localhost:3002');
         const providerEndpoint = `${proxyUrl}/api/${e.provider === 'anthropic' ? 'anthropic' : e.provider}`;
         
         const response = await fetch(providerEndpoint, {

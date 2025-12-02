@@ -6,7 +6,8 @@
  */
 
 // Proxy server URL - configurable via environment
-const PROXY_BASE_URL = import.meta.env.VITE_PROXY_URL || 'http://localhost:3002';
+// In production, use relative URL (same domain); in dev, use localhost
+const PROXY_BASE_URL = import.meta.env.VITE_PROXY_URL || (import.meta.env.PROD ? '' : 'http://localhost:3002');
 
 export interface ProxyMessage {
   role: 'user' | 'assistant' | 'system';

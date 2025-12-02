@@ -34,3 +34,5 @@ npm-debug.log*
 # API Keys backup files
 *-api-keys*
 *_api_keys*
+.vercel
+.env*.local
