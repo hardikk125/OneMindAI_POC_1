@@ -233,7 +233,7 @@ export function getSafeEnvInfo(): Record<string, string> {
   const safeEnv: Record<string, string> = {};
   
   // Only include non-sensitive env vars
-  const safeKeys = ['NODE_ENV', 'VITE_PROXY_URL', 'VITE_APP_TITLE'];
+  const safeKeys = ['NODE_ENV', 'VITE_PROXY_URL', 'NEXT_PUBLIC_BACKEND_URL', 'VITE_APP_TITLE'];
   
   for (const key of safeKeys) {
     const value = (import.meta as { env?: Record<string, string> }).env?.[key];
