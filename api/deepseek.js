@@ -24,6 +24,10 @@ module.exports = async (req, res) => {
       return res.status(503).json({ error: 'DeepSeek not configured' });
     }
 
+    // DeepSeek has max 8192 output tokens
+    const requestedTokens = max_tokens || 4096;
+    const safeMaxTokens = Math.min(requestedTokens, 8192);
+
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -33,7 +37,7 @@ module.exports = async (req, res) => {
       body: JSON.stringify({
         model: model || 'deepseek-chat',
         messages,
-        max_tokens: max_tokens || 8000,
+        max_tokens: safeMaxTokens,
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })

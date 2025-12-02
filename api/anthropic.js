@@ -24,6 +24,21 @@ module.exports = async (req, res) => {
       return res.status(503).json({ error: 'Anthropic not configured' });
     }
 
+    // Claude model-specific max token limits
+    const selectedModel = model || 'claude-3-5-sonnet-20241022';
+    const modelLimits = {
+      'claude-3-haiku': 4096,
+      'claude-3-haiku-20240307': 4096,
+      'claude-3-5-sonnet': 8192,
+      'claude-3-5-sonnet-20241022': 8192,
+      'claude-3-opus': 4096,
+      'claude-3-opus-20240229': 4096,
+    };
+    
+    const maxLimit = modelLimits[selectedModel] || 4096;
+    const requestedTokens = max_tokens || 4096;
+    const safeMaxTokens = Math.min(requestedTokens, maxLimit);
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -32,9 +47,9 @@ module.exports = async (req, res) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: model || 'claude-3-5-sonnet-20241022',
+        model: selectedModel,
         messages,
-        max_tokens: max_tokens || 8000,
+        max_tokens: safeMaxTokens,
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
