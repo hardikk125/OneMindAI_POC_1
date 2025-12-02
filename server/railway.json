@@ -5,7 +5,7 @@
     "buildCommand": "npm install"
   },
   "deploy": {
-    "startCommand": "node ai-proxy.cjs",
+    "startCommand": "node server/ai-proxy.cjs",
     "numReplicas": 1,
     "sleepApplication": false,
     "restartPolicyType": "ON_FAILURE",
