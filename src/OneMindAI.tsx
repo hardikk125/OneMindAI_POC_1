@@ -1152,7 +1152,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     // If using proxy, route through backend
     if (useProxy) {
       try {
-        const proxyUrl = import.meta.env.NEXT_PUBLIC_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002';
+        const proxyUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002';
         const providerEndpoint = `${proxyUrl}/api/${e.provider === 'anthropic' ? 'anthropic' : e.provider}`;
         
         const response = await fetch(providerEndpoint, {
@@ -1703,7 +1703,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           // Use proxy if no API key, otherwise direct API call
           const apiUrl = e.apiKey 
             ? 'https://api.mistral.ai/v1/chat/completions'
-            : `${import.meta.env.NEXT_PUBLIC_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002'}/api/mistral`;
+            : `${import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002'}/api/mistral`;
           
           const response = await fetch(apiUrl, {
             method: 'POST',
@@ -2042,7 +2042,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           // Use proxy if no API key, otherwise direct API call
           const apiUrl = e.apiKey 
             ? 'https://api.deepseek.com/v1/chat/completions'
-            : `${import.meta.env.NEXT_PUBLIC_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002'}/api/deepseek`;
+            : `${import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002'}/api/deepseek`;
           
           const response = await fetch(apiUrl, {
             method: 'POST',

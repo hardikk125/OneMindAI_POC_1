@@ -6,7 +6,7 @@
  */
 
 // Proxy server URL - configurable via environment
-const PROXY_BASE_URL = import.meta.env.NEXT_PUBLIC_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002';
+const PROXY_BASE_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002';
 
 export interface ProxyMessage {
   role: 'user' | 'assistant' | 'system';
