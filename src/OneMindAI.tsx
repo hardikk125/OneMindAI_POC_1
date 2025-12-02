@@ -307,12 +307,34 @@ function outcomeLabel(outCap: number): string {
   if (outCap <= 4000) return "Concise report";
   return "Detailed report";
 }
+// Provider-specific max output token limits (API constraints)
+const PROVIDER_MAX_OUTPUT: Record<string, number> = {
+  openai: 16384,      // GPT-4o max output
+  anthropic: 8192,    // Claude max output
+  gemini: 8192,       // Gemini max output
+  deepseek: 8192,     // DeepSeek max output
+  mistral: 32768,     // Mistral max output
+  perplexity: 4096,   // Perplexity max output
+  kimi: 8192,         // Kimi/Moonshot max output
+  xai: 16384,         // xAI Grok max output
+  groq: 8192,         // Groq max output
+  huggingface: 4096,  // HuggingFace max output
+  sarvam: 4096,       // Sarvam max output
+  falcon: 4096,       // Falcon max output
+  generic: 4096,      // Generic fallback
+};
+
 function computeOutCap(e: Engine, inputTokens: number): number {
   if (e.outPolicy?.mode === "fixed" && e.outPolicy.fixedTokens) return e.outPolicy.fixedTokens;
-  const free = Math.max(0, e.contextLimit - inputTokens);
-  // Increased limits for full responses
-  const raw = Math.max(2000, Math.min(16000, Math.floor(2 * inputTokens + 2000)));
-  return Math.min(raw, Math.floor(0.8 * free)); // Allow 80% of context for output instead of 50%
+  
+  // Get provider-specific max output limit
+  const providerMax = PROVIDER_MAX_OUTPUT[e.provider] || 4096;
+  
+  // Calculate available context space
+  const availableTokens = Math.max(0, e.contextLimit - inputTokens);
+  
+  // Use the smaller of: provider max limit OR 90% of available context
+  return Math.min(providerMax, Math.floor(availableTokens * 0.9));
 }
 
 // Configure marked for enhanced markdown rendering
@@ -321,7 +343,11 @@ marked.setOptions({
   gfm: true,
 });
 
-export default function OneMindAI_v14Mobile() {
+interface OneMindAIProps {
+  onOpenAdmin?: () => void;
+}
+
+export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   // ===== Auth (must be first - before any conditional returns) =====
   const { isAuthenticated, isLoading, user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -1281,7 +1307,7 @@ export default function OneMindAI_v14Mobile() {
         const makeClaudeRequest = async () => {
           return await client.messages.create({
             model: e.selectedVersion,
-            max_tokens: Math.max(outCap, 4000),
+            max_tokens: Math.max(outCap, 8000),
             temperature: 0.7,
             messages: [{ role: 'user', content: messageContent }],
             stream: true,
@@ -1412,7 +1438,7 @@ export default function OneMindAI_v14Mobile() {
         logger.step(6, 'Making OpenAI API call');
         logger.data('API Request', {
           model: e.selectedVersion,
-          max_tokens: Math.max(outCap, 4000),
+          max_tokens: Math.max(outCap, 8000),
           temperature: 0.7,
           stream: true,
           hasImages: images.length > 0
@@ -1442,7 +1468,7 @@ export default function OneMindAI_v14Mobile() {
           return await client.chat.completions.create({
             model: e.selectedVersion,
             messages: [{ role: 'user', content: messageContent }],
-            max_tokens: Math.max(outCap, 4000),
+            max_tokens: Math.max(outCap, 8000),
             temperature: 0.7,
             stream: true,
           });
@@ -1484,7 +1510,7 @@ export default function OneMindAI_v14Mobile() {
         logger.success('OpenAI streaming started');
         terminalLogger.streamStart(e.name);
         terminalLogger.apiCallStart('OpenAI', e.selectedVersion, {
-          maxTokens: Math.max(outCap, 4000),
+          maxTokens: Math.max(outCap, 8000),
           temperature: 0.7,
           stream: true
         });
@@ -1615,7 +1641,7 @@ export default function OneMindAI_v14Mobile() {
             model: e.selectedVersion,
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: Math.max(outCap, 4000),
+              maxOutputTokens: Math.max(outCap, 8000),
             },
           });
 
@@ -1674,16 +1700,21 @@ export default function OneMindAI_v14Mobile() {
         
         // Wrap API call with auto-recovery
         const makeMistralRequest = async () => {
-          const response = await fetch('/api/mistral/v1/chat/completions', {
+          // Use proxy if no API key, otherwise direct API call
+          const apiUrl = e.apiKey 
+            ? 'https://api.mistral.ai/v1/chat/completions'
+            : `${import.meta.env.VITE_PROXY_URL || 'http://localhost:3002'}/api/mistral`;
+          
+          const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${e.apiKey}`,
+              ...(e.apiKey && { 'Authorization': `Bearer ${e.apiKey}` }),
             },
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 4000),
+              max_tokens: Math.max(outCap, 8000),
               temperature: 0.7,
               stream: true,
             }),
@@ -1798,7 +1829,7 @@ export default function OneMindAI_v14Mobile() {
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 4000),
+              max_tokens: Math.max(outCap, 8000),
               temperature: 0.7,
               stream: true,
             }),
@@ -1903,7 +1934,7 @@ export default function OneMindAI_v14Mobile() {
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 4000),
+              max_tokens: Math.max(outCap, 8000),
               temperature: 0.7,
               stream: true,
             }),
@@ -2008,16 +2039,21 @@ export default function OneMindAI_v14Mobile() {
         
         // Define the request function for the retry manager
         const makeDeepSeekRequest = async () => {
-          const response = await fetch('/api/deepseek/v1/chat/completions', {
+          // Use proxy if no API key, otherwise direct API call
+          const apiUrl = e.apiKey 
+            ? 'https://api.deepseek.com/v1/chat/completions'
+            : `${import.meta.env.VITE_PROXY_URL || 'http://localhost:3002'}/api/deepseek`;
+          
+          const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${e.apiKey}`,
+              ...(e.apiKey && { 'Authorization': `Bearer ${e.apiKey}` }),
             },
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 4000),
+              max_tokens: Math.max(outCap, 8000),
               temperature: 0.7,
               stream: true,
             }),
@@ -2118,7 +2154,7 @@ export default function OneMindAI_v14Mobile() {
         const stream = await client.chat.completions.create({
           model: e.selectedVersion,
           messages: [{ role: 'user', content: enhancedPrompt }],
-          max_tokens: Math.max(outCap, 4000),
+          max_tokens: Math.max(outCap, 8000),
           temperature: 0.7,
           stream: true,
         });
@@ -2145,7 +2181,7 @@ export default function OneMindAI_v14Mobile() {
         const stream = await client.chat.completions.create({
           model: e.selectedVersion,
           messages: [{ role: 'user', content: enhancedPrompt }],
-          max_tokens: Math.max(outCap, 4000),
+          max_tokens: Math.max(outCap, 8000),
           temperature: 0.7,
           stream: true,
         });
@@ -2172,7 +2208,7 @@ export default function OneMindAI_v14Mobile() {
             body: JSON.stringify({
               inputs: enhancedPrompt,
               parameters: {
-                max_new_tokens: Math.max(outCap, 4000),
+                max_new_tokens: Math.max(outCap, 8000),
                 temperature: 0.7,
                 return_full_text: false,
                 stream: true,
@@ -2246,7 +2282,7 @@ export default function OneMindAI_v14Mobile() {
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 4000),
+              max_tokens: Math.max(outCap, 8000),
               temperature: 0.7,
               stream: true,
             }),
@@ -4524,7 +4560,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </button>
           </div>
           {/* User Menu - always visible */}
-          <UserMenu />
+          <UserMenu onOpenAdmin={onOpenAdmin} />
         </div>
       </div>
 

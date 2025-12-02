@@ -28,13 +28,14 @@ interface UserMenuProps {
   onOpenCredits?: () => void;
   onOpenHistory?: () => void;
   onOpenPricing?: () => void;
+  onOpenAdmin?: () => void;
 }
 
 // =============================================================================
 // COMPONENT
 // =============================================================================
 
-export function UserMenu({ onOpenSettings, onOpenCredits, onOpenHistory, onOpenPricing }: UserMenuProps) {
+export function UserMenu({ onOpenSettings, onOpenCredits, onOpenHistory, onOpenPricing, onOpenAdmin }: UserMenuProps) {
   const { user, profile, credits, signOut, isAuthenticated } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -177,8 +178,22 @@ export function UserMenu({ onOpenSettings, onOpenCredits, onOpenHistory, onOpenP
                 </button>
               )}
 
+              {/* Admin button */}
+              {onOpenAdmin && profile?.role === 'admin' && (
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    onOpenAdmin();
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-3 transition-colors border-t border-gray-200 dark:border-gray-700"
+                >
+                  <Shield className="w-4 h-4" />
+                  Admin Panel
+                </button>
+              )}
+
               {/* Role badge for premium/admin */}
-              {profile?.role && profile.role !== 'user' && (
+              {profile?.role && profile.role !== 'user' && !onOpenAdmin && (
                 <div className="px-4 py-2 flex items-center gap-3">
                   <Shield className="w-4 h-4 text-purple-500" />
                   <span className="text-sm text-purple-600 dark:text-purple-400 font-medium capitalize">

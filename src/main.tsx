@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import OneMindAI from "./OneMindAI"; // Main app
+import App from "./App"; // Main router
 import { AuthProvider } from "./lib/supabase"; // Auth provider
 // import { LandingPage } from "./landing/LandingPage"; // Landing page (commented out)
 
@@ -25,7 +25,7 @@ console.log('[TERMINAL] ⚙️ ENVIRONMENT:', {
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AuthProvider>
-      <OneMindAI />
+      <App />
     </AuthProvider>
   </React.StrictMode>
 );

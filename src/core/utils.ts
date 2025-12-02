@@ -32,15 +32,36 @@ export function estimateTokens(text: string, tokenizer: Tokenizer): number {
 /**
  * Compute output token cap based on engine and input tokens
  */
+// Provider-specific max output token limits (API constraints)
+const PROVIDER_MAX_OUTPUT: Record<string, number> = {
+  openai: 16384,
+  anthropic: 8192,
+  gemini: 8192,
+  deepseek: 8192,
+  mistral: 32768,
+  perplexity: 4096,
+  kimi: 8192,
+  xai: 16384,
+  groq: 8192,
+  huggingface: 4096,
+  sarvam: 4096,
+  falcon: 4096,
+  generic: 4096,
+};
+
 export function computeOutCap(engine: Engine, inputTokens: number): number {
   if (engine.outPolicy?.mode === 'fixed' && engine.outPolicy.fixedTokens) {
     return engine.outPolicy.fixedTokens;
   }
   
-  const freeSpace = Math.max(0, engine.contextLimit - inputTokens);
-  // Increased limits for full responses
-  const raw = Math.max(2000, Math.min(16000, Math.floor(2 * inputTokens + 2000)));
-  return Math.min(raw, Math.floor(0.8 * freeSpace)); // Allow 80% of context for output
+  // Get provider-specific max output limit
+  const providerMax = PROVIDER_MAX_OUTPUT[engine.provider] || 4096;
+  
+  // Calculate available context space
+  const availableTokens = Math.max(0, engine.contextLimit - inputTokens);
+  
+  // Use the smaller of: provider max limit OR 90% of available context
+  return Math.min(providerMax, Math.floor(availableTokens * 0.9));
 }
 
 // =============================================================================
