@@ -1547,6 +1547,741 @@ plt.show()
             </div>
         </div>
 
+        <!-- NEW SECTION: Error Handling Architecture -->
+        <div class="slide">
+            <h2>🚨 Error Handling Architecture - NEW!</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">Comprehensive error detection, classification, and user-friendly display across all 10+ AI providers</p>
+            
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-number">10+</div><div class="stat-label">Providers Supported</div></div>
+                <div class="stat-card"><div class="stat-number">15+</div><div class="stat-label">Error Types</div></div>
+                <div class="stat-card"><div class="stat-number">Auto</div><div class="stat-label">Retry Logic</div></div>
+                <div class="stat-card"><div class="stat-number">Real</div><div class="stat-label">Raw Error JSON</div></div>
+            </div>
+        </div>
+
+        <div class="slide">
+            <h2>🔄 Error Flow: From API to Screen</h2>
+            <div class="flow-diagram">
+                <div class="flow-step" data-step="1">
+                    <h3>API Call Fails</h3>
+                    <p><strong>📁 File:</strong> <code>src/OneMindAI.tsx</code></p>
+                    <p><strong>🔧 Function:</strong> <code>streamFromProvider()</code> catch block (Line ~1851)</p>
+                    <p><strong>⏰ When Called:</strong> When any API call throws an error</p>
+                    <div class="code-block">
+<span class="keyword">try</span> {
+    <span class="comment">// API call to provider (OpenAI, Claude, Gemini, etc.)</span>
+    <span class="keyword">const</span> <span class="variable">stream</span> = <span class="keyword">await</span> <span class="variable">client</span>.<span class="variable">chat</span>.<span class="variable">completions</span>.<span class="function">create</span>({...});
+} <span class="keyword">catch</span> (<span class="variable">error</span>) {
+    <span class="comment">// Error caught here - begins error processing pipeline</span>
+    <span class="variable">console</span>.<span class="function">log</span>(<span class="string">'[streamFromProvider] RAW ERROR OBJECT:'</span>, <span class="variable">error</span>);
+}
+                    </div>
+                </div>
+                <div class="arrow">↓</div>
+                <div class="flow-step" data-step="2">
+                    <h3>Status Code Extraction</h3>
+                    <p><strong>📁 File:</strong> <code>src/OneMindAI.tsx</code> (Lines 1860-1878)</p>
+                    <p><strong>❓ Why:</strong> Different SDKs store status codes in different locations</p>
+                    <div class="code-block">
+<span class="comment">// Extract status code from various possible locations</span>
+<span class="keyword">let</span> <span class="variable">extractedStatusCode</span> = 
+    <span class="variable">error</span>.<span class="variable">status</span> ||                    <span class="comment">// OpenAI SDK</span>
+    <span class="variable">error</span>.<span class="variable">statusCode</span> ||               <span class="comment">// Custom errors</span>
+    <span class="variable">error</span>.<span class="variable">status_code</span> ||              <span class="comment">// Anthropic SDK</span>
+    <span class="variable">error</span>.<span class="variable">error</span>?.<span class="variable">status</span> ||            <span class="comment">// Nested error object</span>
+    <span class="variable">error</span>.<span class="variable">response</span>?.<span class="variable">status</span>;           <span class="comment">// Fetch response</span>
+
+<span class="comment">// Fallback: Parse from error message</span>
+<span class="keyword">if</span> (!<span class="variable">extractedStatusCode</span> && <span class="variable">error</span>.<span class="variable">message</span>) {
+    <span class="keyword">const</span> <span class="variable">statusMatch</span> = <span class="variable">error</span>.<span class="variable">message</span>.<span class="function">match</span>(<span class="string">/\b(40[0-9]|50[0-9]|429)\b/</span>);
+    <span class="keyword">if</span> (<span class="variable">statusMatch</span>) <span class="variable">extractedStatusCode</span> = <span class="function">parseInt</span>(<span class="variable">statusMatch</span>[<span class="string">1</span>]);
+}
+                    </div>
+                </div>
+                <div class="arrow">↓</div>
+                <div class="flow-step" data-step="3">
+                    <h3>Raw Error Message Extraction</h3>
+                    <p><strong>📁 File:</strong> <code>src/OneMindAI.tsx</code> (Lines 1891-1913)</p>
+                    <p><strong>❓ Why:</strong> Preserve the REAL error from API, not cleaned version</p>
+                    <div class="code-block">
+<span class="comment">// Extract the truly raw error message from the API</span>
+<span class="keyword">let</span> <span class="variable">rawApiMessage</span> = <span class="string">'Unknown error occurred'</span>;
+
+<span class="keyword">if</span> (<span class="variable">error</span>.<span class="variable">error</span>?.<span class="variable">message</span>) {
+    <span class="variable">rawApiMessage</span> = <span class="variable">error</span>.<span class="variable">error</span>.<span class="variable">message</span>; <span class="comment">// Anthropic SDK nested</span>
+} <span class="keyword">else if</span> (<span class="variable">error</span>.<span class="variable">message</span>) {
+    <span class="variable">rawApiMessage</span> = <span class="variable">error</span>.<span class="variable">message</span>;       <span class="comment">// Direct error message</span>
+}
+
+<span class="comment">// Include error type if available</span>
+<span class="keyword">if</span> (<span class="variable">error</span>.<span class="variable">error</span>?.<span class="variable">type</span>) {
+    <span class="variable">rawApiMessage</span> = <span class="string">`Type: ${error.error.type} | ${error.error.message}`</span>;
+}
+                    </div>
+                </div>
+                <div class="arrow">↓</div>
+                <div class="flow-step" data-step="4">
+                    <h3>Enhanced Error Object Creation</h3>
+                    <p><strong>📁 File:</strong> <code>src/OneMindAI.tsx</code> (Lines 1918-1940)</p>
+                    <p><strong>❓ Why:</strong> Create comprehensive error object for display</p>
+                    <div class="code-block">
+<span class="keyword">const</span> <span class="variable">enhancedError</span> = {
+    <span class="variable">message</span>: <span class="variable">rawApiMessage</span>,           <span class="comment">// REAL error shown on screen</span>
+    <span class="variable">cleanedMessage</span>: <span class="variable">cleanedMessage</span>,   <span class="comment">// User-friendly version</span>
+    <span class="variable">rawMessage</span>: <span class="variable">rawApiMessage</span>,        <span class="comment">// Real raw error from API</span>
+    <span class="variable">rawJson</span>: <span class="variable">JSON</span>.<span class="function">stringify</span>(<span class="variable">error</span>, <span class="keyword">null</span>, <span class="string">2</span>), <span class="comment">// Full error JSON</span>
+    <span class="variable">statusCode</span>: <span class="variable">extractedStatusCode</span>,
+    <span class="variable">type</span>: <span class="variable">errorType</span>,
+    <span class="variable">provider</span>: <span class="variable">e</span>.<span class="variable">provider</span>,
+    <span class="variable">engine</span>: <span class="variable">e</span>.<span class="variable">name</span>,
+    <span class="variable">originalError</span>: <span class="variable">error</span>
+};
+
+<span class="function">setCurrentError</span>(<span class="variable">enhancedError</span>); <span class="comment">// Triggers ErrorRecoveryPanel</span>
+                    </div>
+                </div>
+                <div class="arrow">↓</div>
+                <div class="flow-step" data-step="5">
+                    <h3>ErrorRecoveryPanel Display</h3>
+                    <p><strong>📁 File:</strong> <code>src/components/ErrorRecoveryPanel.tsx</code></p>
+                    <p><strong>❓ Why:</strong> Show user-friendly error with actionable steps</p>
+                    <div class="code-block">
+<span class="comment">// Extract raw error data</span>
+<span class="keyword">const</span> <span class="variable">rawErrorData</span> = {
+    <span class="variable">message</span>: <span class="variable">error</span>?.<span class="variable">message</span>,           <span class="comment">// Real raw error</span>
+    <span class="variable">cleanedMessage</span>: <span class="variable">error</span>?.<span class="variable">cleanedMessage</span>,
+    <span class="variable">rawJson</span>: <span class="variable">error</span>?.<span class="variable">rawJson</span>,
+    <span class="variable">statusCode</span>: <span class="variable">error</span>?.<span class="variable">statusCode</span>,
+    <span class="variable">provider</span>: <span class="variable">error</span>?.<span class="variable">provider</span>,
+    <span class="variable">engine</span>: <span class="variable">error</span>?.<span class="variable">engine</span>
+};
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide">
+            <h2>🎯 Error Types & Status Codes</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Status Code</th>
+                        <th>Error Type</th>
+                        <th>Auto-Retry?</th>
+                        <th>User Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-warning">401</span></td>
+                        <td>Authentication Error</td>
+                        <td>❌ No</td>
+                        <td>Check/Update API Key in Settings</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-warning">403</span></td>
+                        <td>Permission Denied</td>
+                        <td>❌ No</td>
+                        <td>Check API key permissions</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-warning">404</span></td>
+                        <td>Model Not Found</td>
+                        <td>❌ No</td>
+                        <td>Verify model name in Settings</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">429</span></td>
+                        <td>Rate Limit</td>
+                        <td>✅ Yes (4 retries)</td>
+                        <td>Wait or upgrade plan</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-success">500</span></td>
+                        <td>Server Error</td>
+                        <td>✅ Yes (4 retries)</td>
+                        <td>Wait and retry</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-success">503</span></td>
+                        <td>Service Unavailable</td>
+                        <td>✅ Yes (4 retries)</td>
+                        <td>Wait and retry</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-warning">400</span></td>
+                        <td>Bad Request</td>
+                        <td>❌ No</td>
+                        <td>Check request parameters</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="slide">
+            <h2>🔧 Auto-Retry Logic</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">Automatic recovery for transient errors (429, 500, 503)</p>
+            
+            <div class="flow-diagram">
+                <div class="flow-step" data-step="1">
+                    <h3>Rate Limit Auto-Fix</h3>
+                    <p><strong>📁 File:</strong> <code>src/lib/error-recovery-engine.ts</code> (Lines 307-335)</p>
+                    <div class="code-block">
+<span class="keyword">export async function</span> <span class="function">autoFixRateLimit</span>&lt;<span class="variable">T</span>&gt;(
+    <span class="variable">provider</span>: <span class="keyword">string</span>,
+    <span class="variable">fn</span>: () => <span class="variable">Promise</span>&lt;<span class="variable">T</span>&gt;,
+    <span class="variable">onProgress</span>?: (<span class="variable">status</span>: <span class="keyword">string</span>) => <span class="keyword">void</span>
+): <span class="variable">Promise</span>&lt;<span class="variable">T</span>&gt; {
+    <span class="keyword">return</span> <span class="variable">retryManager</span>.<span class="function">executeWithRetry</span>(
+        <span class="string">`rate-limit-${provider}`</span>,
+        <span class="keyword">async</span> () => {
+            <span class="keyword">await</span> <span class="variable">throttler</span>.<span class="function">throttle</span>();
+            <span class="keyword">return await</span> <span class="function">fn</span>();
+        },
+        (<span class="variable">error</span>) => {
+            <span class="comment">// Retry on rate limit errors</span>
+            <span class="keyword">return</span> <span class="variable">error</span>.<span class="variable">statusCode</span> === <span class="string">429</span> || 
+                   <span class="variable">error</span>.<span class="variable">message</span>?.<span class="function">includes</span>(<span class="string">'rate limit'</span>);
+        }
+    );
+}
+                    </div>
+                    <p><strong>Retry Strategy:</strong> Exponential backoff - 1s → 2s → 4s → 8s</p>
+                </div>
+                <div class="arrow">↓</div>
+                <div class="flow-step" data-step="2">
+                    <h3>Server Error Auto-Fix</h3>
+                    <p><strong>📁 File:</strong> <code>src/lib/error-recovery-engine.ts</code> (Lines 340-367)</p>
+                    <div class="code-block">
+<span class="keyword">export async function</span> <span class="function">autoFixServerError</span>&lt;<span class="variable">T</span>&gt;(
+    <span class="variable">provider</span>: <span class="keyword">string</span>,
+    <span class="variable">fn</span>: () => <span class="variable">Promise</span>&lt;<span class="variable">T</span>&gt;
+): <span class="variable">Promise</span>&lt;<span class="variable">T</span>&gt; {
+    <span class="keyword">return</span> <span class="variable">retryManager</span>.<span class="function">executeWithRetry</span>(
+        <span class="string">`server-error-${provider}`</span>,
+        <span class="variable">fn</span>,
+        (<span class="variable">error</span>) => {
+            <span class="comment">// Retry on 500/503 errors</span>
+            <span class="keyword">return</span> <span class="variable">error</span>.<span class="variable">statusCode</span> === <span class="string">500</span> || 
+                   <span class="variable">error</span>.<span class="variable">statusCode</span> === <span class="string">503</span>;
+        }
+    );
+}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide">
+            <h2>🏢 Provider-Specific Error Handling</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">Each provider has unique error structures - we handle them all!</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+                <div style="background: #f8f9fa; padding: 25px; border-radius: 15px; border-left: 5px solid #667eea;">
+                    <h3 style="color: #667eea;">🤖 OpenAI / xAI / Groq</h3>
+                    <p><strong>SDK:</strong> OpenAI SDK (compatible)</p>
+                    <div class="code-block" style="font-size: 0.85em;">
+<span class="keyword">const</span> <span class="variable">client</span> = <span class="keyword">new</span> <span class="function">OpenAI</span>({
+    <span class="variable">apiKey</span>: <span class="variable">e</span>.<span class="variable">apiKey</span>,
+    <span class="variable">baseURL</span>: <span class="string">'https://api.openai.com/v1'</span>
+});
+<span class="comment">// Error: error.status = 401</span>
+                    </div>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 25px; border-radius: 15px; border-left: 5px solid #764ba2;">
+                    <h3 style="color: #764ba2;">🧠 Anthropic (Claude)</h3>
+                    <p><strong>SDK:</strong> Anthropic SDK</p>
+                    <div class="code-block" style="font-size: 0.85em;">
+<span class="keyword">const</span> <span class="variable">client</span> = <span class="keyword">new</span> <span class="function">Anthropic</span>({
+    <span class="variable">apiKey</span>: <span class="variable">e</span>.<span class="variable">apiKey</span>
+});
+<span class="comment">// Error: error.error.type = 'authentication_error'</span>
+<span class="comment">// Error: error.status = 401</span>
+                    </div>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 25px; border-radius: 15px; border-left: 5px solid #4285f4;">
+                    <h3 style="color: #4285f4;">💎 Google Gemini</h3>
+                    <p><strong>SDK:</strong> Google Generative AI SDK</p>
+                    <div class="code-block" style="font-size: 0.85em;">
+<span class="keyword">const</span> <span class="variable">genAI</span> = <span class="keyword">new</span> <span class="function">GoogleGenerativeAI</span>(<span class="variable">apiKey</span>);
+<span class="keyword">const</span> <span class="variable">model</span> = <span class="variable">genAI</span>.<span class="function">getGenerativeModel</span>({...});
+<span class="comment">// Error: error.message contains status</span>
+                    </div>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 25px; border-radius: 15px; border-left: 5px solid #ff6b35;">
+                    <h3 style="color: #ff6b35;">🦅 Falcon / Sarvam</h3>
+                    <p><strong>SDK:</strong> Direct Fetch API</p>
+                    <div class="code-block" style="font-size: 0.85em;">
+<span class="keyword">const</span> <span class="variable">response</span> = <span class="keyword">await</span> <span class="function">fetch</span>(<span class="variable">url</span>, {...});
+<span class="keyword">if</span> (!<span class="variable">response</span>.<span class="variable">ok</span>) {
+    <span class="keyword">const</span> <span class="variable">error</span> = <span class="keyword">new</span> <span class="function">Error</span>(<span class="variable">errorMessage</span>);
+    <span class="variable">error</span>.<span class="variable">statusCode</span> = <span class="variable">response</span>.<span class="variable">status</span>;
+    <span class="keyword">throw</span> <span class="variable">error</span>;
+}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide">
+            <h2>📊 ErrorRecoveryPanel UI Components</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">User-friendly error display with actionable guidance</p>
+            
+            <div class="flow-diagram">
+                <div style="background: #fee2e2; border: 2px solid #ef4444; border-radius: 15px; padding: 25px; margin: 20px 0;">
+                    <h3 style="color: #dc2626; margin-bottom: 15px;">🚨 ERROR 401 - UNAUTHORIZED</h3>
+                    <p style="color: #7f1d1d; margin-bottom: 20px;"><strong>Raw Error:</strong> Type: authentication_error | Invalid API Key</p>
+                    
+                    <div style="background: white; padding: 20px; border-radius: 10px; margin-bottom: 15px;">
+                        <h4 style="color: #333;">What's happening?</h4>
+                        <p>Claude API authentication failed - your API key is invalid or expired.</p>
+                        
+                        <h4 style="color: #333; margin-top: 15px;">Why this happened?</h4>
+                        <p>The API key you entered is incorrect, has been revoked, or may have expired.</p>
+                        
+                        <h4 style="color: #333; margin-top: 15px;">Impact</h4>
+                        <p>Go to https://console.anthropic.com/settings/keys to get a valid API key.</p>
+                    </div>
+                    
+                    <div style="background: #fef3c7; padding: 15px; border-radius: 10px;">
+                        <h4 style="color: #92400e;">🔧 Action Required:</h4>
+                        <p>1. Go to Settings and verify your API key is correct</p>
+                        <p>2. Get a new API key from the anthropic dashboard if needed</p>
+                    </div>
+                    
+                    <div style="margin-top: 15px;">
+                        <span class="badge badge-info">Show Raw Error</span>
+                        <span class="badge badge-success">Go to Settings</span>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>Key Features:</h3>
+            <ul style="line-height: 2; margin-left: 25px; font-size: 1.1em;">
+                <li><strong>Real Raw Error:</strong> Shows actual API error message, not cleaned version</li>
+                <li><strong>Status Code:</strong> Extracted from multiple possible locations</li>
+                <li><strong>Provider-Specific Guidance:</strong> Tailored steps for each provider</li>
+                <li><strong>Full JSON:</strong> Complete error object for debugging</li>
+                <li><strong>Consistent UI:</strong> Same layout across all 10+ providers</li>
+            </ul>
+        </div>
+
+        <div class="slide">
+            <h2>🆕 New Provider Implementations</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">Recently added providers with full error handling</p>
+            
+            <div class="flow-diagram">
+                <div class="flow-step" data-step="1">
+                    <h3>🚀 xAI (Grok)</h3>
+                    <p><strong>📁 File:</strong> <code>src/OneMindAI.tsx</code> (Lines 1847-1876)</p>
+                    <p><strong>Base URL:</strong> <code>https://api.x.ai/v1</code></p>
+                    <div class="code-block">
+<span class="keyword">const</span> <span class="variable">client</span> = <span class="keyword">new</span> <span class="function">OpenAI</span>({
+    <span class="variable">apiKey</span>: <span class="variable">e</span>.<span class="variable">apiKey</span>,
+    <span class="variable">baseURL</span>: <span class="string">'https://api.x.ai/v1'</span>,
+    <span class="variable">dangerouslyAllowBrowser</span>: <span class="keyword">true</span>,
+});
+
+<span class="keyword">const</span> <span class="variable">stream</span> = <span class="keyword">await</span> <span class="variable">client</span>.<span class="variable">chat</span>.<span class="variable">completions</span>.<span class="function">create</span>({
+    <span class="variable">model</span>: <span class="variable">e</span>.<span class="variable">selectedVersion</span>,
+    <span class="variable">messages</span>: [{ <span class="variable">role</span>: <span class="string">'user'</span>, <span class="variable">content</span>: <span class="variable">enhancedPrompt</span> }],
+    <span class="variable">stream</span>: <span class="keyword">true</span>,
+});
+                    </div>
+                </div>
+                
+                <div class="flow-step" data-step="2">
+                    <h3>⚡ Groq</h3>
+                    <p><strong>📁 File:</strong> <code>src/OneMindAI.tsx</code> (Lines 1877-1906)</p>
+                    <p><strong>Base URL:</strong> <code>https://api.groq.com/openai/v1</code></p>
+                    <div class="code-block">
+<span class="keyword">const</span> <span class="variable">client</span> = <span class="keyword">new</span> <span class="function">OpenAI</span>({
+    <span class="variable">apiKey</span>: <span class="variable">e</span>.<span class="variable">apiKey</span>,
+    <span class="variable">baseURL</span>: <span class="string">'https://api.groq.com/openai/v1'</span>,
+    <span class="variable">dangerouslyAllowBrowser</span>: <span class="keyword">true</span>,
+});
+                    </div>
+                </div>
+                
+                <div class="flow-step" data-step="3">
+                    <h3>🦅 Falcon (HuggingFace)</h3>
+                    <p><strong>📁 File:</strong> <code>src/OneMindAI.tsx</code> (Lines 1907-1970)</p>
+                    <p><strong>API:</strong> HuggingFace Inference API</p>
+                    <div class="code-block">
+<span class="keyword">const</span> <span class="variable">response</span> = <span class="keyword">await</span> <span class="function">fetch</span>(
+    <span class="string">`https://api-inference.huggingface.co/models/tiiuae/${e.selectedVersion}`</span>,
+    {
+        <span class="variable">method</span>: <span class="string">'POST'</span>,
+        <span class="variable">headers</span>: {
+            <span class="string">'Authorization'</span>: <span class="string">`Bearer ${e.apiKey}`</span>,
+        },
+        <span class="variable">body</span>: <span class="variable">JSON</span>.<span class="function">stringify</span>({
+            <span class="variable">inputs</span>: <span class="variable">enhancedPrompt</span>,
+            <span class="variable">parameters</span>: { <span class="variable">stream</span>: <span class="keyword">true</span> }
+        })
+    }
+);
+
+<span class="comment">// Error handling with status code preservation</span>
+<span class="keyword">if</span> (!<span class="variable">response</span>.<span class="variable">ok</span>) {
+    <span class="keyword">const</span> <span class="variable">error</span> = <span class="keyword">new</span> <span class="function">Error</span>(<span class="string">`Falcon API error: ${errorMessage}`</span>);
+    <span class="variable">error</span>.<span class="variable">statusCode</span> = <span class="variable">response</span>.<span class="variable">status</span>;
+    <span class="keyword">throw</span> <span class="variable">error</span>;
+}
+                    </div>
+                </div>
+                
+                <div class="flow-step" data-step="4">
+                    <h3>🇮🇳 Sarvam AI</h3>
+                    <p><strong>📁 File:</strong> <code>src/OneMindAI.tsx</code> (Lines 1971-2040)</p>
+                    <p><strong>API:</strong> <code>https://api.sarvam.ai/v1/chat/completions</code></p>
+                    <div class="code-block">
+<span class="keyword">const</span> <span class="variable">response</span> = <span class="keyword">await</span> <span class="function">fetch</span>(<span class="string">'https://api.sarvam.ai/v1/chat/completions'</span>, {
+    <span class="variable">method</span>: <span class="string">'POST'</span>,
+    <span class="variable">headers</span>: {
+        <span class="string">'Authorization'</span>: <span class="string">`Bearer ${e.apiKey}`</span>,
+    },
+    <span class="variable">body</span>: <span class="variable">JSON</span>.<span class="function">stringify</span>({
+        <span class="variable">model</span>: <span class="variable">e</span>.<span class="variable">selectedVersion</span>,
+        <span class="variable">messages</span>: [{ <span class="variable">role</span>: <span class="string">'user'</span>, <span class="variable">content</span>: <span class="variable">enhancedPrompt</span> }],
+        <span class="variable">stream</span>: <span class="keyword">true</span>
+    })
+});
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide">
+            <h2>📋 Supported Providers List</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">All providers with streaming support and error handling</p>
+            
+            <div class="code-block">
+<span class="comment">// Provider validation in streamFromProvider()</span>
+<span class="keyword">if</span> (!<span class="variable">e</span>.<span class="variable">apiKey</span> || !<span class="variable">liveMode</span> || ![
+    <span class="string">'anthropic'</span>,   <span class="comment">// Claude</span>
+    <span class="string">'openai'</span>,      <span class="comment">// GPT-4, GPT-3.5</span>
+    <span class="string">'gemini'</span>,      <span class="comment">// Google Gemini</span>
+    <span class="string">'mistral'</span>,     <span class="comment">// Mistral AI</span>
+    <span class="string">'perplexity'</span>,  <span class="comment">// Perplexity</span>
+    <span class="string">'kimi'</span>,        <span class="comment">// Kimi (Moonshot)</span>
+    <span class="string">'deepseek'</span>,    <span class="comment">// DeepSeek</span>
+    <span class="string">'xai'</span>,         <span class="comment">// xAI Grok (NEW!)</span>
+    <span class="string">'groq'</span>,        <span class="comment">// Groq (NEW!)</span>
+    <span class="string">'falcon'</span>,      <span class="comment">// Falcon via HuggingFace (NEW!)</span>
+    <span class="string">'sarvam'</span>       <span class="comment">// Sarvam AI (NEW!)</span>
+].<span class="function">includes</span>(<span class="variable">e</span>.<span class="variable">provider</span>)) {
+    <span class="comment">// Show error for unsupported provider</span>
+}
+            </div>
+            
+            <div class="stats-grid" style="margin-top: 40px;">
+                <div class="stat-card"><div class="stat-number">11</div><div class="stat-label">Total Providers</div></div>
+                <div class="stat-card"><div class="stat-number">4</div><div class="stat-label">New Providers</div></div>
+                <div class="stat-card"><div class="stat-number">100%</div><div class="stat-label">Error Handling</div></div>
+                <div class="stat-card"><div class="stat-number">Real-Time</div><div class="stat-label">Streaming</div></div>
+            </div>
+        </div>
+
+        <div class="slide">
+            <h2>🧪 Simulating Errors for Testing</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">How to trigger different error types for testing</p>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Error Type</th>
+                        <th>How to Simulate</th>
+                        <th>Expected Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-warning">401 Auth Error</span></td>
+                        <td>Enter invalid API key (e.g., "sk-invalid-key-12345")</td>
+                        <td>Shows "Invalid or expired API key" with Settings link</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-warning">403 Forbidden</span></td>
+                        <td>Use API key without required permissions</td>
+                        <td>Shows "Permission denied" with console link</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-warning">404 Not Found</span></td>
+                        <td>Enter invalid model name (e.g., "gpt-99-turbo")</td>
+                        <td>Shows "Model not found" with documentation link</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">429 Rate Limit</span></td>
+                        <td>Send many requests quickly or use free tier</td>
+                        <td>Auto-retry with exponential backoff (4 attempts)</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-success">500 Server Error</span></td>
+                        <td>Wait for provider outage or use test endpoint</td>
+                        <td>Auto-retry with backoff, then show error</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-warning">Network Error</span></td>
+                        <td>Disconnect internet or block API domain</td>
+                        <td>Shows "Connection failed" with retry button</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div style="background: #e8f5e9; padding: 25px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #4caf50;">
+                <h3 style="color: #2e7d32;">💡 Testing Tip</h3>
+                <p style="font-size: 1.1em;">To test error handling without affecting production:</p>
+                <ol style="margin-left: 25px; line-height: 2;">
+                    <li>Go to Settings</li>
+                    <li>Enter an intentionally wrong API key for any provider</li>
+                    <li>Try to send a message</li>
+                    <li>Observe the ErrorRecoveryPanel with real error details</li>
+                    <li>Click "Show Raw Error" to see full JSON structure</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="slide">
+            <h2>✅ Auto-Fixable vs ❌ Manual Fix Errors</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">Understanding which errors the system handles automatically vs which require user action</p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                <!-- Auto-Fixable Errors -->
+                <div style="background: #ecfdf5; border: 2px solid #10b981; border-radius: 15px; padding: 25px;">
+                    <h3 style="color: #059669; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                        🔄 Auto-Fixable Errors (System Handles)
+                    </h3>
+                    <p style="color: #047857; margin-bottom: 15px; font-size: 0.95em;">These errors are automatically retried with exponential backoff (1s → 2s → 4s → 8s)</p>
+                    
+                    <div>
+                        <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #10b981;">
+                            <div style="font-weight: bold; color: #059669;">429 - Rate Limit Exceeded</div>
+                            <div style="font-size: 0.85em; color: #666;">Too many requests per minute</div>
+                            <div style="font-size: 0.8em; color: #10b981; margin-top: 5px;">✅ Auto-retry with backoff</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #10b981;">
+                            <div style="font-weight: bold; color: #059669;">500 - Internal Server Error</div>
+                            <div style="font-size: 0.85em; color: #666;">Provider server issue</div>
+                            <div style="font-size: 0.8em; color: #10b981; margin-top: 5px;">✅ Auto-retry up to 4 times</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #10b981;">
+                            <div style="font-weight: bold; color: #059669;">503 - Service Unavailable</div>
+                            <div style="font-size: 0.85em; color: #666;">Service temporarily overloaded</div>
+                            <div style="font-size: 0.8em; color: #10b981; margin-top: 5px;">✅ Auto-retry with throttling</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 10px; border-left: 4px solid #10b981;">
+                            <div style="font-weight: bold; color: #059669;">504 - Gateway Timeout</div>
+                            <div style="font-size: 0.85em; color: #666;">Request took too long</div>
+                            <div style="font-size: 0.8em; color: #10b981; margin-top: 5px;">✅ Auto-retry with longer timeout</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Manual Fix Errors -->
+                <div style="background: #fef2f2; border: 2px solid #ef4444; border-radius: 15px; padding: 25px;">
+                    <h3 style="color: #dc2626; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                        🛠️ Manual Fix Required (User Must Act)
+                    </h3>
+                    <p style="color: #b91c1c; margin-bottom: 15px; font-size: 0.95em;">These errors require user intervention - system shows detailed guidance</p>
+                    
+                    <div>
+                        <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #ef4444;">
+                            <div style="font-weight: bold; color: #dc2626;">401 - Authentication Error</div>
+                            <div style="font-size: 0.85em; color: #666;">Invalid or expired API key</div>
+                            <div style="font-size: 0.8em; color: #ef4444; margin-top: 5px;">❌ Go to Settings → Update API Key</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #ef4444;">
+                            <div style="font-weight: bold; color: #dc2626;">403 - Permission Denied</div>
+                            <div style="font-size: 0.85em; color: #666;">API key lacks permissions</div>
+                            <div style="font-size: 0.8em; color: #ef4444; margin-top: 5px;">❌ Check API key permissions</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #ef4444;">
+                            <div style="font-weight: bold; color: #dc2626;">404 - Not Found</div>
+                            <div style="font-size: 0.85em; color: #666;">Model or resource not found</div>
+                            <div style="font-size: 0.8em; color: #ef4444; margin-top: 5px;">❌ Verify model name in Settings</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 10px; border-left: 4px solid #ef4444;">
+                            <div style="font-weight: bold; color: #dc2626;">400 - Bad Request</div>
+                            <div style="font-size: 0.85em; color: #666;">Invalid request parameters</div>
+                            <div style="font-size: 0.8em; color: #ef4444; margin-top: 5px;">❌ Check API documentation</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Error Simulator -->
+        <div class="slide" id="simulatorSlide">
+            <h2>🎮 Interactive Error Simulator</h2>
+            <p style="font-size: 1.2em; margin-bottom: 20px;">Click any error to see how the ErrorRecoveryPanel handles it</p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 30px;">
+                <!-- Error Selection Panel -->
+                <div>
+                    <!-- Auto-Fixable -->
+                    <div style="background: #ecfdf5; border-radius: 15px; overflow: hidden; margin-bottom: 20px;">
+                        <div style="background: #10b981; color: white; padding: 12px 15px; font-weight: bold;">
+                            🔄 Auto-Fixable Errors
+                        </div>
+                        <div id="autoFixableList">
+                            <button onclick="simulateError('429', 'Rate Limit', true, 'openai')" style="width: 100%; text-align: left; padding: 12px 15px; border: none; background: white; border-bottom: 1px solid #d1fae5; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='white'">
+                                <div style="font-weight: 600; color: #059669;">429 - Rate Limit</div>
+                                <div style="font-size: 0.8em; color: #666;">OpenAI / Claude / Gemini</div>
+                            </button>
+                            <button onclick="simulateError('500', 'Internal Server Error', true, 'anthropic')" style="width: 100%; text-align: left; padding: 12px 15px; border: none; background: white; border-bottom: 1px solid #d1fae5; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='white'">
+                                <div style="font-weight: 600; color: #059669;">500 - Server Error</div>
+                                <div style="font-size: 0.8em; color: #666;">All Providers</div>
+                            </button>
+                            <button onclick="simulateError('503', 'Service Unavailable', true, 'gemini')" style="width: 100%; text-align: left; padding: 12px 15px; border: none; background: white; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='white'">
+                                <div style="font-weight: 600; color: #059669;">503 - Unavailable</div>
+                                <div style="font-size: 0.8em; color: #666;">Service Overloaded</div>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Manual Fix -->
+                    <div style="background: #fef2f2; border-radius: 15px; overflow: hidden;">
+                        <div style="background: #ef4444; color: white; padding: 12px 15px; font-weight: bold;">
+                            🛠️ Manual Fix Required
+                        </div>
+                        <div id="manualFixList">
+                            <button onclick="simulateError('401', 'Authentication Error', false, 'anthropic')" style="width: 100%; text-align: left; padding: 12px 15px; border: none; background: white; border-bottom: 1px solid #fecaca; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='white'">
+                                <div style="font-weight: 600; color: #dc2626;">401 - Auth Error</div>
+                                <div style="font-size: 0.8em; color: #666;">Invalid API Key</div>
+                            </button>
+                            <button onclick="simulateError('403', 'Permission Denied', false, 'openai')" style="width: 100%; text-align: left; padding: 12px 15px; border: none; background: white; border-bottom: 1px solid #fecaca; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='white'">
+                                <div style="font-weight: 600; color: #dc2626;">403 - Forbidden</div>
+                                <div style="font-size: 0.8em; color: #666;">Permission Denied</div>
+                            </button>
+                            <button onclick="simulateError('404', 'Model Not Found', false, 'gemini')" style="width: 100%; text-align: left; padding: 12px 15px; border: none; background: white; border-bottom: 1px solid #fecaca; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='white'">
+                                <div style="font-weight: 600; color: #dc2626;">404 - Not Found</div>
+                                <div style="font-size: 0.8em; color: #666;">Model doesn't exist</div>
+                            </button>
+                            <button onclick="simulateError('400', 'Bad Request', false, 'mistral')" style="width: 100%; text-align: left; padding: 12px 15px; border: none; background: white; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='white'">
+                                <div style="font-weight: 600; color: #dc2626;">400 - Bad Request</div>
+                                <div style="font-size: 0.8em; color: #666;">Invalid Parameters</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Error Display Panel -->
+                <div>
+                    <!-- Placeholder -->
+                    <div id="errorPlaceholder" style="background: #f8f9fa; border: 2px dashed #ccc; border-radius: 15px; padding: 60px; text-align: center;">
+                        <div style="font-size: 4em; margin-bottom: 20px;">🎯</div>
+                        <h3 style="color: #666; margin-bottom: 10px;">Click an error to simulate</h3>
+                        <p style="color: #999;">See how ErrorRecoveryPanel displays different error types</p>
+                    </div>
+                    
+                    <!-- Simulated Error Panel -->
+                    <div id="simulatedErrorPanel" style="display: none; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
+                        <!-- Header -->
+                        <div id="errorHeader" style="padding: 20px; border-bottom: 1px solid #e5e7eb;">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                        <span id="simErrorIcon" style="font-size: 1.5em;">🚨</span>
+                                        <span id="simErrorTitle" style="font-weight: bold; font-size: 1.2em;">ERROR 401</span>
+                                        <span id="simErrorBadge" style="padding: 3px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold;">Critical</span>
+                                    </div>
+                                    <p style="color: #666; font-size: 0.9em;">Provider: <span id="simProvider" style="font-weight: 600; color: #667eea;">anthropic</span></p>
+                                </div>
+                                <button onclick="closeSimulator()" style="background: none; border: none; cursor: pointer; font-size: 1.5em; color: #999;">×</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Raw Error Message -->
+                        <div style="padding: 15px 20px; background: #1e1e1e;">
+                            <p style="color: #888; font-size: 0.8em; margin-bottom: 5px;">Raw API Error:</p>
+                            <pre id="simRawError" style="color: #ef4444; font-family: monospace; font-size: 0.9em; margin: 0; white-space: pre-wrap;"></pre>
+                        </div>
+                        
+                        <!-- Explanation -->
+                        <div style="padding: 20px; background: #f0f9ff; border-bottom: 1px solid #bae6fd;">
+                            <h4 style="color: #0369a1; margin-bottom: 15px;">💡 What's happening?</h4>
+                            <p id="simExplanation" style="color: #0c4a6e; line-height: 1.6;"></p>
+                        </div>
+                        
+                        <!-- Auto-Retry Timeline (for auto-fixable) -->
+                        <div id="simRetryTimeline" style="display: none; padding: 20px; background: #ecfdf5; border-bottom: 1px solid #a7f3d0;">
+                            <h4 style="color: #059669; margin-bottom: 15px;">🔄 Auto-Retry in Progress</h4>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                        <span style="font-size: 0.8em; color: #059669;">Attempt 1</span>
+                                        <span style="font-size: 0.8em; color: #059669;">Attempt 4</span>
+                                    </div>
+                                    <div style="height: 8px; background: #d1fae5; border-radius: 4px; overflow: hidden;">
+                                        <div id="simRetryProgress" style="height: 100%; background: #10b981; width: 0%; transition: width 0.5s;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p style="font-size: 0.85em; color: #047857; margin-top: 10px;">⏱️ Exponential backoff: 1s → 2s → 4s → 8s (Total: ~15s)</p>
+                        </div>
+                        
+                        <!-- Action Required -->
+                        <div id="simActionRequired" style="padding: 20px; background: #fffbeb; border-bottom: 1px solid #fde68a;">
+                            <h4 style="color: #92400e; margin-bottom: 15px;">🔧 Action Required:</h4>
+                            <ol id="simActionSteps" style="margin-left: 20px; color: #78350f; line-height: 2;"></ol>
+                        </div>
+                        
+                        <!-- Raw JSON -->
+                        <div style="padding: 15px 20px; background: #1e1e1e;">
+                            <p style="color: #888; font-size: 0.8em; margin-bottom: 5px;">Full Raw Error JSON:</p>
+                            <pre id="simRawJson" style="color: #4ade80; font-family: monospace; font-size: 0.75em; margin: 0; max-height: 100px; overflow: auto; white-space: pre-wrap;"></pre>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div style="padding: 15px 20px; background: #f3f4f6; display: flex; gap: 10px;">
+                            <button style="padding: 8px 16px; background: #374151; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">📋 Copy Error</button>
+                            <button style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">⚙️ Go to Settings</button>
+                            <button id="simRetryBtn" style="display: none; padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">🔄 Retry Now</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide">
+            <h2>🎯 Error Handling Summary</h2>
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; border-radius: 15px;">
+                <h3 style="color: white; font-size: 2em; margin-bottom: 30px;">Key Improvements Made</h3>
+                <div style="font-size: 1.1em; line-height: 2.5;">
+                    <p>✅ <strong>Real Raw Errors:</strong> Show actual API error, not cleaned version</p>
+                    <p>✅ <strong>Status Code Extraction:</strong> From multiple locations + message parsing</p>
+                    <p>✅ <strong>Full JSON Display:</strong> Complete error object for debugging</p>
+                    <p>✅ <strong>Provider-Specific Guidance:</strong> Tailored action steps</p>
+                    <p>✅ <strong>Consistent UI:</strong> Same layout across all 11 providers</p>
+                    <p>✅ <strong>Auto-Retry:</strong> For transient errors (429, 500, 503)</p>
+                    <p>✅ <strong>New Providers:</strong> xAI, Groq, Falcon, Sarvam added</p>
+                </div>
+            </div>
+            
+            <div style="margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
+                    <h4 style="color: #667eea;">Files Modified</h4>
+                    <p style="font-size: 1.5em; font-weight: bold;">3</p>
+                    <p style="font-size: 0.9em; color: #666;">OneMindAI.tsx, ErrorRecoveryPanel.tsx, error-recovery-engine.ts</p>
+                </div>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
+                    <h4 style="color: #667eea;">Lines Added</h4>
+                    <p style="font-size: 1.5em; font-weight: bold;">~500+</p>
+                    <p style="font-size: 0.9em; color: #666;">Error handling, new providers, UI improvements</p>
+                </div>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
+                    <h4 style="color: #667eea;">Error Types</h4>
+                    <p style="font-size: 1.5em; font-weight: bold;">15+</p>
+                    <p style="font-size: 0.9em; color: #666;">Auth, rate limit, server, network, etc.</p>
+                </div>
+            </div>
+        </div>
+
         <div class="slide" style="text-align: center;">
             <h1 style="font-size: 4em; margin-bottom: 30px;">🎉</h1>
             <h2 style="border: none;">Thank You!</h2>
@@ -1555,6 +2290,7 @@ plt.show()
             <div style="margin-top: 60px; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; color: white;">
                 <p style="font-size: 1.3em;">Questions?</p>
                 <p style="font-size: 1.1em; margin-top: 15px; opacity: 0.9;">This presentation covers the complete flow from API call to screen display</p>
+                <p style="font-size: 1em; margin-top: 10px; opacity: 0.8;">+ NEW: Comprehensive Error Handling Architecture</p>
             </div>
         </div>
     </div>
@@ -1587,6 +2323,223 @@ plt.show()
         console.log('🚀 OneMindAI Architecture Presentation Loaded');
         console.log('📖 Use Arrow Keys or Page Up/Down to navigate');
         console.log('🖨️ Press Ctrl+P to print');
+
+        // Error Simulator Data
+        const errorSimData = {
+            '429': {
+                icon: '🔶',
+                title: 'ERROR 429 - RATE LIMIT',
+                badge: 'Auto-Retry',
+                badgeColor: '#10b981',
+                headerBg: '#ecfdf5',
+                rawError: 'Error 429: Rate limit exceeded. You are sending requests too quickly. Please slow down.',
+                explanation: 'You\'ve exceeded the API rate limit. The system is automatically retrying with exponential backoff (1s → 2s → 4s → 8s). This usually resolves within 15 seconds.',
+                actions: [
+                    'System is automatically retrying...',
+                    'Wait for auto-retry to complete',
+                    'Consider upgrading your API plan for higher limits'
+                ],
+                json: {
+                    statusCode: 429,
+                    type: 'rate_limit_error',
+                    message: 'Rate limit exceeded',
+                    retryAfter: 60
+                }
+            },
+            '500': {
+                icon: '🔴',
+                title: 'ERROR 500 - SERVER ERROR',
+                badge: 'Auto-Retry',
+                badgeColor: '#10b981',
+                headerBg: '#ecfdf5',
+                rawError: 'Error 500: Internal server error. An unexpected error occurred on the server.',
+                explanation: 'The API provider is experiencing internal issues. The system will automatically retry up to 4 times with increasing delays. This is usually temporary.',
+                actions: [
+                    'System is automatically retrying...',
+                    'Wait for auto-retry to complete',
+                    'If persists, check provider status page'
+                ],
+                json: {
+                    statusCode: 500,
+                    type: 'internal_error',
+                    message: 'Internal server error',
+                    provider: 'anthropic'
+                }
+            },
+            '503': {
+                icon: '🔴',
+                title: 'ERROR 503 - SERVICE UNAVAILABLE',
+                badge: 'Auto-Retry',
+                badgeColor: '#10b981',
+                headerBg: '#ecfdf5',
+                rawError: 'Error 503: Service temporarily unavailable. The server is overloaded.',
+                explanation: 'The service is temporarily overloaded or under maintenance. Auto-retry is in progress with throttling to avoid further overload.',
+                actions: [
+                    'System is automatically retrying with throttling...',
+                    'Service may be under high load',
+                    'Try again during off-peak hours if issue persists'
+                ],
+                json: {
+                    statusCode: 503,
+                    type: 'service_unavailable',
+                    message: 'Service temporarily unavailable',
+                    retryAfter: 30
+                }
+            },
+            '401': {
+                icon: '🚨',
+                title: 'ERROR 401 - UNAUTHORIZED',
+                badge: 'Manual Fix',
+                badgeColor: '#ef4444',
+                headerBg: '#fef2f2',
+                rawError: 'Type: authentication_error | Invalid API Key. The API key provided is invalid or has expired.',
+                explanation: 'Your API key is invalid, expired, or has been revoked. This error cannot be auto-fixed - you need to update your API key in Settings.',
+                actions: [
+                    'Go to Settings and verify your API key',
+                    'Get a new API key from the provider dashboard',
+                    'Ensure the key has not expired or been revoked'
+                ],
+                json: {
+                    statusCode: 401,
+                    type: 'authentication_error',
+                    message: 'Invalid API Key',
+                    error: { type: 'authentication_error', message: 'Invalid or expired API key' }
+                }
+            },
+            '403': {
+                icon: '🚨',
+                title: 'ERROR 403 - FORBIDDEN',
+                badge: 'Manual Fix',
+                badgeColor: '#ef4444',
+                headerBg: '#fef2f2',
+                rawError: 'Error 403: Permission denied. Your API key does not have access to this resource.',
+                explanation: 'Your API key doesn\'t have the required permissions for this operation. Check your API key settings in the provider\'s console.',
+                actions: [
+                    'Check API key permissions in provider console',
+                    'Ensure your plan includes access to this model',
+                    'Contact provider support if permissions are correct'
+                ],
+                json: {
+                    statusCode: 403,
+                    type: 'permission_denied',
+                    message: 'Permission denied',
+                    requiredScope: 'model:read'
+                }
+            },
+            '404': {
+                icon: '🔶',
+                title: 'ERROR 404 - NOT FOUND',
+                badge: 'Manual Fix',
+                badgeColor: '#ef4444',
+                headerBg: '#fef2f2',
+                rawError: 'Error 404: Model not found. The requested model "gpt-99-turbo" does not exist.',
+                explanation: 'The model or resource you requested doesn\'t exist. This could be a typo in the model name or the model may have been deprecated.',
+                actions: [
+                    'Verify the model name is correct in Settings',
+                    'Check provider documentation for available models',
+                    'The model may have been deprecated or renamed'
+                ],
+                json: {
+                    statusCode: 404,
+                    type: 'not_found',
+                    message: 'Model not found',
+                    requestedModel: 'gpt-99-turbo'
+                }
+            },
+            '400': {
+                icon: '🔶',
+                title: 'ERROR 400 - BAD REQUEST',
+                badge: 'Manual Fix',
+                badgeColor: '#ef4444',
+                headerBg: '#fef2f2',
+                rawError: 'Error 400: Invalid request. The "temperature" parameter must be between 0 and 2.',
+                explanation: 'The request contains invalid parameters. Check the error details to see which parameter is incorrect and what values are allowed.',
+                actions: [
+                    'Check the error details for invalid parameters',
+                    'Review API documentation for correct parameter values',
+                    'Ensure request body is properly formatted'
+                ],
+                json: {
+                    statusCode: 400,
+                    type: 'invalid_request_error',
+                    message: 'Invalid parameter: temperature',
+                    param: 'temperature',
+                    allowedRange: '0-2'
+                }
+            }
+        };
+
+        function simulateError(code, name, isAutoFixable, provider) {
+            const data = errorSimData[code];
+            
+            // Hide placeholder, show panel
+            document.getElementById('errorPlaceholder').style.display = 'none';
+            document.getElementById('simulatedErrorPanel').style.display = 'block';
+            
+            // Update header
+            document.getElementById('errorHeader').style.background = data.headerBg;
+            document.getElementById('simErrorIcon').textContent = data.icon;
+            document.getElementById('simErrorTitle').textContent = data.title;
+            document.getElementById('simErrorBadge').textContent = data.badge;
+            document.getElementById('simErrorBadge').style.background = data.badgeColor;
+            document.getElementById('simErrorBadge').style.color = 'white';
+            document.getElementById('simProvider').textContent = provider;
+            
+            // Update content
+            document.getElementById('simRawError').textContent = data.rawError;
+            document.getElementById('simExplanation').textContent = data.explanation;
+            
+            // Update actions
+            const actionsList = document.getElementById('simActionSteps');
+            actionsList.innerHTML = data.actions.map(a => `<li>${a}</li>`).join('');
+            
+            // Update JSON
+            document.getElementById('simRawJson').textContent = JSON.stringify(data.json, null, 2);
+            
+            // Show/hide retry timeline and button
+            if (isAutoFixable) {
+                document.getElementById('simRetryTimeline').style.display = 'block';
+                document.getElementById('simRetryBtn').style.display = 'inline-block';
+                document.getElementById('simActionRequired').style.background = '#ecfdf5';
+                document.getElementById('simActionRequired').querySelector('h4').style.color = '#059669';
+                document.getElementById('simActionRequired').querySelector('h4').textContent = '🔄 Auto-Recovery in Progress:';
+                
+                // Animate progress bar
+                animateRetryProgress();
+            } else {
+                document.getElementById('simRetryTimeline').style.display = 'none';
+                document.getElementById('simRetryBtn').style.display = 'none';
+                document.getElementById('simActionRequired').style.background = '#fffbeb';
+                document.getElementById('simActionRequired').querySelector('h4').style.color = '#92400e';
+                document.getElementById('simActionRequired').querySelector('h4').textContent = '🔧 Action Required:';
+            }
+        }
+
+        function animateRetryProgress() {
+            const progressBar = document.getElementById('simRetryProgress');
+            progressBar.style.width = '0%';
+            
+            // Animate through retry attempts
+            const delays = [1000, 2000, 4000, 8000];
+            let totalTime = 0;
+            
+            delays.forEach((delay, index) => {
+                setTimeout(() => {
+                    progressBar.style.width = ((index + 1) * 25) + '%';
+                }, totalTime);
+                totalTime += delay;
+            });
+            
+            // Reset after animation
+            setTimeout(() => {
+                progressBar.style.width = '0%';
+            }, totalTime + 1000);
+        }
+
+        function closeSimulator() {
+            document.getElementById('errorPlaceholder').style.display = 'block';
+            document.getElementById('simulatedErrorPanel').style.display = 'none';
+        }
     </script>
 </body>
 </html>

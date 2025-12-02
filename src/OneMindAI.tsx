@@ -3,12 +3,13 @@ import { marked } from "marked";
 import { FileUploadZone } from './components/FileUploadZone';
 import EnhancedMarkdownRenderer from './components/EnhancedMarkdownRenderer';
 import { SelectableMarkdownRenderer } from './components/SelectableMarkdownRenderer';
+import { TableChartRenderer } from './components/TableChartRenderer';
 import { ErrorRecoveryPanel } from './components/ErrorRecoveryPanel';
 import { ExportDropdown } from './components/ExportButton';
 import { HyperText } from './components/ui/hyper-text';
 import { UploadedFile } from "./lib/file-utils";
 import { terminalLogger } from "./lib/terminal-logger";
-import { exportAllToWord, ExportData } from './lib/export-utils';
+import { exportAllToWord, exportAllToPDF, ExportData } from './lib/export-utils';
 import { 
   autoFixRateLimit, 
   autoFixServerError, 
@@ -18,6 +19,13 @@ import {
   getAutoFixFunction,
   initializeAutoRecovery
 } from './lib/error-recovery-engine';
+import { SuperDebugPanel } from './components/SuperDebugPanel';
+import { superDebugBus } from './lib/super-debug-bus';
+import { BalanceManager } from './components/BalanceManager';
+import { deductFromBalance, loadBalances, BalanceRecord } from './lib/balance-tracker';
+import { useAuth } from './lib/supabase';
+import { deductCredits, calculateCredits, CREDIT_PRICING } from './lib/supabase/credit-service';
+import { AuthModal, UserMenu } from './components/auth';
 
 /**
  * OneMindAI — v14 (Mobile-First Preview, patched again)
@@ -69,7 +77,7 @@ const logger = {
 interface Engine {
   id: string;
   name: string;
-  provider: "openai" | "anthropic" | "gemini" | "deepseek" | "mistral" | "perplexity" | "kimi" | "xai" | "huggingface" | "sarvam" | "generic";
+  provider: "openai" | "anthropic" | "gemini" | "deepseek" | "mistral" | "perplexity" | "kimi" | "xai" | "groq" | "falcon" | "huggingface" | "sarvam" | "generic";
   tokenizer: "tiktoken" | "sentencepiece" | "bytebpe";
   contextLimit: number;
   versions: string[];
@@ -101,8 +109,10 @@ interface RunResult {
   streamingContent?: string;
 }
 
-// ===== Default API Keys (Encrypted Display) =====
-// API keys should be added by users - DO NOT commit real keys to GitHub
+// ===== Default API Keys =====
+// SECURITY: API keys are now managed via backend proxy (server/ai-proxy.cjs)
+// Users should NOT add keys here - use .env file with the proxy server instead
+// See .env.example for configuration
 const DEFAULT_API_KEYS: Record<string, string> = {
   "claude": "",
   "kimi": "",
@@ -112,7 +122,9 @@ const DEFAULT_API_KEYS: Record<string, string> = {
   "mistral": "",
   "groq": "",
   "sarvam": "",
-  "chatgpt": ""
+  "chatgpt": "",
+  "xai": "",
+  "huggingface": "",
 };
 
 // Simple encryption/decryption for display (Base64)
@@ -161,6 +173,8 @@ const seededEngines: Engine[] = [
   { id: "perplexity", name: "Perplexity", provider: "perplexity", tokenizer: "tiktoken", contextLimit: 32_000, versions: ["sonar-pro", "sonar-small"], selectedVersion: "sonar-pro", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["perplexity"] },
   { id: "kimi", name: "KIMI", provider: "kimi", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"], selectedVersion: "moonshot-v1-128k", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["kimi"] },
   { id: "xai", name: "xAI Grok", provider: "xai", tokenizer: "bytebpe", contextLimit: 128_000, versions: ["grok-beta"], selectedVersion: "grok-beta", outPolicy: { mode: "auto" }, endpoint: "", apiKey: DEFAULT_API_KEYS["groq"] },
+  { id: "groq", name: "Groq", provider: "groq", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"], selectedVersion: "llama-3.3-70b-versatile", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["groq"] },
+  { id: "falcon", name: "Falcon LLM", provider: "falcon", tokenizer: "bytebpe", contextLimit: 128_000, versions: ["falcon-180b-chat", "falcon-40b-instruct", "falcon-7b-instruct", "falcon-mamba-7b", "falcon-11b"], selectedVersion: "falcon-180b-chat", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["huggingface"] },
   { id: "sarvam", name: "Sarvam AI", provider: "sarvam", tokenizer: "tiktoken", contextLimit: 32_000, versions: ["sarvam-2b", "sarvam-1"], selectedVersion: "sarvam-2b", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["sarvam"] },
   { id: "huggingface", name: "HuggingFace Inference", provider: "huggingface", tokenizer: "bytebpe", contextLimit: 64_000, versions: ["hf-model"], selectedVersion: "hf-model", outPolicy: { mode: "auto" }, endpoint: "", apiKey: DEFAULT_API_KEYS["sarvam"] },
   { id: "generic", name: "Custom HTTP Engine", provider: "generic", tokenizer: "bytebpe", contextLimit: 64_000, versions: ["v1"], selectedVersion: "v1", outPolicy: { mode: "auto" }, endpoint: "", apiKey: DEFAULT_API_KEYS["sarvam"] },
@@ -205,6 +219,19 @@ const BASE_PRICING: Record<string, Record<string, { in: number; out: number; not
   xai: {
     "grok-beta": { in: 6.00, out: 12.00, note: "Fast, opinionated." },
   },
+  groq: {
+    "llama-3.3-70b-versatile": { in: 0.59, out: 0.79, note: "Llama 3.3 70B - Best quality on Groq" },
+    "llama-3.1-8b-instant": { in: 0.05, out: 0.08, note: "Llama 3.1 8B - Ultra fast inference" },
+    "mixtral-8x7b-32768": { in: 0.24, out: 0.24, note: "Mixtral 8x7B - 32K context MoE" },
+    "gemma2-9b-it": { in: 0.20, out: 0.20, note: "Gemma 2 9B - Google's efficient model" },
+  },
+  falcon: {
+    "falcon-180b-chat": { in: 0.80, out: 1.60, note: "Falcon 180B - Top open-source LLM by TII" },
+    "falcon-40b-instruct": { in: 0.40, out: 0.80, note: "Falcon 40B - Multilingual, royalty-free" },
+    "falcon-7b-instruct": { in: 0.10, out: 0.20, note: "Falcon 7B - Lightweight Apache 2.0" },
+    "falcon-mamba-7b": { in: 0.15, out: 0.30, note: "Falcon Mamba 7B - State Space LM" },
+    "falcon-11b": { in: 0.20, out: 0.40, note: "Falcon 2 11B - Vision-to-language" },
+  },
   sarvam: {
     "sarvam-2b": { in: 0.10, out: 0.30, note: "Sarvam AI 2B - Lightweight & fast" },
     "sarvam-1": { in: 0.20, out: 0.50, note: "Sarvam AI 1 - Balanced performance" },
@@ -225,6 +252,43 @@ function estimateTokens(text: string, tokenizer: Engine["tokenizer"]): number {
   if (tokenizer === "tiktoken") return Math.max(1, Math.floor(0.75 * words + 0.002 * chars));
   if (tokenizer === "sentencepiece") return Math.max(1, Math.floor(0.95 * words + 0.003 * chars));
   return Math.max(1, Math.floor(0.6 * words + 0.004 * chars));
+}
+
+// Calculate estimated cost for selected engines
+function calculateEstimatedCost(
+  engines: Engine[], 
+  selected: Record<string, boolean>, 
+  promptTokens: number,
+  expectedOutputTokens: number = 1000 // Default expected output
+): { totalCost: number; breakdown: Array<{ engine: string; cost: number; inCost: number; outCost: number }> } {
+  const breakdown: Array<{ engine: string; cost: number; inCost: number; outCost: number }> = [];
+  let totalCost = 0;
+  
+  for (const engine of engines) {
+    if (!selected[engine.id]) continue;
+    
+    const providerPricing = BASE_PRICING[engine.provider];
+    if (!providerPricing) continue;
+    
+    const versionPricing = providerPricing[engine.selectedVersion];
+    if (!versionPricing) continue;
+    
+    // Cost per 1M tokens, so divide by 1,000,000
+    const inCost = (promptTokens / 1_000_000) * versionPricing.in;
+    const outCost = (expectedOutputTokens / 1_000_000) * versionPricing.out;
+    const cost = inCost + outCost;
+    
+    breakdown.push({
+      engine: engine.name,
+      cost,
+      inCost,
+      outCost
+    });
+    
+    totalCost += cost;
+  }
+  
+  return { totalCost, breakdown };
 }
 const rand = (min: number, max: number) => Math.random() * (max - min) + min;
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -258,12 +322,28 @@ marked.setOptions({
 });
 
 export default function OneMindAI_v14Mobile() {
+  // ===== Auth (must be first - before any conditional returns) =====
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   // ===== Prompt Limits =====
   const LIMITS = {
     PROMPT_SOFT_LIMIT: 5000,    // Warning
     PROMPT_HARD_LIMIT: 10000,   // Block
     PROMPT_CHUNK_SIZE: 4000,    // For chunking
   };
+
+  // ===== MOCK ERROR TESTING (DISABLED) =====
+  // Uncomment to enable mock error testing for auto-retry logic
+  // Set to '429', '500', '503', or 'random' to simulate errors
+  // Set to false for normal operation
+  const mockErrorMode: false | '429' | '500' | '503' | 'random' = false; // DISABLED - change to useState to enable
+  const mockErrorCounts: Record<string, number> = {}; // DISABLED
+  const setMockErrorCounts = (_: any) => {}; // DISABLED - no-op
+  const MOCK_FAIL_AFTER_RETRIES = 2; // Succeed after this many retries (to test retry logic)
+  // To re-enable, uncomment these lines:
+  // const [mockErrorMode, setMockErrorMode] = useState<false | '429' | '500' | '503' | 'random'>(false);
+  // const [mockErrorCounts, setMockErrorCounts] = useState<Record<string, number>>({});
 
   // ===== State =====
   const [prompt, setPrompt] = useState("");
@@ -281,6 +361,15 @@ export default function OneMindAI_v14Mobile() {
   const [lastFailedRequest, setLastFailedRequest] = useState<{ engine: Engine; prompt: string; outCap: number } | null>(null);
   const [showEngineRecommendations, setShowEngineRecommendations] = useState(false);
   const [errorQueue, setErrorQueue] = useState<Array<{id: string; error: any; engine: Engine; prompt: string; outCap: number}>>([]);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [apiBalances, setApiBalances] = useState<Record<string, { balance: string; loading: boolean; error?: string }>>({});
+  const [showBalanceManager, setShowBalanceManager] = useState(false);
+  const [localBalances, setLocalBalances] = useState<BalanceRecord[]>([]);
+
+  // ===== Load Local Balances =====
+  useEffect(() => {
+    setLocalBalances(loadBalances());
+  }, [showBalanceManager]); // Reload when balance manager closes
 
   // ===== Application Startup Logging =====
   useEffect(() => {
@@ -302,7 +391,7 @@ export default function OneMindAI_v14Mobile() {
     terminalLogger.appStart();
     terminalLogger.componentMount('OneMindAI_v14Mobile');
   }, []);
-  const [expandEngines, setExpandEngines] = useState<'hide' | 'show'>('hide');
+  const [expandedEngines, setExpandedEngines] = useState<Set<string>>(new Set());
   const [showGreenGlow, setShowGreenGlow] = useState(false);
   const [priceOverrides, setPriceOverrides] = useState<Record<string, Record<string, { in: number; out: number }>>>({});
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -326,6 +415,7 @@ export default function OneMindAI_v14Mobile() {
   const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
   const [consoleVisible, setConsoleVisible] = useState(false);
   const [comingSoonClicked, setComingSoonClicked] = useState(false);
+  const [superDebugMode, setSuperDebugMode] = useState(false);
 
   // ===== Override console.log to control [TERMINAL] logs =====
   useEffect(() => {
@@ -395,6 +485,27 @@ export default function OneMindAI_v14Mobile() {
     }
   }, [storyMode, storyStep, engines, selected, activeEngineTab]);
 
+  // ===== Helper to highlight [placeholder] text in prompts =====
+  const highlightPlaceholders = (text: string, variant: 'default' | 'light' = 'default') => {
+    const parts = text.split(/(\[[^\]]+\])/g);
+    return parts.map((part, index) => {
+      if (part.match(/^\[[^\]]+\]$/)) {
+        return (
+          <span 
+            key={index} 
+            className={variant === 'light' 
+              ? "bg-purple-50 text-purple-600 px-1 rounded text-[11px]" 
+              : "bg-purple-100/80 text-purple-700 px-1.5 py-0.5 rounded-md text-[11px] font-medium"
+            }
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
   // ===== Brand colours per provider =====
   const providerStyles: Record<string, string> = {
     openai: "bg-[#0F766E]",
@@ -405,6 +516,8 @@ export default function OneMindAI_v14Mobile() {
     perplexity: "bg-[#111827]",
     kimi: "bg-[#DC2626]",
     xai: "bg-[#0EA5E9]",
+    groq: "bg-[#F55036]",
+    falcon: "bg-[#8B5CF6]",
     sarvam: "bg-[#FF6B35]",
     huggingface: "bg-[#F59E0B] text-black",
     generic: "bg-[#374151]",
@@ -463,9 +576,388 @@ export default function OneMindAI_v14Mobile() {
   // Clean error message - convert technical errors to user-friendly messages
   function cleanErrorMessage(error: any, engineName: string, provider: string): string {
     const errorStr = String(error?.message || error || 'Unknown error');
+    const statusCode = error?.status || error?.statusCode || error?.code;
     
     // Remove HTML tags and extract meaningful content
     const withoutHtml = errorStr.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // ===== xAI Grok Specific Error Handling =====
+    if (provider === 'xai') {
+      // 400 Bad Request
+      if (statusCode === 400 || withoutHtml.includes('400') || withoutHtml.includes('Bad Request')) {
+        if (withoutHtml.includes('invalid argument') || withoutHtml.includes('invalid param')) {
+          return `❌ ${engineName}: Invalid request parameters. Please check your prompt format.`;
+        }
+        if (withoutHtml.includes('incorrect API key') || withoutHtml.includes('api key')) {
+          return `🔑 ${engineName}: Incorrect API key format. Please verify your xAI API key.`;
+        }
+        return `❌ ${engineName}: Bad request. Please check your input and try again.`;
+      }
+      
+      // 401 Unauthorized
+      if (statusCode === 401 || withoutHtml.includes('401') || withoutHtml.includes('Unauthorized')) {
+        return `🔑 ${engineName}: Invalid or missing API key. Get a new key at console.x.ai`;
+      }
+      
+      // 403 Forbidden
+      if (statusCode === 403 || withoutHtml.includes('403') || withoutHtml.includes('Forbidden')) {
+        if (withoutHtml.includes('blocked')) {
+          return `🚫 ${engineName}: Your API key/team is blocked. Please contact xAI support.`;
+        }
+        return `🚫 ${engineName}: Permission denied. Ask your team admin for access or check console.x.ai`;
+      }
+      
+      // 404 Not Found
+      if (statusCode === 404 || withoutHtml.includes('404') || withoutHtml.includes('Not Found')) {
+        if (withoutHtml.includes('model')) {
+          return `❓ ${engineName}: Model not found. Please select a valid Grok model version.`;
+        }
+        return `❓ ${engineName}: Endpoint not found. Please check the API configuration.`;
+      }
+      
+      // 405 Method Not Allowed
+      if (statusCode === 405 || withoutHtml.includes('405') || withoutHtml.includes('Method Not Allowed')) {
+        return `⚠️ ${engineName}: Invalid request method. This is a configuration error.`;
+      }
+      
+      // 415 Unsupported Media Type
+      if (statusCode === 415 || withoutHtml.includes('415') || withoutHtml.includes('Unsupported Media Type')) {
+        return `⚠️ ${engineName}: Invalid content type. Ensure request is JSON formatted.`;
+      }
+      
+      // 422 Unprocessable Entity
+      if (statusCode === 422 || withoutHtml.includes('422') || withoutHtml.includes('Unprocessable Entity')) {
+        return `❌ ${engineName}: Invalid request format. Please check your prompt structure.`;
+      }
+      
+      // 429 Too Many Requests (Rate Limit)
+      if (statusCode === 429 || withoutHtml.includes('429') || withoutHtml.includes('Too Many Requests') || withoutHtml.includes('rate limit')) {
+        return `⏱️ ${engineName}: Rate limit exceeded. Reduce request frequency or increase limit at console.x.ai`;
+      }
+      
+      // 202 Accepted (Deferred completion)
+      if (statusCode === 202 || withoutHtml.includes('202') || withoutHtml.includes('queued')) {
+        return `⏳ ${engineName}: Request queued for processing. Response will be available shortly.`;
+      }
+      
+      // 5XX Server Errors
+      if (statusCode >= 500 || withoutHtml.includes('500') || withoutHtml.includes('502') || withoutHtml.includes('503') || withoutHtml.includes('504')) {
+        return `⚠️ ${engineName}: xAI server error. Check status at status.x.ai`;
+      }
+    }
+    
+    // ===== Groq Specific Error Handling =====
+    if (provider === 'groq') {
+      // 400 Bad Request
+      if (statusCode === 400 || withoutHtml.includes('400') || withoutHtml.includes('Bad Request')) {
+        return `❌ ${engineName}: Invalid request syntax. Review your request format.`;
+      }
+      
+      // 401 Unauthorized
+      if (statusCode === 401 || withoutHtml.includes('401') || withoutHtml.includes('Unauthorized')) {
+        return `🔑 ${engineName}: Invalid API key. Get a new key at console.groq.com`;
+      }
+      
+      // 403 Forbidden
+      if (statusCode === 403 || withoutHtml.includes('403') || withoutHtml.includes('Forbidden')) {
+        return `🚫 ${engineName}: Permission denied. Check your API permissions at console.groq.com`;
+      }
+      
+      // 404 Not Found
+      if (statusCode === 404 || withoutHtml.includes('404') || withoutHtml.includes('Not Found')) {
+        return `❓ ${engineName}: Resource not found. Check the model name and endpoint URL.`;
+      }
+      
+      // 413 Request Entity Too Large
+      if (statusCode === 413 || withoutHtml.includes('413') || withoutHtml.includes('Too Large')) {
+        return `📦 ${engineName}: Request too large. Please reduce your prompt size.`;
+      }
+      
+      // 422 Unprocessable Entity
+      if (statusCode === 422 || withoutHtml.includes('422') || withoutHtml.includes('Unprocessable')) {
+        if (withoutHtml.includes('hallucination')) {
+          return `🤖 ${engineName}: Model hallucination detected. Please retry your request.`;
+        }
+        return `❌ ${engineName}: Semantic error in request. Verify data correctness.`;
+      }
+      
+      // 424 Failed Dependency (MCP issues)
+      if (statusCode === 424 || withoutHtml.includes('424') || withoutHtml.includes('Failed Dependency')) {
+        return `🔗 ${engineName}: Dependent request failed (MCP auth issue). Check Remote MCP config.`;
+      }
+      
+      // 429 Too Many Requests
+      if (statusCode === 429 || withoutHtml.includes('429') || withoutHtml.includes('Too Many Requests') || withoutHtml.includes('rate limit')) {
+        return `⏱️ ${engineName}: Rate limit exceeded. Implement throttling or wait before retrying.`;
+      }
+      
+      // 498 Flex Tier Capacity Exceeded (Groq custom)
+      if (statusCode === 498 || withoutHtml.includes('498') || withoutHtml.includes('Flex Tier')) {
+        return `📊 ${engineName}: Flex tier at capacity. Try again later.`;
+      }
+      
+      // 499 Request Cancelled (Groq custom)
+      if (statusCode === 499 || withoutHtml.includes('499') || withoutHtml.includes('Cancelled')) {
+        return `🚫 ${engineName}: Request was cancelled.`;
+      }
+      
+      // 500 Internal Server Error
+      if (statusCode === 500 || withoutHtml.includes('500') || withoutHtml.includes('Internal Server Error')) {
+        return `⚠️ ${engineName}: Groq server error. Try again later or contact support.`;
+      }
+      
+      // 502 Bad Gateway
+      if (statusCode === 502 || withoutHtml.includes('502') || withoutHtml.includes('Bad Gateway')) {
+        return `⚠️ ${engineName}: Bad gateway. This may be temporary - retry the request.`;
+      }
+      
+      // 503 Service Unavailable
+      if (statusCode === 503 || withoutHtml.includes('503') || withoutHtml.includes('Service Unavailable')) {
+        return `⚠️ ${engineName}: Service unavailable (maintenance/overload). Wait and retry.`;
+      }
+      
+      // 206 Partial Content
+      if (statusCode === 206 || withoutHtml.includes('206') || withoutHtml.includes('Partial Content')) {
+        return `📄 ${engineName}: Partial content delivered. Check if this is expected.`;
+      }
+    }
+    
+    // ===== Falcon LLM Specific Error Handling (via HuggingFace) =====
+    if (provider === 'falcon') {
+      // 400 Bad Request
+      if (statusCode === 400 || withoutHtml.includes('400') || withoutHtml.includes('Bad Request')) {
+        return `❌ ${engineName}: Invalid request format. Check your prompt structure.`;
+      }
+      
+      // 401 Unauthorized
+      if (statusCode === 401 || withoutHtml.includes('401') || withoutHtml.includes('Unauthorized')) {
+        return `🔑 ${engineName}: Invalid HuggingFace API token. Get one at huggingface.co/settings/tokens`;
+      }
+      
+      // 403 Forbidden
+      if (statusCode === 403 || withoutHtml.includes('403') || withoutHtml.includes('Forbidden')) {
+        return `🚫 ${engineName}: Access denied. You may need to accept the model's license on HuggingFace.`;
+      }
+      
+      // 404 Not Found
+      if (statusCode === 404 || withoutHtml.includes('404') || withoutHtml.includes('Not Found')) {
+        return `❓ ${engineName}: Model not found. Check model name at huggingface.co/tiiuae`;
+      }
+      
+      // 413 Payload Too Large
+      if (statusCode === 413 || withoutHtml.includes('413') || withoutHtml.includes('Too Large')) {
+        return `📦 ${engineName}: Input too large. Reduce your prompt size.`;
+      }
+      
+      // 429 Rate Limit
+      if (statusCode === 429 || withoutHtml.includes('429') || withoutHtml.includes('Too Many Requests') || withoutHtml.includes('rate limit')) {
+        return `⏱️ ${engineName}: Rate limit exceeded. Wait before retrying or upgrade your HuggingFace plan.`;
+      }
+      
+      // 500 Internal Server Error
+      if (statusCode === 500 || withoutHtml.includes('500') || withoutHtml.includes('Internal Server Error')) {
+        return `⚠️ ${engineName}: Server error. The model may be loading - try again in a moment.`;
+      }
+      
+      // 502 Bad Gateway
+      if (statusCode === 502 || withoutHtml.includes('502') || withoutHtml.includes('Bad Gateway')) {
+        return `⚠️ ${engineName}: Bad gateway. Model may be initializing - retry shortly.`;
+      }
+      
+      // 503 Service Unavailable / Model Loading
+      if (statusCode === 503 || withoutHtml.includes('503') || withoutHtml.includes('Service Unavailable') || withoutHtml.includes('loading')) {
+        return `⏳ ${engineName}: Model is loading. Please wait ~20-60 seconds and retry.`;
+      }
+      
+      // Timeout
+      if (withoutHtml.includes('timeout') || withoutHtml.includes('Timeout')) {
+        return `⏰ ${engineName}: Request timed out. The model may be under heavy load.`;
+      }
+      
+      // Model unavailable
+      if (withoutHtml.includes('unavailable') || withoutHtml.includes('Unavailable')) {
+        return `⚠️ ${engineName}: Model temporarily unavailable. Try a different Falcon variant.`;
+      }
+    }
+    
+    // ===== Mistral Specific Error Handling =====
+    if (provider === 'mistral') {
+      // Extract detail from JSON error format {"detail":"Unauthorized"}
+      const detailMatch = withoutHtml.match(/"detail"\s*:\s*"([^"]+)"/i);
+      const errorDetail = detailMatch ? detailMatch[1] : '';
+      
+      // 401 Unauthorized
+      if (statusCode === 401 || withoutHtml.includes('401') || withoutHtml.includes('Unauthorized') || errorDetail.toLowerCase() === 'unauthorized') {
+        return `🔑 ${engineName}: API key invalid or missing. Get your key at console.mistral.ai/api-keys`;
+      }
+      
+      // 400 Bad Request
+      if (statusCode === 400 || withoutHtml.includes('400') || withoutHtml.includes('Bad Request')) {
+        if (withoutHtml.includes('role')) {
+          return `❌ ${engineName}: Invalid role field. Mistral uses "user", "assistant", "tool" - not "system".`;
+        }
+        return `❌ ${engineName}: Invalid request format. Check your prompt structure.`;
+      }
+      
+      // 403 Forbidden
+      if (statusCode === 403 || withoutHtml.includes('403') || withoutHtml.includes('Forbidden')) {
+        return `🚫 ${engineName}: Access denied. Check API key permissions at console.mistral.ai`;
+      }
+      
+      // 404 Not Found
+      if (statusCode === 404 || withoutHtml.includes('404') || withoutHtml.includes('Not Found')) {
+        return `❓ ${engineName}: Model not found. Codestral models need codestral.mistral.ai endpoint.`;
+      }
+      
+      // 422 Validation Error
+      if (statusCode === 422 || withoutHtml.includes('422') || withoutHtml.includes('Validation') || withoutHtml.includes('HTTPValidationError')) {
+        return `❌ ${engineName}: Validation error - unsupported parameters. Check Mistral API docs.`;
+      }
+      
+      // 429 Rate Limit
+      if (statusCode === 429 || withoutHtml.includes('429') || withoutHtml.includes('Too Many Requests') || withoutHtml.includes('rate limit') || withoutHtml.includes('service tier capacity')) {
+        return `⏱️ ${engineName}: Rate limit exceeded. Free tier has strict limits - upgrade at console.mistral.ai`;
+      }
+      
+      // Connection Error
+      if (withoutHtml.includes('connection') || withoutHtml.includes('ConnectError') || withoutHtml.includes('network')) {
+        return `🌐 ${engineName}: Cannot connect to Mistral API. Check your internet connection.`;
+      }
+      
+      // Timeout
+      if (withoutHtml.includes('timeout') || withoutHtml.includes('Timeout') || withoutHtml.includes('timed out')) {
+        return `⏰ ${engineName}: Request timed out. Try again or reduce prompt size.`;
+      }
+      
+      // 500+ Server Errors
+      if (statusCode >= 500 || withoutHtml.includes('500') || withoutHtml.includes('502') || withoutHtml.includes('503') || withoutHtml.includes('504')) {
+        return `⚠️ ${engineName}: Mistral server error. Try again in a few moments.`;
+      }
+      
+      // If we extracted a detail, show it
+      if (errorDetail) {
+        return `❌ ${engineName}: ${errorDetail}. Check your API configuration.`;
+      }
+    }
+    
+    // ===== Anthropic/Claude Specific Error Handling =====
+    if (provider === 'anthropic') {
+      // 401 - Authentication Error
+      if (statusCode === 401 || withoutHtml.includes('401') || withoutHtml.includes('authentication_error') || 
+          withoutHtml.includes('invalid api key') || withoutHtml.includes('invalid_api_key')) {
+        return `🔑 ${engineName}: Invalid or expired API key. Get your key at console.anthropic.com`;
+      }
+      
+      // 403 - Permission Error
+      if (statusCode === 403 || withoutHtml.includes('403') || withoutHtml.includes('permission_error') ||
+          withoutHtml.includes('forbidden')) {
+        return `🚫 ${engineName}: API key lacks required permissions. Check your Anthropic console settings.`;
+      }
+      
+      // 404 - Not Found
+      if (statusCode === 404 || withoutHtml.includes('404') || withoutHtml.includes('not_found_error') ||
+          withoutHtml.includes('not found')) {
+        return `❓ ${engineName}: Model or resource not found. Check the model name (e.g., claude-3-5-sonnet-20241022).`;
+      }
+      
+      // 413 - Request Too Large
+      if (statusCode === 413 || withoutHtml.includes('413') || withoutHtml.includes('request_too_large') ||
+          withoutHtml.includes('too large')) {
+        return `📦 ${engineName}: Request too large. Maximum is 32 MB. Please reduce your input size.`;
+      }
+      
+      // 429 - Rate Limit
+      if (statusCode === 429 || withoutHtml.includes('429') || withoutHtml.includes('rate_limit_error') ||
+          withoutHtml.includes('rate limit') || withoutHtml.includes('too many requests')) {
+        return `⏱️ ${engineName}: Rate limit exceeded. System will retry automatically.`;
+      }
+      
+      // 500 - API Error
+      if (statusCode === 500 || withoutHtml.includes('500') || withoutHtml.includes('api_error') ||
+          withoutHtml.includes('internal error')) {
+        return `⚠️ ${engineName}: Anthropic server error. System will retry automatically.`;
+      }
+      
+      // 529 - Overloaded
+      if (statusCode === 529 || withoutHtml.includes('529') || withoutHtml.includes('overloaded_error') ||
+          withoutHtml.includes('overloaded')) {
+        return `⏳ ${engineName}: API temporarily overloaded. System will retry automatically.`;
+      }
+      
+      // Connection errors
+      if (withoutHtml.includes('connection') || withoutHtml.includes('network') || withoutHtml.includes('timeout')) {
+        return `🌐 ${engineName}: Network connection issue. Check your internet and try again.`;
+      }
+    }
+    
+    // ===== OpenAI Specific Error Handling =====
+    if (provider === 'openai') {
+      // PRIORITY 1: Authentication errors (check BEFORE connection errors!)
+      // OpenAI SDK may wrap auth errors with connection-related messages
+      if (statusCode === 401 || 
+          withoutHtml.includes('401') || 
+          withoutHtml.includes('invalid_api_key') || 
+          withoutHtml.includes('incorrect api key') || 
+          withoutHtml.includes('invalid api key') ||
+          withoutHtml.includes('authentication failed') ||
+          withoutHtml.includes('unauthorized') ||
+          (withoutHtml.includes('authentication') && !withoutHtml.includes('timeout'))) {
+        return `🔑 ${engineName}: Invalid or expired API key. Get your key at platform.openai.com/api-keys`;
+      }
+      
+      // 403 - Permission Error
+      if (statusCode === 403 || withoutHtml.includes('403') || withoutHtml.includes('permission') ||
+          withoutHtml.includes('forbidden')) {
+        return `🚫 ${engineName}: API key lacks required permissions. Check your OpenAI dashboard.`;
+      }
+      
+      // 404 - Not Found
+      if (statusCode === 404 || withoutHtml.includes('404') || 
+          (withoutHtml.includes('model') && withoutHtml.includes('not found')) ||
+          withoutHtml.includes('does not exist')) {
+        return `❓ ${engineName}: Model not found. Check the model name (e.g., gpt-4, gpt-3.5-turbo).`;
+      }
+      
+      // 429 - Rate Limit / Quota
+      if (statusCode === 429 || withoutHtml.includes('429') || withoutHtml.includes('rate_limit') ||
+          withoutHtml.includes('rate limit') || withoutHtml.includes('too many requests')) {
+        return `⏱️ ${engineName}: Rate limit exceeded. System will retry automatically.`;
+      }
+      
+      // Quota/Billing
+      if (withoutHtml.includes('insufficient_quota') || withoutHtml.includes('billing') ||
+          withoutHtml.includes('exceeded your current quota')) {
+        return `💳 ${engineName}: No credits remaining. Add credits at platform.openai.com/account/billing`;
+      }
+      
+      // 500 - Server Error
+      if (statusCode === 500 || withoutHtml.includes('500') || withoutHtml.includes('internal error')) {
+        return `⚠️ ${engineName}: OpenAI server error. System will retry automatically.`;
+      }
+      
+      // 502/503 - Overloaded
+      if (statusCode === 502 || statusCode === 503 || withoutHtml.includes('502') || withoutHtml.includes('503') ||
+          withoutHtml.includes('overloaded') || withoutHtml.includes('bad gateway')) {
+        return `⏳ ${engineName}: OpenAI servers overloaded. System will retry automatically.`;
+      }
+      
+      // Token limit
+      if (withoutHtml.includes('context_length') || withoutHtml.includes('maximum context length')) {
+        return `📏 ${engineName}: Request exceeds token limit. Reduce your prompt length.`;
+      }
+      
+      // Content policy
+      if (withoutHtml.includes('content_policy') || withoutHtml.includes('safety') || withoutHtml.includes('flagged')) {
+        return `🚫 ${engineName}: Content flagged by safety system. Modify your prompt.`;
+      }
+      
+      // Connection errors (LAST - only if no other error matched)
+      if (withoutHtml.includes('connection') || withoutHtml.includes('network') || withoutHtml.includes('timeout')) {
+        return `🌐 ${engineName}: Network connection issue. Check your internet and try again.`;
+      }
+    }
+    
+    // ===== Common Error Patterns (All Providers) =====
     
     // Check for common error patterns
     if (withoutHtml.includes('401') || withoutHtml.includes('Authorization Required') || withoutHtml.includes('invalid_api_key')) {
@@ -522,6 +1014,19 @@ export default function OneMindAI_v14Mobile() {
   }
 
   async function* streamFromProvider(e: Engine, prompt: string, outCap: number) {
+    // ===== Super Debug: Function Entry =====
+    superDebugBus.emit('FUNCTION_ENTER', `streamFromProvider() called for ${e.name}`, {
+      engineId: e.id,
+      engineName: e.name,
+      provider: e.provider,
+      variables: { promptLength: prompt.length, outCap, version: e.selectedVersion },
+      codeSnippet: `async function* streamFromProvider(e: Engine, prompt: string, outCap: number) {\n  // Provider: ${e.provider}\n  // Max tokens: ${outCap}\n}`
+    });
+    superDebugBus.emit('PIPELINE_STEP', `API call preparation for ${e.name}`, {
+      engineId: e.id,
+      provider: e.provider
+    });
+    
     logger.separator();
     logger.step(4, `streamFromProvider() called for ${e.name}`);
     logger.data('Engine Config', { id: e.id, provider: e.provider, version: e.selectedVersion });
@@ -609,19 +1114,141 @@ export default function OneMindAI_v14Mobile() {
       });
     }
     
-    if (!e.apiKey || !liveMode || !['anthropic', 'openai', 'gemini', 'mistral', 'perplexity', 'kimi', 'deepseek'].includes(e.provider)) {
-      // Show error for missing API key or unsupported provider
-      const errorMessage = e.apiKey 
-        ? `⚠️ ${e.name} is not configured for live streaming. Please add API key or use a supported provider.`
-        : `⚠️ ${e.name} requires an API key for live streaming. Please add your ${e.name} API key in the engine settings.`;
-      
-      yield errorMessage;
+    // Check if we should use the proxy (no API key) or direct calls (has API key)
+    const useProxy = !e.apiKey;
+    const supportedProviders = ['anthropic', 'openai', 'gemini', 'mistral', 'perplexity', 'kimi', 'deepseek', 'xai', 'groq', 'falcon', 'sarvam'];
+    
+    if (!liveMode || !supportedProviders.includes(e.provider)) {
+      yield `⚠️ ${e.name} is not configured for live streaming. Provider not supported.`;
       return;
+    }
+    
+    // If using proxy, route through backend
+    if (useProxy) {
+      try {
+        const proxyUrl = import.meta.env.VITE_PROXY_URL || 'http://localhost:3002';
+        const providerEndpoint = `${proxyUrl}/api/${e.provider === 'anthropic' ? 'anthropic' : e.provider}`;
+        
+        const response = await fetch(providerEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: enhancedPrompt }],
+            model: e.selectedVersion,
+            max_tokens: outCap,
+            stream: true,
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Proxy request failed' }));
+          yield `⚠️ ${e.name}: ${errorData.error || `HTTP ${response.status}`}`;
+          return;
+        }
+        
+        // Handle streaming response
+        const reader = response.body?.getReader();
+        if (!reader) {
+          yield `⚠️ ${e.name}: No response stream available`;
+          return;
+        }
+        
+        const decoder = new TextDecoder();
+        let buffer = '';
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content || 
+                               parsed.delta?.text ||
+                               parsed.content?.[0]?.text || '';
+                if (content) yield content;
+              } catch {
+                // Skip non-JSON lines
+              }
+            }
+          }
+        }
+        return;
+      } catch (proxyError) {
+        yield `⚠️ ${e.name}: Proxy server not available. Run 'npm run proxy' to start it.`;
+        return;
+      }
     }
 
     try {
+      // ===== MOCK ERROR INJECTION FOR TESTING =====
+      // Must be INSIDE try block so errors are caught by the error handling logic
+      if (mockErrorMode) {
+        const engineRetryCount = mockErrorCounts[e.id] || 0;
+        const shouldFail = mockErrorMode === 'random' 
+          ? Math.random() > 0.5 
+          : true;
+        
+        if (shouldFail && engineRetryCount < MOCK_FAIL_AFTER_RETRIES) {
+          // Increment retry count for this engine
+          setMockErrorCounts(prev => ({ ...prev, [e.id]: (prev[e.id] || 0) + 1 }));
+          
+          const mockErrors: Record<string, { status: number; message: string }> = {
+            '429': { 
+              status: 429, 
+              message: `Rate limit exceeded. You are sending requests too quickly. Please retry after 30 seconds.` 
+            },
+            '500': { 
+              status: 500, 
+              message: `Internal server error. The ${e.provider} API is experiencing issues.` 
+            },
+            '503': { 
+              status: 503, 
+              message: `Service temporarily unavailable. The ${e.provider} API is overloaded.` 
+            },
+            'random': {
+              status: [429, 500, 503][Math.floor(Math.random() * 3)],
+              message: `Random mock error for testing`
+            }
+          };
+          
+          const mockError = mockErrors[mockErrorMode] || mockErrors['429'];
+          
+          console.log(`🧪 [MOCK ERROR] Simulating ${mockError.status} error for ${e.name} (attempt ${engineRetryCount + 1}/${MOCK_FAIL_AFTER_RETRIES})`);
+          
+          const error: any = new Error(mockError.message);
+          error.status = mockError.status;
+          error.statusCode = mockError.status;
+          error.provider = e.provider;
+          error.engine = e.name;
+          
+          throw error;
+        } else if (engineRetryCount >= MOCK_FAIL_AFTER_RETRIES) {
+          console.log(`✅ [MOCK] ${e.name} succeeding after ${engineRetryCount} retries`);
+          // Reset for next run
+          setMockErrorCounts(prev => ({ ...prev, [e.id]: 0 }));
+        }
+      }
+
       if (e.provider === 'anthropic') {
         const { default: Anthropic } = await import('@anthropic-ai/sdk');
+        
+        // Super Debug: Library trigger for Anthropic SDK
+        superDebugBus.emitLibrary(
+          '@anthropic-ai/sdk',
+          'messages.create',
+          'Streaming response from Claude API',
+          prompt.substring(0, 100),
+          undefined
+        );
+        
         const client = new Anthropic({
           apiKey: e.apiKey,
           dangerouslyAllowBrowser: true,
@@ -694,15 +1321,37 @@ export default function OneMindAI_v14Mobile() {
         }
 
         logger.success('Claude streaming started');
+        
+        // Super Debug: Stream started
+        superDebugBus.emit('STREAM_START', `Claude stream started for ${e.name}`, {
+          engineId: e.id,
+          provider: 'anthropic'
+        });
 
         for await (const event of stream) {
           if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
             yield event.delta.text;
           }
         }
+        
+        // Super Debug: Stream ended
+        superDebugBus.emit('STREAM_END', `Claude stream completed for ${e.name}`, {
+          engineId: e.id,
+          provider: 'anthropic'
+        });
       } else if (e.provider === 'openai') {
         logger.step(5, 'Initializing OpenAI SDK');
         const { default: OpenAI } = await import('openai');
+        
+        // Super Debug: Library trigger for OpenAI SDK
+        superDebugBus.emitLibrary(
+          'openai',
+          'chat.completions.create',
+          'Streaming response from ChatGPT API',
+          prompt.substring(0, 100),
+          undefined
+        );
+        
         const client = new OpenAI({
           apiKey: e.apiKey,
           dangerouslyAllowBrowser: true,
@@ -877,6 +1526,16 @@ export default function OneMindAI_v14Mobile() {
         // =============================================
 
         const { GoogleGenerativeAI } = await import('@google/generative-ai');
+        
+        // Super Debug: Library trigger for Google Generative AI
+        superDebugBus.emitLibrary(
+          '@google/generative-ai',
+          'generateContentStream',
+          'Streaming response from Gemini API',
+          prompt.substring(0, 100),
+          undefined
+        );
+        
         const genAI = new GoogleGenerativeAI(e.apiKey);
         
         // Check if there are images to send
@@ -1004,6 +1663,15 @@ export default function OneMindAI_v14Mobile() {
           }
         }
       } else if (e.provider === 'mistral') {
+        // Super Debug: Library trigger for Mistral API
+        superDebugBus.emitLibrary(
+          'Fetch API',
+          'fetch',
+          'Streaming response from Mistral API',
+          prompt.substring(0, 100),
+          undefined
+        );
+        
         // Wrap API call with auto-recovery
         const makeMistralRequest = async () => {
           const response = await fetch('/api/mistral/v1/chat/completions', {
@@ -1329,6 +1997,15 @@ export default function OneMindAI_v14Mobile() {
           }
         }
       } else if (e.provider === 'deepseek') {
+        // Super Debug: Library trigger for DeepSeek API
+        superDebugBus.emitLibrary(
+          'Fetch API',
+          'fetch',
+          'Streaming response from DeepSeek API',
+          prompt.substring(0, 100),
+          undefined
+        );
+        
         // Define the request function for the retry manager
         const makeDeepSeekRequest = async () => {
           const response = await fetch('/api/deepseek/v1/chat/completions', {
@@ -1427,24 +2104,305 @@ export default function OneMindAI_v14Mobile() {
             reader.releaseLock();
           }
         }
+      } else if (e.provider === 'xai') {
+        // xAI Grok using OpenAI-compatible API
+        logger.step(5, 'Initializing xAI Grok with OpenAI SDK');
+        const { default: OpenAI } = await import('openai');
+        const client = new OpenAI({
+          apiKey: e.apiKey,
+          baseURL: 'https://api.x.ai/v1',
+          dangerouslyAllowBrowser: true,
+        });
+        logger.info('xAI Grok client initialized successfully');
+
+        const stream = await client.chat.completions.create({
+          model: e.selectedVersion,
+          messages: [{ role: 'user', content: enhancedPrompt }],
+          max_tokens: Math.max(outCap, 4000),
+          temperature: 0.7,
+          stream: true,
+        });
+
+        logger.success('xAI Grok streaming started');
+
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content;
+          if (content) {
+            yield content;
+          }
+        }
+      } else if (e.provider === 'groq') {
+        // Groq using OpenAI-compatible API
+        logger.step(5, 'Initializing Groq with OpenAI SDK');
+        const { default: OpenAI } = await import('openai');
+        const client = new OpenAI({
+          apiKey: e.apiKey,
+          baseURL: 'https://api.groq.com/openai/v1',
+          dangerouslyAllowBrowser: true,
+        });
+        logger.info('Groq client initialized successfully');
+
+        const stream = await client.chat.completions.create({
+          model: e.selectedVersion,
+          messages: [{ role: 'user', content: enhancedPrompt }],
+          max_tokens: Math.max(outCap, 4000),
+          temperature: 0.7,
+          stream: true,
+        });
+
+        logger.success('Groq streaming started');
+
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content;
+          if (content) {
+            yield content;
+          }
+        }
+      } else if (e.provider === 'falcon') {
+        // Falcon LLM via HuggingFace Inference API
+        logger.step(5, 'Initializing Falcon LLM with HuggingFace API');
+        
+        const makeHuggingFaceRequest = async () => {
+          const response = await fetch(`https://api-inference.huggingface.co/models/tiiuae/${e.selectedVersion}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${e.apiKey}`,
+            },
+            body: JSON.stringify({
+              inputs: enhancedPrompt,
+              parameters: {
+                max_new_tokens: Math.max(outCap, 4000),
+                temperature: 0.7,
+                return_full_text: false,
+                stream: true,
+              },
+            }),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorMessage = errorText;
+            try {
+              const errorJson = JSON.parse(errorText);
+              errorMessage = errorJson.error || errorText;
+            } catch {
+              // Use raw text if JSON parse fails
+            }
+            
+            const error: any = new Error(`Falcon API error: ${errorMessage}`);
+            error.statusCode = response.status;
+            error.status = response.status;
+            error.response = response;
+            throw error;
+          }
+
+          return response;
+        };
+
+        const response = await makeHuggingFaceRequest();
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (reader) {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              const chunk = decoder.decode(value, { stream: true });
+              
+              try {
+                const parsed = JSON.parse(chunk);
+                if (parsed.token?.text) {
+                  yield parsed.token.text;
+                } else if (parsed.generated_text) {
+                  yield parsed.generated_text;
+                } else if (typeof parsed === 'string') {
+                  yield parsed;
+                }
+              } catch {
+                // If not JSON, yield as is
+                if (chunk.trim()) {
+                  yield chunk;
+                }
+              }
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        }
+      } else if (e.provider === 'sarvam') {
+        // Sarvam AI using their API
+        logger.step(5, 'Initializing Sarvam AI');
+        
+        const makeSarvamRequest = async () => {
+          const response = await fetch('https://api.sarvam.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${e.apiKey}`,
+            },
+            body: JSON.stringify({
+              model: e.selectedVersion,
+              messages: [{ role: 'user', content: enhancedPrompt }],
+              max_tokens: Math.max(outCap, 4000),
+              temperature: 0.7,
+              stream: true,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorMessage = errorText;
+            try {
+              const errorJson = JSON.parse(errorText);
+              errorMessage = errorJson.error?.message || errorJson.message || errorText;
+            } catch {
+              // Use raw text if JSON parse fails
+            }
+            
+            const error: any = new Error(`Sarvam API error: ${errorMessage}`);
+            error.statusCode = response.status;
+            error.status = response.status;
+            error.response = response;
+            throw error;
+          }
+
+          return response;
+        };
+
+        const response = await makeSarvamRequest();
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (reader) {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = chunk.split('\n');
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]') return;
+
+                  try {
+                    const parsed = JSON.parse(data);
+                    const content = parsed.choices[0]?.delta?.content;
+                    if (content) {
+                      yield content;
+                    }
+                  } catch {
+                    // Ignore parsing errors
+                  }
+                }
+              }
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        }
       }
     } catch (error: any) {
+      // ===== Super Debug: Error Caught =====
+      superDebugBus.emitError(error, {
+        provider: e.provider,
+        engineId: e.id,
+        engineName: e.name,
+        functionName: 'streamFromProvider'
+      });
+      superDebugBus.emitFileHandoff('OneMindAI.tsx', 'ErrorRecoveryPanel.tsx', 'Enhanced Error Object');
+      
+      // Log the full error structure to understand what we're dealing with
+      console.log(`[streamFromProvider] RAW ERROR OBJECT for ${e.name}:`, error);
+      console.log(`[streamFromProvider] error.status:`, error.status);
+      console.log(`[streamFromProvider] error.statusCode:`, error.statusCode);
+      console.log(`[streamFromProvider] error.status_code:`, error.status_code);
+      console.log(`[streamFromProvider] error.error:`, error.error);
+      console.log(`[streamFromProvider] error.response:`, error.response);
+      
+      // Extract status code from various possible locations (Anthropic SDK, OpenAI SDK, etc.)
+      let extractedStatusCode = 
+        error.status || 
+        error.statusCode || 
+        error.status_code || 
+        error.error?.status ||
+        error.error?.status_code ||
+        error.response?.status ||
+        error.response?.statusCode ||
+        (typeof error.code === 'number' ? error.code : undefined);
+      
+      // Fallback: Try to parse status code from error message if not found in object
+      if (!extractedStatusCode && error.message) {
+        const statusMatch = error.message.match(/\b(40[0-9]|50[0-9]|429)\b/);
+        if (statusMatch) {
+          extractedStatusCode = parseInt(statusMatch[1]);
+          console.log(`[streamFromProvider] Extracted status ${extractedStatusCode} from error message`);
+        }
+      }
+      
+      // Extract error type for Anthropic errors
+      const errorType = error.error?.type || error.type || '';
+      
+      console.log(`[streamFromProvider] EXTRACTED STATUS CODE:`, extractedStatusCode);
+      console.log(`[streamFromProvider] Error for ${e.name}:`, {
+        message: error.message,
+        status: extractedStatusCode,
+        errorType,
+        fullError: JSON.stringify(error).substring(0, 500)
+      });
+      
+      // Extract the truly raw error message from the API
+      let rawApiMessage = 'Unknown error occurred';
+      try {
+        // Try to get the most detailed error message available
+        if (error.error?.message) {
+          rawApiMessage = error.error.message; // Anthropic SDK nested error
+        } else if (error.message) {
+          rawApiMessage = error.message; // Direct error message
+        }
+        
+        // For some APIs, the full error details are in error.error
+        if (error.error && typeof error.error === 'object') {
+          // Include error type and message if available
+          const errorDetails = [];
+          if (error.error.type) errorDetails.push(`Type: ${error.error.type}`);
+          if (error.error.message) errorDetails.push(error.error.message);
+          if (errorDetails.length > 0) {
+            rawApiMessage = errorDetails.join(' | ');
+          }
+        }
+      } catch (e) {
+        console.error('[streamFromProvider] Error extracting raw message:', e);
+      }
+      
       // Clean the error message for user-friendly display
       const cleanedMessage = cleanErrorMessage(error, e.name, e.provider);
       
       // Enhanced error handling with recovery engine
       const enhancedError = {
-        message: cleanedMessage,
-        statusCode: error.status || error.statusCode || error.code,
-        status: error.status || error.statusCode || error.code,
-        code: error.code || error.status || error.statusCode,
+        message: rawApiMessage, // Show the REAL error from API, not cleaned version
+        cleanedMessage: cleanedMessage, // Keep cleaned version for reference
+        rawMessage: rawApiMessage, // Real raw error from API
+        rawJson: JSON.stringify(error, null, 2), // Full error JSON for debugging
+        statusCode: extractedStatusCode,
+        status: extractedStatusCode,
+        code: extractedStatusCode,
+        type: errorType, // Include error type for analysis
         provider: e.provider,
         engine: e.name,
         originalError: {
           ...error,
           message: error.message || 'Unknown error occurred',
-          statusCode: error.status || error.statusCode || error.code,
-          status: error.status || error.statusCode || error.code,
+          statusCode: extractedStatusCode,
+          status: extractedStatusCode,
+          type: errorType,
+          // Preserve the error's error object for Anthropic SDK
+          error: error.error || undefined
         }
       };
       
@@ -1504,7 +2462,36 @@ export default function OneMindAI_v14Mobile() {
       
       // Update results
       const { nowIn, outCap: estOutCap, minSpend, maxSpend } = computePreview(engine, failedPrompt);
-      setResults(prev => {
+
+      // ===== CREDIT DEDUCTION (after successful manual retry) =====
+      const estimatedInputTokens = estimateTokens(failedPrompt, engine.tokenizer);
+      const estimatedOutputTokens = estimateTokens(fullContent, engine.tokenizer);
+      
+      if (user?.id) {
+        const creditsToDeduct = calculateCredits(
+          engine.provider,
+          engine.selectedVersion,
+          estimatedInputTokens,
+          estimatedOutputTokens
+        );
+        
+        if (creditsToDeduct > 0) {
+          const deductResult = await deductCredits(
+            user.id,
+            creditsToDeduct,
+            engine.provider,
+            engine.selectedVersion,
+            estimatedInputTokens + estimatedOutputTokens,
+            `API call to ${engine.name} (${engine.selectedVersion}) - manual retry`
+          );
+          
+          if (deductResult.success) {
+            logger.success(`[Credits] Deducted ${creditsToDeduct} credits for ${engine.name} (manual retry). New balance: ${deductResult.newBalance}`);
+          }
+        }
+      }
+
+      setResults((prev: RunResult[]) => {
         const filtered = prev.filter(r => r.engineId !== engine.id);
         return [...filtered, {
           engineId: engine.id,
@@ -1629,6 +2616,23 @@ export default function OneMindAI_v14Mobile() {
       return;
     }
     
+    // ===== Super Debug: Pipeline Start =====
+    superDebugBus.emit('PIPELINE_START', 'User clicked "Run Live" - Starting execution pipeline', {
+      details: {
+        selectedEngines: selectedEngines.map(e => e.name),
+        promptLength: prompt.length,
+        filesUploaded: uploadedFiles.length
+      },
+      codeSnippet: `async function runAll() {\n  // Selected: ${selectedEngines.map(e => e.name).join(', ')}\n  // Prompt: ${prompt.length} chars\n}`
+    });
+    superDebugBus.emit('FUNCTION_ENTER', 'runAll() function called', {
+      variables: {
+        selectedEngines: selectedEngines.length,
+        promptLength: prompt.length,
+        uploadedFiles: uploadedFiles.length
+      }
+    });
+    
     logger.separator();
     logger.header('🎯 USER CLICKED "RUN LIVE"');
     logger.step(1, 'runAll() function called');
@@ -1639,6 +2643,11 @@ export default function OneMindAI_v14Mobile() {
     setIsRunning(true);
     setResults([]);
     setStreamingStates({});
+    
+    // Super Debug: State update
+    superDebugBus.emitStateUpdate('isRunning', false, true);
+    superDebugBus.emitStateUpdate('results', '[]', '[]');
+    superDebugBus.emitStateUpdate('streamingStates', '{}', '{}');
 
     // Initialize streaming states
     selectedEngines.forEach(e => {
@@ -1670,6 +2679,9 @@ export default function OneMindAI_v14Mobile() {
           tokenCount++;
           updateStreamingContent(e.id, fullContent, true);
           
+          // Super Debug: Chunk received and merged
+          superDebugBus.emitChunk(chunk, e.id, fullContent);
+          
           // No artificial delay - true real-time streaming
         }
 
@@ -1677,6 +2689,16 @@ export default function OneMindAI_v14Mobile() {
         updateStreamingContent(e.id, fullContent, false);
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
         logger.success(`${e.name} completed in ${elapsed}s - ${fullContent.length} characters`);
+        
+        // Super Debug: Pipeline step - streaming complete
+        superDebugBus.emit('PIPELINE_STEP', `${e.name} streaming completed`, {
+          engineId: e.id,
+          engineName: e.name,
+          details: { duration: elapsed, contentLength: fullContent.length }
+        });
+        
+        // Super Debug: File handoff to markdown renderer
+        superDebugBus.emitFileHandoff('OneMindAI.tsx', 'EnhancedMarkdownRenderer.tsx', 'Streaming content for rendering');
 
         const endTime = Date.now();
         const duration = endTime - startTime;
@@ -1688,6 +2710,36 @@ export default function OneMindAI_v14Mobile() {
         const pricing = getPrice(e);
         const inputCost = pricing ? (estimatedInputTokens / 1_000_000) * pricing.in : 0;
         const outputCost = pricing ? (estimatedOutputTokens / 1_000_000) * pricing.out : 0;
+
+        // ===== CREDIT DEDUCTION (after successful API response) =====
+        // Only deduct credits if user is authenticated
+        if (user?.id) {
+          const creditsToDeduct = calculateCredits(
+            e.provider,
+            e.selectedVersion,
+            estimatedInputTokens,
+            estimatedOutputTokens
+          );
+          
+          if (creditsToDeduct > 0) {
+            const deductResult = await deductCredits(
+              user.id,
+              creditsToDeduct,
+              e.provider,
+              e.selectedVersion,
+              estimatedInputTokens + estimatedOutputTokens,
+              `API call to ${e.name} (${e.selectedVersion})`
+            );
+            
+            if (deductResult.success) {
+              logger.success(`[Credits] Deducted ${creditsToDeduct} credits for ${e.name}. New balance: ${deductResult.newBalance}`);
+            } else {
+              logger.warning(`[Credits] Failed to deduct credits: ${deductResult.error}`);
+            }
+          } else {
+            logger.info(`[Credits] No credits charged for ${e.name} (free tier or zero cost)`);
+          }
+        }
 
         return {
           engineId: e.id,
@@ -1804,6 +2856,31 @@ export default function OneMindAI_v14Mobile() {
               const pricing = getPrice(e);
               const inputCost = pricing ? (estimatedInputTokens / 1_000_000) * pricing.in : 0;
               const outputCost = pricing ? (estimatedOutputTokens / 1_000_000) * pricing.out : 0;
+
+              // ===== CREDIT DEDUCTION (after successful auto-retry) =====
+              if (user?.id) {
+                const creditsToDeduct = calculateCredits(
+                  e.provider,
+                  e.selectedVersion,
+                  estimatedInputTokens,
+                  estimatedOutputTokens
+                );
+                
+                if (creditsToDeduct > 0) {
+                  const deductResult = await deductCredits(
+                    user.id,
+                    creditsToDeduct,
+                    e.provider,
+                    e.selectedVersion,
+                    estimatedInputTokens + estimatedOutputTokens,
+                    `API call to ${e.name} (${e.selectedVersion}) - auto-retry`
+                  );
+                  
+                  if (deductResult.success) {
+                    logger.success(`[Credits] Deducted ${creditsToDeduct} credits for ${e.name} (auto-retry). New balance: ${deductResult.newBalance}`);
+                  }
+                }
+              }
               
               return {
                 engineId: e.id,
@@ -1882,14 +2959,43 @@ export default function OneMindAI_v14Mobile() {
       totalCost: `$${totalCost.toFixed(4)}`,
       totalCharacters: out.reduce((sum, r) => sum + (r.responsePreview?.length || 0), 0)
     });
+    
+    // Super Debug: Pipeline end
+    superDebugBus.emit('PIPELINE_END', 'All engines completed', {
+      details: {
+        totalEngines: out.length,
+        successful: out.filter(r => r.success).length,
+        failed: out.filter(r => !r.success).length,
+        totalCost: totalCost.toFixed(4),
+        totalCharacters: out.reduce((sum, r) => sum + (r.responsePreview?.length || 0), 0)
+      }
+    });
+    superDebugBus.emit('FUNCTION_EXIT', 'runAll() completed', {
+      variables: { resultsCount: out.length, totalCost: totalCost.toFixed(4) }
+    });
     out.forEach(result => {
       if (result.success) {
         logger.success(`${result.engineName}: ${result.tokensOut} tokens, $${result.costUSD.toFixed(4)}, ${(result.durationMs / 1000).toFixed(2)}s`);
+        
+        // Auto-deduct from local balance tracker (with token tracking)
+        const engine = engines.find(e => e.id === result.engineId);
+        if (engine && result.costUSD > 0) {
+          deductFromBalance(
+            engine.provider, 
+            result.costUSD, 
+            engine.selectedVersion,
+            result.tokensIn,
+            result.tokensOut
+          );
+        }
       } else {
         logger.error(`${result.engineName}: ${result.error}`);
       }
     });
     logger.separator();
+    
+    // Reload local balances after run
+    setLocalBalances(loadBalances());
     
     setIsRunning(false);
   }
@@ -1907,6 +3013,74 @@ export default function OneMindAI_v14Mobile() {
     const id = `custom-${Date.now()}`;
     setEngines(prev => ([...prev, { id, name: "Custom HTTP Engine", provider: "generic", tokenizer: "bytebpe", contextLimit: 64000, versions: ["v1"], selectedVersion: "v1", outPolicy: { mode: "auto" }, endpoint: "" }]));
     setSelected(prev => ({ ...prev, [id]: true }));
+  }
+
+  // ===== Fetch API Balance for a single engine =====
+  async function fetchBalance(engine: Engine) {
+    if (!engine.apiKey) {
+      setApiBalances(prev => ({ ...prev, [engine.id]: { balance: 'No API key', loading: false, error: 'Missing key' } }));
+      return;
+    }
+    
+    setApiBalances(prev => ({ ...prev, [engine.id]: { balance: '...', loading: true } }));
+    
+    try {
+      if (engine.provider === 'deepseek') {
+        // DeepSeek has a balance API
+        const response = await fetch('https://api.deepseek.com/user/balance', {
+          headers: { 'Authorization': 'Bearer ' + engine.apiKey }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const balance = data.balance_infos?.[0]?.total_balance || data.balance || 'N/A';
+          const currency = data.balance_infos?.[0]?.currency || 'CNY';
+          setApiBalances(prev => ({ ...prev, [engine.id]: { balance: `${balance} ${currency}`, loading: false } }));
+        } else {
+          setApiBalances(prev => ({ ...prev, [engine.id]: { balance: 'Error', loading: false, error: `HTTP ${response.status}` } }));
+        }
+      } else if (engine.provider === 'openai') {
+        // OpenAI - try to get usage info to estimate balance
+        // First try the usage endpoint
+        const today = new Date().toISOString().split('T')[0];
+        const usageResponse = await fetch('https://api.openai.com/v1/usage?date=' + today, {
+          headers: { 'Authorization': 'Bearer ' + engine.apiKey }
+        });
+        
+        if (usageResponse.ok) {
+          const usage = await usageResponse.json();
+          const usageCents = usage.total_usage || 0;
+          const usageDollars = (usageCents / 100).toFixed(2);
+          setApiBalances(prev => ({ ...prev, [engine.id]: { balance: `Used $${usageDollars} today`, loading: false } }));
+        } else if (usageResponse.status === 401) {
+          setApiBalances(prev => ({ ...prev, [engine.id]: { balance: '✗ Invalid key', loading: false, error: 'Unauthorized' } }));
+        } else {
+          // Fallback: just validate the key with models endpoint
+          const modelResponse = await fetch('https://api.openai.com/v1/models', {
+            headers: { 'Authorization': 'Bearer ' + engine.apiKey }
+          });
+          if (modelResponse.ok) {
+            setApiBalances(prev => ({ ...prev, [engine.id]: { balance: '✓ Key valid (balance unavailable)', loading: false } }));
+          } else if (modelResponse.status === 401) {
+            setApiBalances(prev => ({ ...prev, [engine.id]: { balance: '✗ Invalid key', loading: false, error: 'Unauthorized' } }));
+          } else {
+            setApiBalances(prev => ({ ...prev, [engine.id]: { balance: `Error ${modelResponse.status}`, loading: false, error: `HTTP ${modelResponse.status}` } }));
+          }
+        }
+      } else if (engine.provider === 'anthropic') {
+        setApiBalances(prev => ({ ...prev, [engine.id]: { balance: 'Check console.anthropic.com', loading: false } }));
+      } else if (engine.provider === 'gemini') {
+        setApiBalances(prev => ({ ...prev, [engine.id]: { balance: 'Free tier / Pay-as-you-go', loading: false } }));
+      } else if (engine.provider === 'mistral') {
+        setApiBalances(prev => ({ ...prev, [engine.id]: { balance: 'Check console.mistral.ai', loading: false } }));
+      } else if (engine.provider === 'groq') {
+        setApiBalances(prev => ({ ...prev, [engine.id]: { balance: 'Free tier', loading: false } }));
+      } else {
+        setApiBalances(prev => ({ ...prev, [engine.id]: { balance: 'N/A', loading: false } }));
+      }
+    } catch (error: any) {
+      console.error(`Failed to fetch balance for ${engine.name}:`, error);
+      setApiBalances(prev => ({ ...prev, [engine.id]: { balance: 'Error', loading: false, error: error.message } }));
+    }
   }
 
   // ===== Sales Leader Prompts Data =====
@@ -3275,8 +4449,45 @@ My specific issue: [describe - losing clients after first project, can't grow ac
   const panel = "bg-white/95 backdrop-blur rounded-2xl shadow-sm border-2 border-slate-300";
   const headerBar = "bg-[#0B1F3B] text-white rounded-2xl p-2 sm:p-3 flex items-center justify-between gap-3 shadow";
 
+  // ===== Auth Screens =====
+  // Show loading screen while checking auth
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mx-auto mb-4"></div>
+          <p className="text-white text-lg">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <h1 className="text-4xl font-bold text-white mb-4">OneMindAI</h1>
+          <p className="text-gray-300 mb-8">Collective Intelligence, Optimised</p>
+          <button
+            onClick={() => setShowAuthModal(true)}
+            className="px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-semibold text-lg"
+          >
+            Sign In to Continue
+          </button>
+        </div>
+        <AuthModal 
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+          initialMode="signin"
+        />
+      </div>
+    );
+  }
+
+  // ===== Main App (authenticated) =====
   return (
-    <div className={`${shell} space-y-4 pb-24`}>
+    <div className={`${shell} space-y-4 pb-24 transition-all duration-300 ${superDebugMode ? 'mr-[480px]' : ''}`}>
       {/* Header */}
       <div className={headerBar}>
         <div className="min-w-0">
@@ -3284,27 +4495,36 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           <div className="text-[12px] sm:text-[13px] italic">The future-proof engine that fuses the smartest minds into one perfect answer.</div>
           <div className="opacity-80 text-[11px] sm:text-[12px]">Formula2GX Digital Advanced Incubation Labs Platform</div>
         </div>
-        <div className="hidden sm:flex items-center gap-3">
-          <label className="text-xs flex items-center gap-2 px-2 py-1 rounded-lg bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-400/50 cursor-pointer hover:from-purple-600/30 hover:to-blue-600/30 transition">
-            <input type="checkbox" checked={storyMode} onChange={() => {
-              setStoryMode(v => !v);
-              if (!storyMode) setStoryStep(1);
-            }} />
-            <span className="font-semibold">Story Mode</span>
-          </label>
-          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={showBusiness} onChange={() => setShowBusiness(v => !v)} /><span>Business</span></label>
-          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={showTech} onChange={() => setShowTech(v => !v)} /><span>Technical</span></label>
-          <label className="text-xs flex items-center gap-2">
-            <input type="checkbox" checked={consoleVisible} onChange={toggleConsole} />
-            <span>Debug</span>
-          </label>
-          <button
-            onClick={simulateMultipleErrors}
-            className="text-xs px-3 py-1 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition font-medium"
-            title="Simulate multi-error display"
-          >
-            Simulate
-          </button>
+        <div className="flex items-center gap-3">
+          {/* Controls - hidden on mobile */}
+          <div className="hidden sm:flex items-center gap-3">
+            <label className="text-xs flex items-center gap-2 px-2 py-1 rounded-lg bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-400/50 cursor-pointer hover:from-purple-600/30 hover:to-blue-600/30 transition">
+              <input type="checkbox" checked={storyMode} onChange={() => {
+                setStoryMode(v => !v);
+                if (!storyMode) setStoryStep(1);
+              }} />
+              <span className="font-semibold">Story Mode</span>
+            </label>
+            <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={showBusiness} onChange={() => setShowBusiness(v => !v)} /><span>Business</span></label>
+            <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={showTech} onChange={() => setShowTech(v => !v)} /><span>Technical</span></label>
+            <label className="text-xs flex items-center gap-2">
+              <input type="checkbox" checked={consoleVisible} onChange={toggleConsole} />
+              <span>Inspect</span>
+            </label>
+            <label className="text-xs flex items-center gap-2 px-2 py-1 rounded-lg bg-gradient-to-r from-purple-600/30 to-pink-600/30 border border-purple-400/50 cursor-pointer hover:from-purple-600/40 hover:to-pink-600/40 transition">
+              <input type="checkbox" checked={superDebugMode} onChange={() => setSuperDebugMode(v => !v)} />
+              <span className="font-semibold">🔧 Debug</span>
+            </label>
+            <button
+              onClick={simulateMultipleErrors}
+              className="text-xs px-3 py-1 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition font-medium"
+              title="Simulate multi-error display"
+            >
+              Simulate
+            </button>
+          </div>
+          {/* User Menu - always visible */}
+          <UserMenu />
         </div>
       </div>
 
@@ -3320,15 +4540,17 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               {storyStep === 4 && "· Review & merge results"}
             </span>
           </div>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4].map((s) => (
-              <div
-                key={s}
-                className={`h-2 w-10 rounded-full transition-all ${
-                  s <= storyStep ? "bg-white" : "bg-white/30"
-                }`}
-              />
-            ))}
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1">
+              {[1, 2, 3, 4].map((s) => (
+                <div
+                  key={s}
+                  className={`h-2 w-10 rounded-full transition-all ${
+                    s <= storyStep ? "bg-white" : "bg-white/30"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -3625,7 +4847,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                                   letterSpacing: '-0.01em'
                                 } : undefined}
                               >
-                                {item.prompt}
+                                {highlightPlaceholders(item.prompt)}
                               </p>
                             </div>
                             <button
@@ -3692,6 +4914,15 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               placeholder="e.g., 'Summarise the top three strategic options I should put in my board pack next week.'"
               className="w-full rounded-2xl border-2 border-slate-300 bg-slate-50 focus:bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
             />
+            {/* Placeholder hint */}
+            {prompt.includes('[') && prompt.includes(']') && (
+              <div className="mt-2 p-2 bg-purple-50/50 rounded-lg border border-purple-100">
+                <p className="text-[11px] text-purple-600 mb-1 font-medium">📝 Updated Prompt:</p>
+                <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
+                  {highlightPlaceholders(prompt, 'light')}
+                </p>
+              </div>
+            )}
             {/* Character counter and warning */}
             <div className="flex justify-between items-center text-xs mt-2">
               <span className="text-slate-500">
@@ -3760,38 +4991,375 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Dynamic Estimated Cost Calculator */}
+            {(() => {
+              const selectedCount = Object.values(selected).filter(Boolean).length;
+              const inputChars = prompt.length;
+              
+              // Use the same estimateTokens function as run summary (tiktoken as default)
+              const inputTokens = estimateTokens(prompt, 'tiktoken');
+              
+              // Estimate output: typical AI response is 2-3x input for short prompts, less for long
+              // This matches what run summary calculates after actual response
+              const estimatedOutputTokens = Math.min(4000, Math.max(100, Math.round(inputTokens * 2)));
+              
+              const { totalCost, breakdown } = calculateEstimatedCost(engines, selected, inputTokens, estimatedOutputTokens);
+              
+              if (selectedCount === 0) return null;
+              
+              return (
+                <div className="mt-4 px-4 py-2.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-6">
+                      <div>
+                        <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-wide">Est. Cost</p>
+                        <p className="text-lg font-bold text-emerald-800">
+                          ${totalCost < 0.01 ? totalCost.toFixed(5) : totalCost.toFixed(4)}
+                        </p>
+                      </div>
+                      <div className="h-8 w-px bg-emerald-200"></div>
+                      <div className="flex items-center gap-4 text-xs">
+                        <div>
+                          <span className="text-slate-500">Engines:</span>
+                          <span className="font-semibold text-slate-700 ml-1">{selectedCount}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">In:</span>
+                          <span className="font-semibold text-slate-700 ml-1">{inputTokens.toLocaleString()} <span className="text-slate-400">({inputChars} chars)</span></span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Est. Out:</span>
+                          <span className="font-semibold text-slate-700 ml-1">~{estimatedOutputTokens.toLocaleString()}/engine</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {breakdown.length > 0 && (
+                        <details className="text-xs">
+                          <summary className="text-emerald-600 cursor-pointer hover:text-emerald-700 font-medium">
+                            Breakdown
+                          </summary>
+                          <div className="absolute right-4 mt-1 p-2 bg-white border border-emerald-200 rounded-lg shadow-lg z-10 grid grid-cols-2 gap-1.5 min-w-[200px]">
+                            {breakdown.map((item) => (
+                              <div key={item.engine} className="flex justify-between gap-2 px-2 py-1 bg-emerald-50 rounded text-[11px]">
+                                <span className="text-slate-600 truncate">{item.engine}</span>
+                                <span className="text-emerald-700 font-medium">${item.cost < 0.0001 ? item.cost.toFixed(5) : item.cost.toFixed(4)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                      <button
+                        onClick={() => setShowBalanceManager(true)}
+                        className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors font-medium"
+                      >
+                        Manage Balances
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* All Engines - Pills or Expanded Cards */}
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
               {engines.map((engine) => {
                 const isSelected = selected[engine.id];
+                const isExpanded = expandedEngines.has(engine.id);
                 const brandColor = providerStyles[engine.provider] || 'bg-slate-700';
+                const warn = warningForEngine(engine);
+                
+                const toggleExpand = () => {
+                  const newSet = new Set(expandedEngines);
+                  if (newSet.has(engine.id)) {
+                    newSet.delete(engine.id);
+                  } else {
+                    newSet.add(engine.id);
+                  }
+                  setExpandedEngines(newSet);
+                };
+
+                // If collapsed, show as pill
+                if (!isExpanded) {
+                  return (
+                    <div
+                      key={engine.id}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${brandColor} text-white hover:shadow-lg cursor-pointer self-start h-fit ${
+                        isSelected ? 'ring-2 ring-purple-500 ring-offset-2' : 'opacity-80 hover:opacity-100'
+                      }`}
+                      onClick={toggleExpand}
+                    >
+                      <span>{engine.name}</span>
+                      <span className="text-xs opacity-75">Context {(engine.contextLimit / 1000).toFixed(0)}k • {engine.tokenizer}</span>
+                      <div className="ml-auto flex items-center gap-1">
+                        <div 
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                            isSelected 
+                              ? 'bg-white border-white shadow-md' 
+                              : 'border-white bg-white/30 hover:bg-white/50'
+                          }`}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            toggleEngine(engine.id);
+                          }}
+                        >
+                          {isSelected && (
+                            <svg className="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <svg className="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // If expanded, show full card
+                const pr = (pricing as any)[engine.provider]?.[engine.selectedVersion];
+                const fallbackPricing = (BASE_PRICING as any)[engine.provider]?.[engine.selectedVersion];
+                const actualPricing = pr || fallbackPricing;
+                
+                const P = estimateTokens(prompt, engine.tokenizer);
+                const minTokens = Math.max(P, 100);
+                const nowIn = Math.min(minTokens, engine.contextLimit);
+                const outCap = computeOutCap(engine, nowIn);
+                const minOut = Math.max(200, Math.floor(0.35 * outCap));
+                
+                const calculatedMinSpend = actualPricing ? (nowIn / 1_000_000) * actualPricing.in + (minOut / 1_000_000) * actualPricing.out : 0;
+                const calculatedMaxSpend = actualPricing ? (nowIn / 1_000_000) * actualPricing.in + (outCap / 1_000_000) * actualPricing.out : 0;
+                const minSpend = Math.max(calculatedMinSpend, 0.01);
+                const maxSpend = Math.max(calculatedMaxSpend, 0.01);
+                
                 return (
-                  <button
+                  <div
                     key={engine.id}
-                    onClick={() => toggleEngine(engine.id)}
-                    className={`flex flex-col items-start text-left rounded-2xl border-2 px-4 py-3 text-sm transition relative overflow-hidden ${
-                      isSelected
-                        ? "border-purple-500 bg-purple-50/70 shadow-md"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
-                    }`}
+                    className="w-full flex flex-col items-start text-left rounded-2xl border-2 px-4 py-3 text-sm transition relative overflow-hidden border-purple-300 bg-white shadow-lg"
                   >
                     {/* Brand color bar on left */}
                     <div className={`absolute left-0 top-0 bottom-0 w-1 ${brandColor}`}></div>
                     
-                    <div className="flex items-center gap-2 w-full">
+                    {/* Clickable header area - Collapse */}
+                    <button
+                      onClick={toggleExpand}
+                      className="flex items-center gap-2 w-full text-left"
+                    >
                       <span className={`px-2 py-0.5 rounded text-xs font-semibold text-white ${brandColor}`}>
-                        {engine.provider.toUpperCase()}
+                        {engine.name}
                       </span>
-                      {isSelected && (
-                        <span className="ml-auto text-purple-600">✓</span>
+                      <div className="ml-auto flex items-center gap-2">
+                        <span className="text-xs text-slate-500">Select Engine</span>
+                        <div 
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                            isSelected ? 'bg-purple-600 border-purple-600' : 'border-slate-300 bg-white'
+                          }`}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            toggleEngine(engine.id);
+                          }}
+                        >
+                          {isSelected && (
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+                    
+                    {/* Model Version Dropdown */}
+                    <div className="w-full mt-2">
+                      <label className="text-xs text-slate-600 block mb-1">Version</label>
+                      <select 
+                        className="w-full text-xs border rounded px-2 py-1.5 bg-white"
+                        value={engine.selectedVersion} 
+                        onChange={(ev) => {
+                          ev.stopPropagation();
+                          updateVersion(engine.id, ev.target.value);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {engine.versions.map(v => {
+                          const excludedModels = ['gemini-2.0-flash-exp', 'claude-3.5-sonnet', 'claude-3-5-sonnet-20241022', 'claude-3-haiku'];
+                          const showGreenDot = liveMode && !excludedModels.includes(v);
+                          return (
+                            <option key={v} value={v}>
+                              {showGreenDot ? '🟢 ' : ''}{v}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                    
+                    {/* API Key Field */}
+                    <div className="w-full mt-2">
+                      <label className="text-xs text-slate-600 block mb-1">API Key</label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          className="flex-1 text-xs border rounded px-2 py-1.5 bg-white" 
+                          type={showApiKey[engine.id] ? "text" : "password"} 
+                          placeholder="Enter API key..." 
+                          value={engine.apiKey || ""} 
+                          onChange={(ev) => {
+                            ev.stopPropagation();
+                            updateApiKey(engine.id, ev.target.value);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowApiKey(prev => ({ ...prev, [engine.id]: !prev[engine.id] }));
+                          }}
+                          className="px-2 py-1 text-xs border rounded hover:bg-slate-50"
+                          title={showApiKey[engine.id] ? "Hide" : "Show"}
+                        >
+                          {showApiKey[engine.id] ? "👁️" : "👁️‍🗨️"}
+                        </button>
+                        {/* Fetch Balance Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fetchBalance(engine);
+                          }}
+                          className="px-2 py-1 text-xs border rounded hover:bg-blue-50 text-blue-600 border-blue-300"
+                          title="Check balance/validate key"
+                        >
+                          {apiBalances[engine.id]?.loading ? '⏳' : '💰'}
+                        </button>
+                      </div>
+                      {/* Balance Display */}
+                      {apiBalances[engine.id] && !apiBalances[engine.id].loading && (
+                        <div className="mt-1">
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            apiBalances[engine.id].error ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                          }`}>
+                            {apiBalances[engine.id].balance}
+                          </span>
+                        </div>
                       )}
                     </div>
                     
-                    <span className="font-semibold text-slate-900 mt-2">{engine.name}</span>
-                    <span className="text-xs text-slate-500">{engine.selectedVersion}</span>
-                    <span className="text-xs text-slate-400 mt-1">
-                      {engine.contextLimit.toLocaleString()} tokens
+                    {/* Output Policy */}
+                    <div className="w-full mt-2">
+                      <label className="text-xs text-slate-600 block mb-1">Output</label>
+                      <div className="flex items-center gap-2">
+                        <select 
+                          className="flex-1 text-xs border rounded px-2 py-1.5 bg-white" 
+                          value={engine.outPolicy?.mode || "auto"} 
+                          onChange={(ev) => {
+                            ev.stopPropagation();
+                            updateOutPolicy(engine.id, ev.target.value as any);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <option value="auto">Auto (recommended)</option>
+                          <option value="fixed">Fixed</option>
+                        </select>
+                        {engine.outPolicy?.mode === "fixed" && (
+                          <>
+                            <input 
+                              type="number" 
+                              min={256} 
+                              step={128} 
+                              value={engine.outPolicy?.fixedTokens || 2000} 
+                              onChange={(ev) => {
+                                ev.stopPropagation();
+                                updateOutPolicy(engine.id, "fixed", Math.max(256, Number(ev.target.value)||2000));
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-20 text-xs border rounded px-2 py-1.5" 
+                            />
+                            <span className="text-xs text-slate-500">tokens</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Pricing Override */}
+                    <div className="w-full mt-2">
+                      <div className="flex items-center gap-2 text-xs">
+                        <div className="flex-1">
+                          <label className="text-slate-600 block mb-1">Price in:</label>
+                          <input 
+                            className="w-full border rounded px-2 py-1.5" 
+                            type="number" 
+                            step="0.000001" 
+                            value={(pr?.in ?? 0).toString()} 
+                            onChange={(ev) => {
+                              ev.stopPropagation();
+                              overridePrice(engine.provider, engine.selectedVersion, "in", Number(ev.target.value));
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-slate-600 block mb-1">Price out:</label>
+                          <input 
+                            className="w-full border rounded px-2 py-1.5" 
+                            type="number" 
+                            step="0.000001" 
+                            value={(pr?.out ?? 0).toString()} 
+                            onChange={(ev) => {
+                              ev.stopPropagation();
+                              overridePrice(engine.provider, engine.selectedVersion, "out", Number(ev.target.value));
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {((BASE_PRICING as any)[engine.provider]?.[engine.selectedVersion]?.note || engine.selectedVersion)}
+                      </p>
+                    </div>
+                    
+                    <span className="text-xs text-slate-400 mt-2 block">
+                      Context {engine.contextLimit.toLocaleString()} • {engine.tokenizer}
                     </span>
-                  </button>
+                    
+                    {/* Min/Max Spend Summary - Always Visible */}
+                    <div className="w-full mt-2 pt-2 border-t border-slate-200">
+                      <div className="text-xs text-slate-700">
+                        <span className="font-medium">Min spend</span> <span className="font-bold text-green-600">${minSpend.toFixed(2)}</span> • 
+                        <span className="font-medium ml-2">Max</span> <span className="font-bold text-orange-600">${maxSpend.toFixed(2)}</span> • 
+                        <span className="font-medium ml-2">ETA</span> <span className="font-bold">{timeLabel(nowIn, outCap)}</span> • 
+                        <span className="font-medium ml-2">Outcome:</span> <span className="font-bold">{outcomeLabel(outCap)}</span>
+                      </div>
+                      {warn && liveMode ? <div className="text-amber-700 text-[11px] mt-1">⚠️ {warn}</div> : null}
+                    </div>
+                    
+                    {/* Token and Cost Info - Only show when Technical toggle is ON */}
+                    {showTech && (
+                      <div className="w-full mt-3 pt-2 border-t border-slate-200">
+                        <div className="text-xs text-slate-600 space-y-1">
+                          <div className="flex justify-between">
+                            <span>Input tokens:</span>
+                            <span className="font-medium text-slate-900">{nowIn.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Output cap:</span>
+                            <span className="font-medium text-slate-900">{outCap.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1">
+                            <span className="font-medium text-purple-700">Min cost:</span>
+                            <span className="font-semibold text-green-600">${minSpend.toFixed(4)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium text-purple-700">Max cost:</span>
+                            <span className="font-semibold text-orange-600">${maxSpend.toFixed(4)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -3840,6 +5408,45 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 </button>
               </div>
             </div>
+
+            {/* 🧪 MOCK ERROR TESTING PANEL - Story Mode (DISABLED)
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🧪</span>
+                  <span className="text-sm font-semibold text-amber-800">Mock Error Testing</span>
+                  {mockErrorMode && (
+                    <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full animate-pulse">
+                      ACTIVE: {mockErrorMode}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={mockErrorMode || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMockErrorMode(val === '' ? false : val as '429' | '500' | '503' | 'random');
+                      setMockErrorCounts({});
+                    }}
+                    className="text-sm border border-amber-400 rounded px-2 py-1 bg-white"
+                  >
+                    <option value="">Off (Normal)</option>
+                    <option value="429">🔄 429 Rate Limit</option>
+                    <option value="500">💥 500 Server Error</option>
+                    <option value="503">⏳ 503 Overloaded</option>
+                    <option value="random">🎲 Random Errors</option>
+                  </select>
+                </div>
+              </div>
+              {mockErrorMode && (
+                <div className="mt-2 text-xs text-amber-700">
+                  <p>⚠️ Mock errors will be thrown for all engines. They will succeed after {MOCK_FAIL_AFTER_RETRIES} retries.</p>
+                  <p className="mt-1">Retry attempts per engine: {Object.entries(mockErrorCounts).map(([id, count]) => `${id}: ${count}`).join(', ') || 'None yet'}</p>
+                </div>
+              )}
+            </div>
+            */}
           </div>
         </div>
       )}
@@ -3905,6 +5512,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     />
                   )}
                 </button>
+                
               </div>
             </div>
             <p className="text-sm text-slate-600">
@@ -3949,6 +5557,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 </button>
               );
             })}
+            
           </div>
 
           {/* Tab Content */}
@@ -3970,94 +5579,262 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                   <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                     <div className="flex items-center gap-3">
                       <span className={`px-3 py-1 rounded-lg text-white text-xs font-semibold ${brandColor}`}>
-                        {engine.provider.toUpperCase()}
+                        {engine.name}
                       </span>
                       <div>
-                        <h3 className="font-semibold text-slate-900">{engine.name}</h3>
-                        <p className="text-xs text-slate-500">{engine.selectedVersion}</p>
+                        <h3 className="font-semibold text-slate-900">{engine.selectedVersion}</h3>
+                        <p className="text-xs text-slate-500">Context: {(engine.contextLimit / 1000).toFixed(0)}k tokens</p>
                       </div>
                     </div>
-                    {streaming && (
-                      <span className="flex items-center gap-2 text-sm text-blue-600 font-medium">
-                        <span className="relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                    <div className="flex items-center gap-3">
+                      {streaming && (
+                        <span className="flex items-center gap-2 text-sm text-blue-600 font-medium">
+                          <span className="relative flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                          </span>
+                          Streaming...
                         </span>
-                        Streaming...
-                      </span>
-                    )}
+                      )}
+                      {content && !streaming && (
+                        <ExportDropdown
+                          data={{
+                            title: `${engine.name} Response`,
+                            provider: engine.provider,
+                            model: engine.selectedVersion,
+                            prompt: prompt,
+                            response: content,
+                            timestamp: new Date(),
+                            tokensUsed: result?.tokensOut,
+                            cost: result?.costUSD,
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
 
                   {/* Response Content */}
                   <div>
                     {hasError ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-center bg-red-50 rounded-lg border border-red-200">
-                        <div className="text-3xl mb-2">⚠️</div>
-                        <p className="text-red-800 font-semibold text-sm mb-1">Request Failed</p>
-                        <p className="text-red-600 text-xs max-w-xs px-4">
-                          {(() => {
-                            const errorStr = result.error || '';
-                            const isSarvam = engine.provider === 'sarvam';
-                            
-                            // Sarvam AI specific errors
-                            if (isSarvam) {
-                              if (errorStr.includes('403') || errorStr.includes('invalid_api_key')) {
-                                return '🔑 Invalid API key - Get a valid key from Sarvam AI Dashboard';
-                              }
-                              if (errorStr.includes('429') || errorStr.includes('insufficient_quota')) {
-                                return '⏱️ Quota exceeded - Check usage or upgrade your plan';
-                              }
-                              if (errorStr.includes('500') || errorStr.includes('internal_server_error')) {
-                                return '🔧 Server error - Please try again later';
-                              }
-                              if (errorStr.includes('400') || errorStr.includes('invalid_request')) {
-                                return '📝 Invalid request - Check your request parameters';
-                              }
-                              if (errorStr.includes('422') || errorStr.includes('unprocessable_entity')) {
-                                return '🌐 Language detection failed - Specify source_language_code';
-                              }
+                      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                        {/* Business-Friendly Error Explanation - No redundant header */}
+                        {(() => {
+                          const errorStr = result.error || '';
+                          const provider = engine.provider?.toLowerCase() || '';
+                          
+                          // Create error info with what happened, fact about it, and actions
+                          const getErrorInfo = () => {
+                            // Authentication errors (401) - also check for emoji patterns from cleanErrorMessage
+                            if (errorStr.includes('401') || errorStr.includes('Unauthorized') || errorStr.includes('Authentication') || 
+                                errorStr.includes('🔑') || errorStr.includes('Invalid') && errorStr.includes('API key') ||
+                                errorStr.includes('invalid') && errorStr.includes('api') || errorStr.includes('API key')) {
+                              return {
+                                what: `Your ${engine.name} API key is invalid or expired`,
+                                fact: 'API keys are like passwords that verify your identity with the AI service. Without a valid key, the service cannot process your requests.',
+                                actions: [
+                                  'Go to Settings and check your API key is correct',
+                                  `Get a new key from ${provider === 'openai' ? 'platform.openai.com' : provider === 'anthropic' ? 'console.anthropic.com' : provider === 'deepseek' ? 'platform.deepseek.com' : provider === 'gemini' ? 'aistudio.google.com' : provider === 'groq' ? 'console.groq.com' : provider === 'xai' ? 'console.x.ai' : 'the provider dashboard'}`
+                                ]
+                              };
                             }
                             
-                            // General error handling for all engines
-                            if (errorStr.includes('401')) return '🔑 Authentication required - Please check your API key';
-                            if (errorStr.includes('429')) return '⏱️ Rate limit exceeded - Please try again in a moment';
-                            if (errorStr.includes('500')) return '🔧 Server error - The service is temporarily unavailable';
-                            if (errorStr.includes('timeout')) return '⏰ Request timed out - Please try again';
-                            if (errorStr.includes('403')) return '🚫 Access forbidden - Check your API permissions';
-                            if (errorStr.includes('400')) return '📝 Bad request - Check your request format';
+                            // Rate limit errors (429) - also check for emoji patterns
+                            if (errorStr.includes('429') || errorStr.includes('rate limit') || errorStr.includes('Too Many Requests') || 
+                                errorStr.includes('quota') || errorStr.includes('⏱️') || errorStr.includes('Rate limit')) {
+                              return {
+                                what: `You've hit a rate limit with ${engine.name}`,
+                                fact: 'Rate limits prevent abuse and ensure fair usage. They restrict how many requests you can make in a time period. The system will automatically retry.',
+                                actions: [
+                                  'Wait a moment - the system will retry automatically',
+                                  'Consider upgrading your API plan for higher limits'
+                                ]
+                              };
+                            }
                             
-                            // Show first line or first 80 characters
-                            const firstLine = errorStr.split('\n')[0];
-                            return firstLine.length > 80 ? firstLine.substring(0, 80) + '...' : firstLine;
-                          })()}
-                        </p>
-                        <button
-                          onClick={() => {
-                            // Add error to queue to show popup
-                            const errorMessage = String(result.error || 'Unknown error occurred');
-                            const enhancedError = {
-                              message: errorMessage,
-                              statusCode: undefined,
-                              status: undefined,
-                              code: undefined,
-                              provider: engine.provider,
-                              engine: engine.name,
-                              originalError: result.error
+                            // Server errors (500, 502, 503) - also check for emoji patterns
+                            if (errorStr.includes('500') || errorStr.includes('502') || errorStr.includes('503') || 
+                                errorStr.includes('Server') || errorStr.includes('overloaded') || errorStr.includes('⚠️') ||
+                                errorStr.includes('server error') || errorStr.includes('⏳')) {
+                              return {
+                                what: `${engine.name} is experiencing server issues`,
+                                fact: 'Server errors are temporary issues on the provider\'s side. They usually resolve within minutes as the service auto-recovers.',
+                                actions: [
+                                  'Wait a moment and try again',
+                                  'Check the provider\'s status page for outages'
+                                ]
+                              };
+                            }
+                            
+                            // Permission errors (403) - also check for emoji patterns
+                            if (errorStr.includes('403') || errorStr.includes('Forbidden') || errorStr.includes('permission') ||
+                                errorStr.includes('🚫') || errorStr.includes('Permission denied') || errorStr.includes('blocked')) {
+                              return {
+                                what: `Your API key lacks permission for ${engine.name}`,
+                                fact: 'Some AI models require special access or upgraded plans. Your current API key may not have access to this specific model.',
+                                actions: [
+                                  'Check if you have access to this model in your account',
+                                  'Contact the provider to request access if needed'
+                                ]
+                              };
+                            }
+                            
+                            // Not found errors (404) - also check for emoji patterns
+                            if (errorStr.includes('404') || errorStr.includes('Not Found') || errorStr.includes('❓') ||
+                                errorStr.includes('not found') || errorStr.includes('Model not found')) {
+                              return {
+                                what: `The requested model or endpoint was not found`,
+                                fact: 'This usually means the model name is incorrect or the model has been deprecated/renamed by the provider.',
+                                actions: [
+                                  'Check the model name is spelled correctly',
+                                  'Verify the model is still available from the provider'
+                                ]
+                              };
+                            }
+                            
+                            // Timeout errors
+                            if (errorStr.includes('timeout') || errorStr.includes('Timeout') || errorStr.includes('timed out')) {
+                              return {
+                                what: `The request to ${engine.name} timed out`,
+                                fact: 'Timeouts happen when the server takes too long to respond, often due to high demand or complex requests.',
+                                actions: [
+                                  'Try again with a shorter prompt',
+                                  'Wait a moment and retry'
+                                ]
+                              };
+                            }
+                            
+                            // Content/request too large (413)
+                            if (errorStr.includes('413') || errorStr.includes('too large') || errorStr.includes('Too Large') || errorStr.includes('exceeds')) {
+                              return {
+                                what: `Your request is too large for ${engine.name}`,
+                                fact: 'Each AI model has limits on how much text it can process at once. This is called the context window.',
+                                actions: [
+                                  'Reduce the length of your prompt',
+                                  'Split your request into smaller parts'
+                                ]
+                              };
+                            }
+                            
+                            // Bad request (400) - also check for emoji patterns
+                            if (errorStr.includes('400') || errorStr.includes('Bad Request') || errorStr.includes('❌') ||
+                                errorStr.includes('Invalid request') || errorStr.includes('invalid request')) {
+                              return {
+                                what: `${engine.name} couldn't process your request`,
+                                fact: 'The request format may be incorrect or contain unsupported parameters.',
+                                actions: [
+                                  'Check your prompt for any special characters',
+                                  'Try simplifying your request'
+                                ]
+                              };
+                            }
+                            
+                            // Network errors
+                            if (errorStr.includes('network') || errorStr.includes('Network') || errorStr.includes('connection') || errorStr.includes('ECONNREFUSED')) {
+                              return {
+                                what: `Network connection issue with ${engine.name}`,
+                                fact: 'This could be a temporary network issue or the service may be temporarily unreachable.',
+                                actions: [
+                                  'Check your internet connection',
+                                  'Try again in a few moments'
+                                ]
+                              };
+                            }
+                            
+                            // If error string contains useful info, show it directly
+                            if (errorStr.length > 10 && !errorStr.includes('Unknown error')) {
+                              return {
+                                what: errorStr.replace(/^[🔑❌⚠️⏱️🚫❓⏳]\s*/, '').replace(new RegExp(`^${engine.name}:\\s*`, 'i'), ''),
+                                fact: 'The AI service returned an error while processing your request.',
+                                actions: [
+                                  'Review the error message above',
+                                  'Try your request again or check your settings'
+                                ]
+                              };
+                            }
+                            
+                            // Default fallback - should rarely be reached now
+                            return {
+                              what: `An error occurred with ${engine.name}`,
+                              fact: 'Something unexpected happened while processing your request.',
+                              actions: [
+                                'Try your request again',
+                                'Click "View details" for technical information'
+                              ]
                             };
-                            
-                            const errorId = `${engine.id}-${Date.now()}`;
-                            setErrorQueue(prev => [...prev, {
-                              id: errorId,
-                              error: enhancedError,
-                              engine: engine,
-                              prompt: prompt,
-                              outCap: 0
-                            }]);
-                          }}
-                          className="mt-3 text-xs text-red-600 hover:text-red-800 underline"
-                        >
-                          View full error details
-                        </button>
+                          };
+                          
+                          const errorInfo = getErrorInfo();
+                          
+                          return (
+                            <div className="p-4 space-y-3">
+                              {/* What Happened */}
+                              <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                                <div className="flex items-start gap-2">
+                                  <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <div>
+                                    <p className="text-blue-900 font-semibold text-sm">{errorInfo.what}</p>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Fact About the Error */}
+                              <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-sm">💡</span>
+                                  <p className="text-gray-700 text-xs leading-relaxed">{errorInfo.fact}</p>
+                                </div>
+                              </div>
+                              
+                              {/* Actions Required */}
+                              <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                                <p className="text-orange-900 font-semibold text-xs mb-2 flex items-center gap-1">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                  </svg>
+                                  Action Required:
+                                </p>
+                                <div className="space-y-1">
+                                  {errorInfo.actions.map((action, idx) => (
+                                    <div key={idx} className="flex items-start gap-2">
+                                      <span className="w-4 h-4 rounded-full bg-orange-200 text-orange-800 text-xs flex items-center justify-center flex-shrink-0 font-semibold">{idx + 1}</span>
+                                      <span className="text-gray-700 text-xs">{action}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              
+                              {/* View Details Button */}
+                              <button
+                                onClick={() => {
+                                  const errorMessage = String(result.error || 'Unknown error occurred');
+                                  const enhancedError = {
+                                    message: errorMessage,
+                                    statusCode: undefined,
+                                    status: undefined,
+                                    code: undefined,
+                                    provider: engine.provider,
+                                    engine: engine.name,
+                                    originalError: result.error
+                                  };
+                                  
+                                  const errorId = `${engine.id}-${Date.now()}`;
+                                  setErrorQueue(prev => [...prev, {
+                                    id: errorId,
+                                    error: enhancedError,
+                                    engine: engine,
+                                    prompt: prompt,
+                                    outCap: 0
+                                  }]);
+                                }}
+                                className="w-full text-center text-xs text-gray-500 hover:text-gray-700 py-2 border-t border-gray-100 mt-2"
+                              >
+                                View technical details →
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     ) : content ? (
                       <SelectableMarkdownRenderer 
@@ -4094,9 +5871,143 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                       <p className="text-xs text-slate-500">View all responses in a single scrollable page</p>
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-purple-600 bg-purple-100 px-3 py-1 rounded-full">
-                    {engines.filter(e => selected[e.id]).length} Engines
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-purple-600 bg-purple-100 px-3 py-1 rounded-full">
+                      {engines.filter(e => selected[e.id]).length} Engines
+                    </span>
+                    {/* Copy All Button - with Word-style formatting */}
+                    <button
+                      onClick={async () => {
+                        const { copyAllToClipboard } = await import('./lib/export-utils');
+                        const selectedEnginesList = engines.filter(e => selected[e.id]);
+                        const exportData = selectedEnginesList.map(e => {
+                          const r = results.find(rr => rr.engineId === e.id);
+                          const streamingState = streamingStates[e.id];
+                          const content = streamingState?.content || r?.responsePreview || "(No response)";
+                          return {
+                            title: `${e.name} Response`,
+                            provider: e.provider,
+                            model: e.selectedVersion,
+                            prompt: prompt,
+                            response: content,
+                            timestamp: new Date(),
+                            tokensUsed: r?.tokensOut,
+                            cost: (r as any)?.cost,
+                          };
+                        });
+                        
+                        try {
+                          await copyAllToClipboard(exportData);
+                          alert('✅ All responses copied with formatting!');
+                        } catch (error) {
+                          alert('❌ Copy failed. Please try again.');
+                          console.error('Copy error:', error);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all hover:opacity-90 flex items-center gap-1 shadow-md"
+                      style={{ background: 'linear-gradient(135deg, #7c3aed, #3b82f6)' }}
+                      title="Copy all responses with Word-style formatting"
+                    >
+                      📋 Copy All
+                    </button>
+                    {/* Export All Buttons */}
+                    <button
+                      onClick={async () => {
+                        const selectedEnginesList = engines.filter(e => selected[e.id]);
+                        const exportData: ExportData[] = selectedEnginesList.map(e => {
+                          const r = results.find(rr => rr.engineId === e.id);
+                          const streamingState = streamingStates[e.id];
+                          const content = streamingState?.content || r?.responsePreview || "(No response)";
+                          
+                          return {
+                            title: `${e.name} Response`,
+                            provider: e.provider,
+                            model: e.selectedVersion,
+                            prompt: prompt,
+                            response: content,
+                            timestamp: new Date(),
+                            tokensUsed: r?.tokensOut,
+                            cost: (r as any)?.cost
+                          };
+                        });
+                        
+                        try {
+                          await exportAllToWord(exportData);
+                          alert('✅ All responses exported to Word!');
+                        } catch (error) {
+                          alert('❌ Export failed. Please try again.');
+                          console.error('Export error:', error);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all hover:opacity-90 flex items-center gap-1"
+                      style={{ backgroundColor: '#059669' }}
+                      title="Export all responses to Word document"
+                    >
+                      📥 Word
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const selectedEnginesList = engines.filter(e => selected[e.id]);
+                        
+                        // Capture chart images from the DOM
+                        const captureChartImages = async (engineId: string): Promise<string[]> => {
+                          const chartImages: string[] = [];
+                          try {
+                            // Find all canvas elements (charts) for this engine
+                            const engineContainer = document.querySelector(`[data-engine-id="${engineId}"]`);
+                            if (engineContainer) {
+                              const canvases = engineContainer.querySelectorAll('canvas');
+                              for (const canvas of canvases) {
+                                try {
+                                  const dataUrl = (canvas as HTMLCanvasElement).toDataURL('image/png');
+                                  chartImages.push(dataUrl);
+                                } catch (e) {
+                                  console.error('Failed to capture chart:', e);
+                                }
+                              }
+                            }
+                          } catch (e) {
+                            console.error('Error capturing charts:', e);
+                          }
+                          return chartImages;
+                        };
+                        
+                        const exportData: ExportData[] = await Promise.all(
+                          selectedEnginesList.map(async (e) => {
+                            const r = results.find(rr => rr.engineId === e.id);
+                            const streamingState = streamingStates[e.id];
+                            const content = streamingState?.content || r?.responsePreview || "(No response)";
+                            const chartImages = await captureChartImages(e.id);
+                            
+                            return {
+                              title: `${e.name} Response`,
+                              provider: e.provider,
+                              model: e.selectedVersion,
+                              prompt: prompt,
+                              response: content,
+                              timestamp: new Date(),
+                              tokensUsed: r?.tokensOut,
+                              cost: (r as any)?.cost,
+                              chartImages
+                            };
+                          })
+                        );
+                        
+                        try {
+                          await exportAllToPDF(exportData);
+                          alert('✅ All responses exported to PDF!');
+                        } catch (error) {
+                          alert('❌ PDF export failed. Please try again.');
+                          console.error('PDF Export error:', error);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all hover:opacity-90 flex items-center gap-1"
+                      style={{ backgroundColor: '#dc2626' }}
+                      title="Export all responses to PDF document"
+                    >
+                      📄 PDF
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-6">
@@ -4109,7 +6020,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     const responseNumber = index + 1;
 
                     return (
-                      <div key={engine.id}>
+                      <div key={engine.id} data-engine-id={engine.id}>
                         {/* Engine Header */}
                         <div className="flex items-center gap-3 mb-3 pb-2 border-b-2 border-purple-200">
                           <span className={`px-3 py-1 rounded-lg text-white font-medium text-xs ${brandColor}`}>
@@ -4244,10 +6155,34 @@ My specific issue: [describe - losing clients after first project, can't grow ac
 
                           {/* Component Content */}
                           <div className="pl-4 border-l-4 border-green-400 bg-green-50/50 rounded-r-lg p-3">
-                            <div 
-                              className="prose prose-sm max-w-none"
-                              dangerouslySetInnerHTML={{ __html: marked.parse(component.content) as string }}
-                            />
+                            {component.type === 'chart' ? (
+                              // Render chart from stored configuration
+                              (() => {
+                                try {
+                                  const chartData = JSON.parse(component.content);
+                                  if (chartData.type === 'echarts' && chartData.config) {
+                                    return (
+                                      <div className="bg-white rounded-lg p-2">
+                                        <TableChartRenderer chart={{ id: chartData.id, config: chartData.config, sourceTable: '' }} />
+                                      </div>
+                                    );
+                                  }
+                                } catch (e) {
+                                  // Fallback to markdown if JSON parse fails
+                                }
+                                return (
+                                  <div 
+                                    className="prose prose-sm max-w-none"
+                                    dangerouslySetInnerHTML={{ __html: marked.parse(component.content) as string }}
+                                  />
+                                );
+                              })()
+                            ) : (
+                              <div 
+                                className="prose prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: marked.parse(component.content) as string }}
+                              />
+                            )}
                           </div>
                         </div>
                       );
@@ -4264,18 +6199,51 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                             These selections are ordered as you picked them
                           </p>
                         </div>
-                        <button
-                          onClick={() => {
-                            const combinedText = selectedComponents.map((c, i) => 
-                              `### From ${c.engineName}\n\n${c.content}\n\n---\n\n`
-                            ).join('');
-                            navigator.clipboard.writeText(combinedText);
-                            alert('Selected components copied to clipboard!');
-                          }}
-                          className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition"
-                        >
-                          📋 Copy All
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={async () => {
+                              const { copyAllToClipboard } = await import('./lib/export-utils');
+                              const exportData = selectedComponents.map(c => {
+                                const engine = engines.find(e => e.name === c.engineName);
+                                return {
+                                  title: `From ${c.engineName}`,
+                                  provider: engine?.provider || 'Unknown',
+                                  model: engine?.selectedVersion || c.engineName,
+                                  prompt: prompt,
+                                  response: c.content,
+                                  timestamp: new Date(),
+                                };
+                              });
+                              try {
+                                await copyAllToClipboard(exportData);
+                                alert('✅ Selected components copied with formatting!');
+                              } catch (error) {
+                                alert('❌ Copy failed. Please try again.');
+                              }
+                            }}
+                            className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition"
+                          >
+                            📋 Copy All
+                          </button>
+                          <ExportDropdown
+                            data={{
+                              title: 'Selected Components',
+                              provider: 'Multiple Engines',
+                              model: selectedComponents.map(c => {
+                                const engine = engines.find(e => e.name === c.engineName);
+                                return engine ? `${engine.name} (${engine.selectedVersion})` : c.engineName;
+                              }).filter((v, i, a) => a.indexOf(v) === i).join(', '),
+                              prompt: prompt,
+                              response: selectedComponents.map((c, i) => 
+                                `## From ${c.engineName}${(() => {
+                                  const engine = engines.find(e => e.name === c.engineName);
+                                  return engine ? ` (${engine.selectedVersion})` : '';
+                                })()}\n\n${c.content}`
+                              ).join('\n\n---\n\n'),
+                              timestamp: new Date(),
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -4321,67 +6289,288 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Technical Analysis Section */}
-          {results.length > 0 && (
-            <div className="mt-6 bg-white rounded-xl border-2 border-slate-200 p-4">
-              <details className="cursor-pointer">
-                <summary className="text-base font-semibold text-slate-900 cursor-pointer">
-                  📊 Technical Analysis (Estimate vs Actual)
-                </summary>
-                <div className="mt-4 space-y-4">
+            {/* Technical Analysis Tab Content */}
+            {activeEngineTab === 'analysis' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📊</span>
+                    <div>
+                      <h3 className="font-semibold text-slate-900">Technical Analysis</h3>
+                      <p className="text-xs text-slate-500">Estimate vs Actual comparison for all engines</p>
+                    </div>
+                  </div>
+                </div>
+
+                {engines.filter(e => selected[e.id]).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="text-4xl mb-3">📊</div>
+                    <p className="text-slate-400 italic">No engines selected. Select engines to see analysis.</p>
+                  </div>
+                ) : results.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="text-4xl mb-3">⏳</div>
+                    <p className="text-slate-400 italic">Waiting for engine responses...</p>
+                    <p className="text-xs text-slate-300 mt-2">Analysis will appear once engines complete.</p>
+                  </div>
+                ) : (
+                <div className="space-y-4">
                   {engines.filter(e => selected[e.id]).map(engine => {
                     const result = results.find(r => r.engineId === engine.id);
                     const preview = previews.find(p => p.e.id === engine.id);
+                    const brandColor = providerStyles[engine.provider] || 'bg-slate-700';
                     
                     return (
-                      <div key={engine.id} className="border rounded-lg p-3">
-                        <div className="font-medium text-sm mb-2">{engine.name} · {engine.selectedVersion}</div>
-                        <div className="overflow-auto text-xs">
+                      <div key={engine.id} className="border rounded-xl p-4 bg-white shadow-sm">
+                        <div className="flex items-center gap-3 mb-3 pb-2 border-b border-slate-200">
+                          <span className={`px-3 py-1 rounded-lg text-white text-xs font-semibold ${brandColor}`}>
+                            {engine.name}
+                          </span>
+                          <div>
+                            <span className="font-semibold text-slate-900">{engine.selectedVersion}</span>
+                            <span className="text-xs text-slate-500 ml-2">· {(engine.contextLimit / 1000).toFixed(0)}k context</span>
+                          </div>
+                          {result && (
+                            <span className={`ml-auto px-2 py-1 rounded-full text-xs font-medium ${
+                              result.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {result.success ? '✓ Success' : '✗ Failed'}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="overflow-auto text-sm">
                           <table className="w-full border-collapse">
                             <thead>
-                              <tr className="text-left border-b">
-                                <th className="py-1 pr-3">Metric</th>
-                                <th className="py-1 pr-3">Estimate</th>
-                                <th className="py-1 pr-3">Actual</th>
-                                <th className="py-1 pr-3">Variance</th>
+                              <tr className="text-left border-b bg-slate-50">
+                                <th className="py-2 px-3 font-medium text-slate-600">Metric</th>
+                                <th className="py-2 px-3 font-medium text-slate-600">Estimate</th>
+                                <th className="py-2 px-3 font-medium text-slate-600">Actual</th>
+                                <th className="py-2 px-3 font-medium text-slate-600">Variance</th>
                               </tr>
                             </thead>
                             <tbody>
                               <tr className="border-b">
-                                <td className="py-1 pr-3">Input tokens</td>
-                                <td className="py-1 pr-3">{preview?.nowIn.toLocaleString()}</td>
-                                <td className="py-1 pr-3">{result ? result.tokensIn.toLocaleString() : "–"}</td>
-                                <td className="py-1 pr-3">{result ? (result.tokensIn - (preview?.nowIn||0)).toLocaleString() : "–"}</td>
+                                <td className="py-2 px-3 text-slate-700">Input tokens</td>
+                                <td className="py-2 px-3">{preview?.nowIn.toLocaleString() || '–'}</td>
+                                <td className="py-2 px-3 font-medium">{result ? result.tokensIn.toLocaleString() : '–'}</td>
+                                <td className="py-2 px-3">{result ? (result.tokensIn - (preview?.nowIn || 0)).toLocaleString() : '–'}</td>
                               </tr>
                               <tr className="border-b">
-                                <td className="py-1 pr-3">Output tokens</td>
-                                <td className="py-1 pr-3">cap {preview?.outCap.toLocaleString()}</td>
-                                <td className="py-1 pr-3">{result ? result.tokensOut.toLocaleString() : "–"}</td>
-                                <td className="py-1 pr-3">{result ? (result.tokensOut - (preview?.outCap||0)).toLocaleString() : "–"}</td>
+                                <td className="py-2 px-3 text-slate-700">Output tokens</td>
+                                <td className="py-2 px-3">cap {preview?.outCap.toLocaleString() || '–'}</td>
+                                <td className="py-2 px-3 font-medium">{result ? result.tokensOut.toLocaleString() : '–'}</td>
+                                <td className="py-2 px-3">{result ? (result.tokensOut - (preview?.outCap || 0)).toLocaleString() : '–'}</td>
                               </tr>
                               <tr className="border-b">
-                                <td className="py-1 pr-3">Spend (min → max)</td>
-                                <td className="py-1 pr-3">${(preview?.minSpend||0).toFixed(3)} → ${(preview?.maxSpend||0).toFixed(3)}</td>
-                                <td className="py-1 pr-3">{result ? `$${result.costUSD.toFixed(3)}` : "–"}</td>
-                                <td className="py-1 pr-3">{result ? `$${(result.costUSD - (preview?.maxSpend||0)).toFixed(3)}` : "–"}</td>
+                                <td className="py-2 px-3 text-slate-700">Cost (min → max)</td>
+                                <td className="py-2 px-3">${(preview?.minSpend || 0).toFixed(4)} → ${(preview?.maxSpend || 0).toFixed(4)}</td>
+                                <td className="py-2 px-3 font-medium text-green-700">{result ? `$${result.costUSD.toFixed(4)}` : '–'}</td>
+                                <td className="py-2 px-3">{result ? `$${(result.costUSD - (preview?.maxSpend || 0)).toFixed(4)}` : '–'}</td>
+                              </tr>
+                              <tr className="border-b">
+                                <td className="py-2 px-3 text-slate-700">Duration</td>
+                                <td className="py-2 px-3">–</td>
+                                <td className="py-2 px-3 font-medium">{result ? `${(result.durationMs / 1000).toFixed(2)}s` : '–'}</td>
+                                <td className="py-2 px-3">–</td>
                               </tr>
                               <tr>
-                                <td className="py-1 pr-3">Reason</td>
-                                <td className="py-1 pr-3" colSpan={3}>{result ? result.reason : "Will be computed after run."}</td>
+                                <td className="py-2 px-3 text-slate-700">Status</td>
+                                <td className="py-2 px-3" colSpan={3}>
+                                  <span className={result?.success ? 'text-green-600' : 'text-red-600'}>
+                                    {result ? result.reason : 'Waiting for response...'}
+                                  </span>
+                                </td>
                               </tr>
                             </tbody>
                           </table>
                           {result?.warnings?.length ? (
-                            <div className="mt-2 text-amber-700 text-[11px]">
-                              Warnings: {result.warnings.join("; ")}
+                            <div className="mt-3 p-2 bg-amber-50 rounded-lg text-amber-700 text-xs">
+                              ⚠️ Warnings: {result.warnings.join("; ")}
                             </div>
                           ) : null}
                         </div>
                       </div>
                     );
                   })}
+
+                  {/* Summary Stats */}
+                  <div className="mt-4 p-4 bg-slate-50 rounded-xl border">
+                    <h4 className="font-semibold text-slate-900 mb-3">📈 Summary</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                      <div className="bg-white p-3 rounded-lg border">
+                        <div className="text-slate-500 text-xs">Total Input</div>
+                        <div className="font-semibold text-lg">{results.reduce((sum, r) => sum + r.tokensIn, 0).toLocaleString()}</div>
+                        <div className="text-xs text-slate-400">tokens</div>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border">
+                        <div className="text-slate-500 text-xs">Total Output</div>
+                        <div className="font-semibold text-lg">{results.reduce((sum, r) => sum + r.tokensOut, 0).toLocaleString()}</div>
+                        <div className="text-xs text-slate-400">tokens</div>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border">
+                        <div className="text-slate-500 text-xs">Total Cost</div>
+                        <div className="font-semibold text-lg text-green-600">${results.reduce((sum, r) => sum + r.costUSD, 0).toFixed(4)}</div>
+                        <div className="text-xs text-slate-400">USD</div>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border">
+                        <div className="text-slate-500 text-xs">Avg Duration</div>
+                        <div className="font-semibold text-lg">{(results.reduce((sum, r) => sum + r.durationMs, 0) / results.length / 1000).toFixed(2)}s</div>
+                        <div className="text-xs text-slate-400">per engine</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                )}
+              </div>
+            )}
+          </div>
+
+
+          {/* Technical Analysis Section - Collapsible */}
+          {results.length > 0 && engines.filter(e => selected[e.id]).length > 0 && (
+            <div className="mt-6 bg-white rounded-xl border-2 border-slate-400 p-4">
+              <details>
+                <summary className="cursor-pointer font-semibold text-slate-900 flex items-center justify-between">
+                  <span>📊 Technical Analysis</span>
+                  <span className="text-xs text-slate-500 font-normal">
+                    {engines.filter(e => selected[e.id]).length} engine{engines.filter(e => selected[e.id]).length > 1 ? 's' : ''} selected
+                  </span>
+                </summary>
+                
+                <div className="mt-4 space-y-4">
+                  {/* Per-Engine Analysis Cards */}
+                  {engines.filter(e => selected[e.id]).map(engine => {
+                    const result = results.find(r => r.engineId === engine.id);
+                    const preview = previews.find(p => p.e.id === engine.id);
+                    const brandColor = providerStyles[engine.provider] || 'bg-slate-700';
+                    
+                    return (
+                      <div key={engine.id} className="border rounded-xl p-3 sm:p-4 bg-slate-50">
+                        {/* Engine Header */}
+                        <div className="flex items-center gap-2 sm:gap-3 mb-3 pb-2 border-b border-slate-200">
+                          <span className={`px-2 sm:px-3 py-1 rounded-lg text-white text-xs font-semibold ${brandColor}`}>
+                            {engine.name}
+                          </span>
+                          <span className="font-medium text-slate-900 text-sm">{engine.selectedVersion}</span>
+                          {result && (
+                            <span className={`ml-auto px-2 py-1 rounded-full text-xs font-medium ${
+                              result.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {result.success ? '✓' : '✗'}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Mobile: Compact View */}
+                        <div className="sm:hidden space-y-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-600">Input tokens:</span>
+                            <span className="font-medium">{result ? result.tokensIn.toLocaleString() : '–'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-600">Output tokens:</span>
+                            <span className="font-medium">{result ? result.tokensOut.toLocaleString() : '–'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-600">Cost:</span>
+                            <span className="font-medium text-green-700">{result ? `$${result.costUSD.toFixed(4)}` : '–'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-600">Duration:</span>
+                            <span className="font-medium">{result ? `${(result.durationMs / 1000).toFixed(2)}s` : '–'}</span>
+                          </div>
+                        </div>
+                        
+                        {/* Desktop: Full Table */}
+                        <div className="hidden sm:block overflow-auto text-sm">
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="text-left border-b bg-white">
+                                <th className="py-2 px-3 font-medium text-slate-600 text-xs">Metric</th>
+                                <th className="py-2 px-3 font-medium text-slate-600 text-xs">Estimate</th>
+                                <th className="py-2 px-3 font-medium text-slate-600 text-xs">Actual</th>
+                                <th className="py-2 px-3 font-medium text-slate-600 text-xs">Variance</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-xs">
+                              <tr className="border-b">
+                                <td className="py-2 px-3 text-slate-700">Input tokens</td>
+                                <td className="py-2 px-3">{preview?.nowIn.toLocaleString() || '–'}</td>
+                                <td className="py-2 px-3 font-medium">{result ? result.tokensIn.toLocaleString() : '–'}</td>
+                                <td className="py-2 px-3">{result ? (result.tokensIn - (preview?.nowIn || 0)).toLocaleString() : '–'}</td>
+                              </tr>
+                              <tr className="border-b">
+                                <td className="py-2 px-3 text-slate-700">Output tokens</td>
+                                <td className="py-2 px-3">cap {preview?.outCap.toLocaleString() || '–'}</td>
+                                <td className="py-2 px-3 font-medium">{result ? result.tokensOut.toLocaleString() : '–'}</td>
+                                <td className="py-2 px-3">{result ? (result.tokensOut - (preview?.outCap || 0)).toLocaleString() : '–'}</td>
+                              </tr>
+                              <tr className="border-b">
+                                <td className="py-2 px-3 text-slate-700">Cost (min → max)</td>
+                                <td className="py-2 px-3">${(preview?.minSpend || 0).toFixed(4)} → ${(preview?.maxSpend || 0).toFixed(4)}</td>
+                                <td className="py-2 px-3 font-medium text-green-700">{result ? `$${result.costUSD.toFixed(4)}` : '–'}</td>
+                                <td className="py-2 px-3">{result ? `$${(result.costUSD - (preview?.maxSpend || 0)).toFixed(4)}` : '–'}</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 px-3 text-slate-700">Duration</td>
+                                <td className="py-2 px-3">–</td>
+                                <td className="py-2 px-3 font-medium">{result ? `${(result.durationMs / 1000).toFixed(2)}s` : '–'}</td>
+                                <td className="py-2 px-3">–</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                        
+                        {/* Warnings only - Error is shown in the warning section below */}
+                        {result?.warnings?.length ? (
+                          <div className="mt-2 p-2 bg-amber-50 rounded-lg text-amber-700 text-xs">
+                            ⚠️ {result.warnings.join("; ")}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Summary Stats */}
+                  <div className="p-3 sm:p-4 bg-slate-100 rounded-xl border border-slate-200">
+                    <h4 className="font-semibold text-slate-900 mb-3 text-sm">📈 Summary (Selected Engines)</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
+                      <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                        <div className="text-slate-500 text-xs">Total Input</div>
+                        <div className="font-semibold text-base sm:text-lg">
+                          {results.filter(r => selected[r.engineId]).reduce((sum, r) => sum + r.tokensIn, 0).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-slate-400">tokens</div>
+                      </div>
+                      <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                        <div className="text-slate-500 text-xs">Total Output</div>
+                        <div className="font-semibold text-base sm:text-lg">
+                          {results.filter(r => selected[r.engineId]).reduce((sum, r) => sum + r.tokensOut, 0).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-slate-400">tokens</div>
+                      </div>
+                      <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                        <div className="text-slate-500 text-xs">Total Cost</div>
+                        <div className="font-semibold text-base sm:text-lg text-green-600">
+                          ${results.filter(r => selected[r.engineId]).reduce((sum, r) => sum + r.costUSD, 0).toFixed(4)}
+                        </div>
+                        <div className="text-xs text-slate-400">USD</div>
+                      </div>
+                      <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                        <div className="text-slate-500 text-xs">Success Rate</div>
+                        <div className="font-semibold text-base sm:text-lg">
+                          {results.filter(r => selected[r.engineId]).length > 0 
+                            ? Math.round((results.filter(r => selected[r.engineId] && r.success).length / results.filter(r => selected[r.engineId]).length) * 100)
+                            : 0}%
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {results.filter(r => selected[r.engineId] && r.success).length}/{results.filter(r => selected[r.engineId]).length} engines
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </details>
             </div>
@@ -5477,6 +7666,45 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           </div>
         </div>
 
+        {/* 🧪 MOCK ERROR TESTING PANEL - For testing auto-retry logic (DISABLED)
+        <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🧪</span>
+              <span className="text-sm font-semibold text-amber-800">Mock Error Testing</span>
+              {mockErrorMode && (
+                <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full animate-pulse">
+                  ACTIVE: {mockErrorMode}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={mockErrorMode || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setMockErrorMode(val === '' ? false : val as '429' | '500' | '503' | 'random');
+                  setMockErrorCounts({});
+                }}
+                className="text-sm border border-amber-400 rounded px-2 py-1 bg-white"
+              >
+                <option value="">Off (Normal)</option>
+                <option value="429">🔄 429 Rate Limit</option>
+                <option value="500">💥 500 Server Error</option>
+                <option value="503">⏳ 503 Overloaded</option>
+                <option value="random">🎲 Random Errors</option>
+              </select>
+            </div>
+          </div>
+          {mockErrorMode && (
+            <div className="mt-2 text-xs text-amber-700">
+              <p>⚠️ Mock errors will be thrown for all engines. They will succeed after {MOCK_FAIL_AFTER_RETRIES} retries.</p>
+              <p className="mt-1">Retry attempts per engine: {Object.entries(mockErrorCounts).map(([id, count]) => `${id}: ${count}`).join(', ') || 'None yet'}</p>
+            </div>
+          )}
+        </div>
+        */}
+
         <div className="mt-2 text-[12px] text-slate-700">Prices are indicative. Adjust these to match your plan; final billing comes from each provider.</div>
 
         {/* Assumptions (hidden from end users - uncomment to show) */}
@@ -5515,60 +7743,139 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         )}
       </div>
 
-      {/* Engine Selection — collapsible on mobile, grid on desktop */}
+      {/* Engine Selection — Story Mode Style */}
       <div className={`${panel} p-3 sm:p-4 border-t-4 border-[#4F46E5]`}>
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold">Engine Selection ({Object.values(selected).filter(Boolean).length}/{engines.length} selected)</div>
           <div className="flex items-center gap-2">
-            <select 
-              value={expandEngines} 
-              onChange={(e) => setExpandEngines(e.target.value as 'hide' | 'show')}
-              className="px-3 py-1.5 rounded-lg border text-sm bg-white hover:bg-slate-50"
-            >
-              <option value="hide">Hide All</option>
-              <option value="show">Show All</option>
-            </select>
             <button onClick={addCustomEngine} className="px-3 py-1.5 rounded-lg border text-sm bg-white hover:bg-slate-50">+ Add Custom Engine</button>
           </div>
         </div>
+        
+        {/* All Engines - Pills or Expanded Cards */}
+        <div className="grid md:grid-cols-2 gap-3 sm:gap-4 items-start">
+          {engines.map(engine => {
+            const isSelected = selected[engine.id];
+            const isExpanded = expandedEngines.has(engine.id);
+            const brandColor = providerStyles[engine.provider] || 'bg-slate-700';
+            const warn = warningForEngine(engine);
+            
+            const toggleExpand = () => {
+              const newSet = new Set(expandedEngines);
+              if (newSet.has(engine.id)) {
+                newSet.delete(engine.id);
+              } else {
+                newSet.add(engine.id);
+              }
+              setExpandedEngines(newSet);
+            };
 
-        <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
-          {engines.map(e => {
+            // If collapsed, show as pill
+            if (!isExpanded) {
+              return (
+                <div
+                  key={engine.id}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${brandColor} text-white hover:shadow-lg cursor-pointer self-start h-fit ${
+                    isSelected ? 'ring-2 ring-purple-500 ring-offset-2' : 'opacity-80 hover:opacity-100'
+                  }`}
+                  onClick={toggleExpand}
+                >
+                  <span>{engine.name}</span>
+                  <span className="text-xs opacity-75">Context {(engine.contextLimit / 1000).toFixed(0)}k • {engine.tokenizer}</span>
+                  <div className="ml-auto flex items-center gap-1">
+                    <div 
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                        isSelected 
+                          ? 'bg-white border-white shadow-md' 
+                          : 'border-white bg-white/30 hover:bg-white/50'
+                      }`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        toggleEngine(engine.id);
+                      }}
+                    >
+                      {isSelected && (
+                        <svg className="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <svg className="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              );
+            }
+
+            // If expanded, show full card
+            const e = engine;
             const pr = (pricing as any)[e.provider]?.[e.selectedVersion];
-            // Fallback pricing if not found in overrides
             const fallbackPricing = (BASE_PRICING as any)[e.provider]?.[e.selectedVersion];
             const actualPricing = pr || fallbackPricing;
             
             const P = estimateTokens(prompt, e.tokenizer);
-            // Ensure minimum tokens to prevent zero pricing - use 100 tokens minimum for visible costs
-            const minTokens = Math.max(P, 100); // At least 100 tokens for visible pricing
+            const minTokens = Math.max(P, 100);
             const nowIn = Math.min(minTokens, e.contextLimit);
             const outCap = computeOutCap(e, nowIn);
-            const minOut = Math.max(200, Math.floor(0.35 * outCap)); // Minimum 200 output tokens
+            const minOut = Math.max(200, Math.floor(0.35 * outCap));
             
-            // Calculate spend with actual pricing, ensure minimum of $0.01
             const calculatedMinSpend = actualPricing ? (nowIn / 1_000_000) * actualPricing.in + (minOut / 1_000_000) * actualPricing.out : 0;
             const calculatedMaxSpend = actualPricing ? (nowIn / 1_000_000) * actualPricing.in + (outCap / 1_000_000) * actualPricing.out : 0;
-            const minSpend = Math.max(calculatedMinSpend, 0.01); // Minimum $0.01
-            const maxSpend = Math.max(calculatedMaxSpend, 0.01); // Minimum $0.01
-            const eta = timeLabel(nowIn, outCap);
-            const outcome = outcomeLabel(outCap);
-            const warn = warningForEngine(e);
+            const minSpend = Math.max(calculatedMinSpend, 0.01);
+            const maxSpend = Math.max(calculatedMaxSpend, 0.01);
 
             return (
-              <details key={e.id} className="rounded-2xl border overflow-hidden group" open={expandEngines === 'show'}>
-                <summary className={`px-3 sm:px-4 py-3 flex items-center justify-between text-white cursor-pointer ${providerStyles[e.provider] || 'bg-slate-700'}`}>
-                  <label className="flex items-center gap-3 text-[15px]">
-                    <input type="checkbox" className="w-5 h-5 accent-white" checked={!!selected[e.id]} onChange={() => toggleEngine(e.id)} />
-                    <span className="font-medium">{e.name}</span>
-                    <span className={`ml-2 px-2 py-[2px] rounded-full text-[10px] ${liveMode && !warn ? 'bg-emerald-600/90' : 'bg-slate-500/70'}`}>{liveMode ? (warn ? 'Mock' : 'Live') : 'Mock'}</span>
-                  </label>
-                  <span className="text-[11px] opacity-90 hidden sm:block">Context {e.contextLimit.toLocaleString()} • {e.tokenizer}</span>
-                </summary>
-
-                <div className="p-3 sm:p-4 grid grid-cols-3 gap-2 items-center text-sm">
-                  <div className="col-span-1 text-xs text-slate-600">Version</div>
-                  <select className="col-span-2 text-sm border rounded-lg p-2" value={e.selectedVersion} onChange={(ev) => updateVersion(e.id, ev.target.value)}>
+              <div
+                key={e.id}
+                className="w-full flex flex-col items-start text-left rounded-2xl border-2 px-4 py-3 text-sm transition relative overflow-hidden border-purple-300 bg-white shadow-lg"
+              >
+                {/* Brand color bar on left */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1 ${brandColor}`}></div>
+                
+                {/* Clickable header area - Collapse */}
+                <button
+                  onClick={toggleExpand}
+                  className="flex items-center gap-2 w-full text-left"
+                >
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold text-white ${brandColor}`}>
+                    {e.name}
+                  </span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Select Engine</span>
+                    <div 
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                        isSelected ? 'bg-purple-600 border-purple-600' : 'border-slate-300 bg-white'
+                      }`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        toggleEngine(e.id);
+                      }}
+                    >
+                      {isSelected && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
+                
+                {/* Model Version Dropdown */}
+                <div className="w-full mt-2">
+                  <label className="text-xs text-slate-600 block mb-1">Version</label>
+                  <select 
+                    className="w-full text-xs border rounded px-2 py-1.5 bg-white"
+                    value={e.selectedVersion} 
+                    onChange={(ev) => {
+                      ev.stopPropagation();
+                      updateVersion(e.id, ev.target.value);
+                    }}
+                    onClick={(ev) => ev.stopPropagation()}
+                  >
                     {e.versions.map(v => {
                       const excludedModels = ['gemini-2.0-flash-exp', 'claude-3.5-sonnet', 'claude-3-5-sonnet-20241022', 'claude-3-haiku'];
                       const showGreenDot = liveMode && !excludedModels.includes(v);
@@ -5579,69 +7886,171 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                       );
                     })}
                   </select>
-
-                  <div className="col-span-1 text-xs text-slate-600">API Key</div>
-                  <div className="col-span-2 flex items-center gap-2">
+                </div>
+                
+                {/* API Key Field */}
+                <div className="w-full mt-2">
+                  <label className="text-xs text-slate-600 block mb-1">API Key</label>
+                  <div className="flex items-center gap-2">
                     <input 
-                      className="flex-1 text-sm border rounded-lg p-2" 
+                      className="flex-1 text-xs border rounded px-2 py-1.5 bg-white" 
                       type={showApiKey[e.id] ? "text" : "password"} 
                       placeholder="Enter API key..." 
                       value={e.apiKey || ""} 
-                      onChange={(ev) => updateApiKey(e.id, ev.target.value)} 
+                      onChange={(ev) => {
+                        ev.stopPropagation();
+                        updateApiKey(e.id, ev.target.value);
+                      }}
+                      onClick={(ev) => ev.stopPropagation()}
                     />
                     <button
                       type="button"
-                      onClick={() => setShowApiKey(prev => ({ ...prev, [e.id]: !prev[e.id] }))}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setShowApiKey(prev => ({ ...prev, [e.id]: !prev[e.id] }));
+                      }}
                       className="px-2 py-1 text-xs border rounded hover:bg-slate-50"
                       title={showApiKey[e.id] ? "Hide" : "Show"}
                     >
                       {showApiKey[e.id] ? "👁️" : "👁️‍🗨️"}
                     </button>
+                    {/* Fetch Balance Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fetchBalance(e);
+                      }}
+                      className="px-2 py-1 text-xs border rounded hover:bg-blue-50 text-blue-600 border-blue-300"
+                      title="Check balance/validate key"
+                    >
+                      {apiBalances[e.id]?.loading ? '⏳' : '💰'}
+                    </button>
                   </div>
-
-                  {(e.provider === "huggingface" || e.provider === "generic") && (
-                    <>
-                      <div className="col-span-1 text-xs text-slate-600">Endpoint</div>
-                      <input className="col-span-2 text-sm border rounded-lg p-2" placeholder="https://..." value={e.endpoint || ""} onChange={(ev) => updateEndpoint(e.id, ev.target.value)} />
-                    </>
+                  {/* Balance Display */}
+                  {apiBalances[e.id] && !apiBalances[e.id].loading && (
+                    <div className="mt-1">
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        apiBalances[e.id].error ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                      }`}>
+                        {apiBalances[e.id].balance}
+                      </span>
+                    </div>
                   )}
-
-                  {/* Output policy */}
-                  <div className="col-span-1 text-xs text-slate-600">Output</div>
-                  <div className="col-span-2 flex items-center gap-2 text-xs">
-                    <select className="border rounded-lg p-2" value={e.outPolicy?.mode || "auto"} onChange={(ev) => updateOutPolicy(e.id, ev.target.value as any)}>
+                </div>
+                
+                {/* Output Policy */}
+                <div className="w-full mt-2">
+                  <label className="text-xs text-slate-600 block mb-1">Output</label>
+                  <div className="flex items-center gap-2">
+                    <select 
+                      className="flex-1 text-xs border rounded px-2 py-1.5 bg-white" 
+                      value={e.outPolicy?.mode || "auto"} 
+                      onChange={(ev) => {
+                        ev.stopPropagation();
+                        updateOutPolicy(e.id, ev.target.value as any);
+                      }}
+                      onClick={(ev) => ev.stopPropagation()}
+                    >
                       <option value="auto">Auto (recommended)</option>
                       <option value="fixed">Fixed</option>
                     </select>
                     {e.outPolicy?.mode === "fixed" && (
-                      <input type="number" min={256} step={128} value={e.outPolicy?.fixedTokens || 2000} onChange={(ev) => updateOutPolicy(e.id, "fixed", Math.max(256, Number(ev.target.value)||2000))} className="border rounded-lg p-2 w-28" />
+                      <>
+                        <input 
+                          type="number" 
+                          min={256} 
+                          step={128} 
+                          value={e.outPolicy?.fixedTokens || 2000} 
+                          onChange={(ev) => {
+                            ev.stopPropagation();
+                            updateOutPolicy(e.id, "fixed", Math.max(256, Number(ev.target.value)||2000));
+                          }}
+                          onClick={(ev) => ev.stopPropagation()}
+                          className="w-20 text-xs border rounded px-2 py-1.5" 
+                        />
+                        <span className="text-xs text-slate-500">tokens</span>
+                      </>
                     )}
-                    {e.outPolicy?.mode === "fixed" && <span className="text-slate-500">tokens</span>}
                   </div>
-
-                  {/* Pricing override */}
-                  <div className="col-span-3 text-[12px] text-slate-600 flex flex-wrap items-center gap-2">
-                    <span>Price in:</span>
-                    <input className="w-24 border rounded p-2" type="number" step="0.000001" value={(pr?.in ?? 0).toString()} onChange={(ev) => overridePrice(e.provider, e.selectedVersion, "in", Number(ev.target.value))} />
-                    <span>Price out:</span>
-                    <input className="w-24 border rounded p-2" type="number" step="0.000001" value={(pr?.out ?? 0).toString()} onChange={(ev) => overridePrice(e.provider, e.selectedVersion, "out", Number(ev.target.value))} />
-                    <span className="opacity-70">{((BASE_PRICING as any)[e.provider]?.[e.selectedVersion]?.note || "override prices for accuracy")}</span>
-                  </div>
-
-                  {/* Business estimate row */}
-                  <div className="col-span-3 text-[13px] mt-1">
-                    <div>Min spend <b>${minSpend.toFixed(2)}</b> • Max <b>${maxSpend.toFixed(2)}</b> • ETA <b>{eta}</b> • Outcome: <b>{outcome}</b></div>
-                    {warn && liveMode ? <div className="text-amber-700 text-[12px] mt-1">{warn}</div> : null}
-                  </div>
-
-                  {/* Technical metrics (toggle) */}
-                  {showTech && (
-                    <div className="col-span-3 text-[12px] text-slate-600 mt-1">
-                      <div>Inputs {nowIn.toLocaleString()} • Output cap {outCap.toLocaleString()} • Min ${minSpend.toFixed(3)} • Max ${maxSpend.toFixed(3)}</div>
-                    </div>
-                  )}
                 </div>
-              </details>
+                
+                {/* Pricing Override */}
+                <div className="w-full mt-2">
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="flex-1">
+                      <label className="text-slate-600 block mb-1">Price in:</label>
+                      <input 
+                        className="w-full border rounded px-2 py-1.5" 
+                        type="number" 
+                        step="0.000001" 
+                        value={(pr?.in ?? 0).toString()} 
+                        onChange={(ev) => {
+                          ev.stopPropagation();
+                          overridePrice(e.provider, e.selectedVersion, "in", Number(ev.target.value));
+                        }}
+                        onClick={(ev) => ev.stopPropagation()}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-slate-600 block mb-1">Price out:</label>
+                      <input 
+                        className="w-full border rounded px-2 py-1.5" 
+                        type="number" 
+                        step="0.000001" 
+                        value={(pr?.out ?? 0).toString()} 
+                        onChange={(ev) => {
+                          ev.stopPropagation();
+                          overridePrice(e.provider, e.selectedVersion, "out", Number(ev.target.value));
+                        }}
+                        onClick={(ev) => ev.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {((BASE_PRICING as any)[e.provider]?.[e.selectedVersion]?.note || e.selectedVersion)}
+                  </p>
+                </div>
+                
+                <span className="text-xs text-slate-400 mt-2 block">
+                  Context {e.contextLimit.toLocaleString()} • {e.tokenizer}
+                </span>
+                
+                {/* Min/Max Spend Summary - Always Visible */}
+                <div className="w-full mt-2 pt-2 border-t border-slate-200">
+                  <div className="text-xs text-slate-700">
+                    <span className="font-medium">Min spend</span> <span className="font-bold text-green-600">${minSpend.toFixed(2)}</span> • 
+                    <span className="font-medium ml-2">Max</span> <span className="font-bold text-orange-600">${maxSpend.toFixed(2)}</span> • 
+                    <span className="font-medium ml-2">ETA</span> <span className="font-bold">{timeLabel(nowIn, outCap)}</span> • 
+                    <span className="font-medium ml-2">Outcome:</span> <span className="font-bold">{outcomeLabel(outCap)}</span>
+                  </div>
+                  {warn && liveMode ? <div className="text-amber-700 text-[11px] mt-1">⚠️ {warn}</div> : null}
+                </div>
+                
+                {/* Token and Cost Info - Only show when Technical toggle is ON */}
+                {showTech && (
+                  <div className="w-full mt-3 pt-2 border-t border-slate-200">
+                    <div className="text-xs text-slate-600 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Input tokens:</span>
+                        <span className="font-medium text-slate-900">{nowIn.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Output cap:</span>
+                        <span className="font-medium text-slate-900">{outCap.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="font-medium text-purple-700">Min cost:</span>
+                        <span className="font-semibold text-green-600">${minSpend.toFixed(4)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-purple-700">Max cost:</span>
+                        <span className="font-semibold text-orange-600">${maxSpend.toFixed(4)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -6167,119 +8576,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             <div className="mt-3 flex gap-3">
               <button
                 onClick={async () => {
-                  try {
-                    const markdownToHtml = (md: string) => {
-                      let html = md;
-                      const codeBlocks: string[] = [];
-                      html = html.replace(/```([^\n]*)\n([\s\S]*?)```/g, (match, lang, code) => {
-                        const placeholder = `___CODE_BLOCK_${codeBlocks.length}___`;
-                        const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').trim();
-                        codeBlocks.push(`<pre style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; overflow-x: auto; font-family: 'Courier New', monospace;"><code>${escapedCode}</code></pre>`);
-                        return placeholder;
-                      });
-                      const inlineCodes: string[] = [];
-                      html = html.replace(/`([^`]+)`/g, (match, code) => {
-                        const placeholder = `___INLINE_CODE_${inlineCodes.length}___`;
-                        const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                        inlineCodes.push(`<code style="background-color: #f1f5f9; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace;">${escapedCode}</code>`);
-                        return placeholder;
-                      });
-                      const tables: string[] = [];
-                      const tableRegex = /(\|[^\n]+\|\n\|[-:\s|]+\|\n(?:\|[^\n]*\|\n?)*)/g;
-                      html = html.replace(tableRegex, (match) => {
-                        const placeholder = `<!--TABLE${tables.length}-->`;
-                        tables.push(match);
-                        return placeholder;
-                      });
-                      html = html.replace(/^### (.+)$/gim, '<h3>$1</h3>');
-                      html = html.replace(/^## (.+)$/gim, '<h2>$1</h2>');
-                      html = html.replace(/^# (.+)$/gim, '<h1>$1</h1>');
-                      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-                      html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-                      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-                      html = html.replace(/(?<!\w)_(.+?)_(?!\w)/g, '<em>$1</em>');
-                      html = html.replace(/^\* (.+)$/gim, '<li>$1</li>');
-                      html = html.replace(/^- (.+)$/gim, '<li>$1</li>');
-                      html = html.replace(/^\d+\. (.+)$/gim, '<li>$1</li>');
-                      html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`);
-                      tables.forEach((tableText, index) => {
-                        const lines = tableText.trim().split('\n');
-                        if (lines.length < 3) return;
-                        const headerRow = lines[0];
-                        const dataRows = lines.slice(2);
-                        const headers = headerRow.split('|').map((h: string) => h.trim()).filter((h: string) => h);
-                        const headerHtml = headers.map((h: string) => `<th>${h}</th>`).join('');
-                        const bodyHtml = dataRows.map((row: string) => {
-                          const cells = row.split('|').map((c: string) => c.trim()).filter((c: string) => c);
-                          return '<tr>' + cells.map((c: string) => `<td>${c}</td>`).join('') + '</tr>';
-                        }).join('');
-                        const tableHtml = `<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
-                        html = html.replace(`<!--TABLE${index}-->`, tableHtml);
-                      });
-                      html = html.replace(/\n\n+/g, '</p><p>');
-                      html = html.replace(/\n/g, '<br>');
-                      if (!html.startsWith('<')) {
-                        html = '<p>' + html + '</p>';
-                      }
-                      codeBlocks.forEach((code, index) => {
-                        html = html.replace(`___CODE_BLOCK_${index}___`, code);
-                      });
-                      inlineCodes.forEach((code, index) => {
-                        html = html.replace(`___INLINE_CODE_${index}___`, code);
-                      });
-                      return html;
-                    };
-                    const htmlContent = selectedEngines.map(e => {
-                      const r = results.find(rr => rr.engineId === e.id);
-                      const streamingState = streamingStates[e.id];
-                      const content = streamingState?.content || r?.responsePreview || "(No response)";
-                      const htmlContent = markdownToHtml(content);
-                      return `<div style="margin-bottom: 30px; page-break-inside: avoid;"><h2 style="color: #1e40af; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; margin-bottom: 16px;">${e.name} <span style="color: #64748b; font-size: 0.9em;">(${e.selectedVersion})</span></h2><div style="font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.6;">${htmlContent}</div><hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;"></div>`;
-                    }).join('');
-                    const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.6; } h1 { color: #1e293b; font-size: 18pt; margin-top: 20px; margin-bottom: 10px; } h2 { color: #1e40af; font-size: 14pt; margin-top: 16px; margin-bottom: 8px; } h3 { color: #475569; font-size: 12pt; margin-top: 12px; margin-bottom: 6px; } strong { font-weight: 600; color: #0f172a; } em { font-style: italic; } code { background-color: #f1f5f9; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 10pt; } pre { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; overflow-x: auto; } pre code { background-color: transparent; padding: 0; } ul, ol { margin-left: 20px; margin-bottom: 10px; } li { margin-bottom: 4px; } table { border-collapse: collapse; width: 100%; margin: 16px 0; } th { background-color: #3b82f6; color: white; padding: 10px; text-align: left; font-weight: 600; } td { border: 1px solid #e2e8f0; padding: 8px; } tr:nth-child(even) { background-color: #f8fafc; }</style></head><body><h1 style="color: #1e293b; border-bottom: 3px solid #3b82f6; padding-bottom: 12px; margin-bottom: 24px;">AI Responses Comparison</h1>${htmlContent}</body></html>`;
-                    const plainText = selectedEngines.map(e => {
-                      const r = results.find(rr => rr.engineId === e.id);
-                      const streamingState = streamingStates[e.id];
-                      const content = streamingState?.content || r?.responsePreview || "(No response)";
-                      return `${e.name} (${e.selectedVersion})\n\n${content}\n\n---\n`;
-                    }).join('\n');
-                    const blob = new Blob([fullHtml], { type: 'text/html' });
-                    const textBlob = new Blob([plainText], { type: 'text/plain' });
-                    const clipboardItem = new ClipboardItem({ 'text/html': blob, 'text/plain': textBlob });
-                    await navigator.clipboard.write([clipboardItem]);
-                    alert('✅ All responses copied with rich formatting!');
-                  } catch (error) {
-                    const plainText = selectedEngines.map(e => {
-                      const r = results.find(rr => rr.engineId === e.id);
-                      const streamingState = streamingStates[e.id];
-                      const content = streamingState?.content || r?.responsePreview || "(No response)";
-                      return `${e.name} (${e.selectedVersion})\n\n${content}\n\n---\n`;
-                    }).join('\n');
-                    navigator.clipboard?.writeText(plainText).then(() => {
-                      alert('✅ Responses copied as plain text!');
-                    }).catch(() => {
-                      alert('❌ Failed to copy. Please try again.');
-                    });
-                  }
-                }}
-                className="px-6 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
-                style={{ backgroundColor: '#7c3aed' }}
-                title="Copy all responses with rich formatting"
-              >
-                📋 Copy All Response
-              </button>
-              
-              <button
-                onClick={() => setShowCombinedResponse(!showCombinedResponse)}
-                className="px-6 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
-                style={{ backgroundColor: '#7c3aed' }}
-                title="View all responses in a single page"
-              >
-                Collective response {showCombinedResponse ? '▲' : '▼'}
-              </button>
-              
-              <button
-                onClick={async () => {
+                  const { copyAllToClipboard } = await import('./lib/export-utils');
                   const exportData: ExportData[] = selectedEngines.map(e => {
                     const r = results.find(rr => rr.engineId === e.id);
                     const streamingState = streamingStates[e.id];
@@ -6293,9 +8590,124 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                       response: content,
                       timestamp: new Date(),
                       tokensUsed: r?.tokensOut,
-                      cost: r?.costUSD,
+                      cost: (r as any)?.cost
                     };
                   });
+                  
+                  try {
+                    await copyAllToClipboard(exportData);
+                    alert('✅ All responses copied with beautiful formatting!');
+                  } catch (error) {
+                    alert('❌ Copy failed. Please try again.');
+                    console.error('Copy error:', error);
+                  }
+                }}
+                className="px-6 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90 shadow-md"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #3b82f6)' }}
+                title="Copy all responses with beautiful formatting"
+              >
+                📋 Copy All
+              </button>
+              
+              <button
+                onClick={() => setShowCombinedResponse(!showCombinedResponse)}
+                className="px-6 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
+                style={{ backgroundColor: '#7c3aed' }}
+                title="View all responses in a single page"
+              >
+                Collective response {showCombinedResponse ? '▲' : '▼'}
+              </button>
+              
+              <button
+                onClick={async () => {
+                  // Helper function to capture chart images (canvas + SVG)
+                  const captureChartImages = async (engineId: string): Promise<string[]> => {
+                    const chartImages: string[] = [];
+                    try {
+                      const engineContainer = document.querySelector(`[data-engine-id="${engineId}"]`);
+                      if (engineContainer) {
+                        // Capture canvas elements (ECharts, Chart.js)
+                        const canvases = engineContainer.querySelectorAll('canvas');
+                        for (const canvas of canvases) {
+                          try {
+                            const dataUrl = (canvas as HTMLCanvasElement).toDataURL('image/png');
+                            if (dataUrl && dataUrl !== 'data:,') {
+                              chartImages.push(dataUrl);
+                              console.log('Captured canvas chart for Word export');
+                            }
+                          } catch (e) {
+                            console.error('Failed to capture canvas chart:', e);
+                          }
+                        }
+                        
+                        // Capture SVG elements (Mermaid charts)
+                        const svgs = engineContainer.querySelectorAll('.mermaid-chart-content svg, .mermaid svg, svg[id^="mermaid"]');
+                        for (const svg of svgs) {
+                          try {
+                            const svgElement = svg as SVGSVGElement;
+                            const svgData = new XMLSerializer().serializeToString(svgElement);
+                            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                            const url = URL.createObjectURL(svgBlob);
+                            
+                            // Convert SVG to PNG using canvas
+                            const img = new Image();
+                            await new Promise<void>((resolve, reject) => {
+                              img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = svgElement.clientWidth || 800;
+                                canvas.height = svgElement.clientHeight || 400;
+                                const ctx = canvas.getContext('2d');
+                                if (ctx) {
+                                  ctx.fillStyle = 'white';
+                                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                  ctx.drawImage(img, 0, 0);
+                                  const dataUrl = canvas.toDataURL('image/png');
+                                  if (dataUrl && dataUrl !== 'data:,') {
+                                    chartImages.push(dataUrl);
+                                    console.log('Captured SVG/Mermaid chart for Word export');
+                                  }
+                                }
+                                URL.revokeObjectURL(url);
+                                resolve();
+                              };
+                              img.onerror = () => {
+                                URL.revokeObjectURL(url);
+                                reject(new Error('Failed to load SVG'));
+                              };
+                              img.src = url;
+                            });
+                          } catch (e) {
+                            console.error('Failed to capture SVG chart:', e);
+                          }
+                        }
+                      }
+                      console.log(`Word Export - Engine ${engineId}: Found ${chartImages.length} charts`);
+                    } catch (e) {
+                      console.error('Error capturing charts:', e);
+                    }
+                    return chartImages;
+                  };
+                  
+                  const exportData: ExportData[] = await Promise.all(
+                    selectedEngines.map(async (e) => {
+                      const r = results.find(rr => rr.engineId === e.id);
+                      const streamingState = streamingStates[e.id];
+                      const content = streamingState?.content || r?.responsePreview || "(No response)";
+                      const chartImages = await captureChartImages(e.id);
+                      
+                      return {
+                        title: `${e.name} Response`,
+                        provider: e.provider,
+                        model: e.selectedVersion,
+                        prompt: prompt,
+                        response: content,
+                        timestamp: new Date(),
+                        tokensUsed: r?.tokensOut,
+                        cost: r?.costUSD,
+                        chartImages
+                      };
+                    })
+                  );
                   
                   try {
                     await exportAllToWord(exportData);
@@ -6310,6 +8722,147 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 title="Export all responses to Word document"
               >
                 📥 Export All to Word
+              </button>
+              
+              <button
+                onClick={async () => {
+                  // Helper function to capture chart images (canvas + SVG)
+                  const captureChartImages = async (engineId: string): Promise<string[]> => {
+                    const chartImages: string[] = [];
+                    try {
+                      const engineContainer = document.querySelector(`[data-engine-id="${engineId}"]`);
+                      if (engineContainer) {
+                        // Capture canvas elements (ECharts, Chart.js)
+                        const canvases = engineContainer.querySelectorAll('canvas');
+                        for (const canvas of canvases) {
+                          try {
+                            const dataUrl = (canvas as HTMLCanvasElement).toDataURL('image/png');
+                            if (dataUrl && dataUrl !== 'data:,') {
+                              chartImages.push(dataUrl);
+                              console.log('Captured canvas chart for PDF export');
+                            }
+                          } catch (e) {
+                            console.error('Failed to capture canvas chart:', e);
+                          }
+                        }
+                        
+                        // Capture SVG elements (Mermaid charts)
+                        const svgs = engineContainer.querySelectorAll('.mermaid-chart-content svg, .mermaid svg, svg[id^="mermaid"]');
+                        for (const svg of svgs) {
+                          try {
+                            const svgElement = svg as SVGSVGElement;
+                            const svgData = new XMLSerializer().serializeToString(svgElement);
+                            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                            const url = URL.createObjectURL(svgBlob);
+                            
+                            // Convert SVG to PNG using canvas
+                            const img = new Image();
+                            await new Promise<void>((resolve, reject) => {
+                              img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = svgElement.clientWidth || 800;
+                                canvas.height = svgElement.clientHeight || 400;
+                                const ctx = canvas.getContext('2d');
+                                if (ctx) {
+                                  ctx.fillStyle = 'white';
+                                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                  ctx.drawImage(img, 0, 0);
+                                  const dataUrl = canvas.toDataURL('image/png');
+                                  if (dataUrl && dataUrl !== 'data:,') {
+                                    chartImages.push(dataUrl);
+                                    console.log('Captured SVG/Mermaid chart for PDF export');
+                                  }
+                                }
+                                URL.revokeObjectURL(url);
+                                resolve();
+                              };
+                              img.onerror = () => {
+                                URL.revokeObjectURL(url);
+                                reject(new Error('Failed to load SVG'));
+                              };
+                              img.src = url;
+                            });
+                          } catch (e) {
+                            console.error('Failed to capture SVG chart:', e);
+                          }
+                        }
+                      }
+                      console.log(`PDF Export - Engine ${engineId}: Found ${chartImages.length} charts`);
+                    } catch (e) {
+                      console.error('Error capturing charts:', e);
+                    }
+                    return chartImages;
+                  };
+                  
+                  const exportData: ExportData[] = await Promise.all(
+                    selectedEngines.map(async (e) => {
+                      const r = results.find(rr => rr.engineId === e.id);
+                      const streamingState = streamingStates[e.id];
+                      const content = streamingState?.content || r?.responsePreview || "(No response)";
+                      const chartImages = await captureChartImages(e.id);
+                      
+                      return {
+                        title: `${e.name} Response`,
+                        provider: e.provider,
+                        model: e.selectedVersion,
+                        prompt: prompt,
+                        response: content,
+                        timestamp: new Date(),
+                        tokensUsed: r?.tokensOut,
+                        cost: (r as any)?.cost,
+                        chartImages
+                      };
+                    })
+                  );
+                  
+                  try {
+                    await exportAllToPDF(exportData);
+                    alert('✅ All responses exported to PDF!');
+                  } catch (error) {
+                    alert('❌ PDF export failed. Please try again.');
+                    console.error('PDF Export error:', error);
+                  }
+                }}
+                className="px-6 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
+                style={{ backgroundColor: '#dc2626' }}
+                title="Export all responses to PDF document"
+              >
+                📄 Export All to PDF
+              </button>
+              
+              <button
+                onClick={async () => {
+                  const { copyAllToClipboard } = await import('./lib/export-utils');
+                  const exportData: ExportData[] = selectedEngines.map(e => {
+                    const r = results.find(rr => rr.engineId === e.id);
+                    const streamingState = streamingStates[e.id];
+                    const content = streamingState?.content || r?.responsePreview || "(No response)";
+                    
+                    return {
+                      title: `${e.name} Response`,
+                      provider: e.provider,
+                      model: e.selectedVersion,
+                      prompt: prompt,
+                      response: content,
+                      timestamp: new Date(),
+                      tokensUsed: r?.tokensOut,
+                      cost: (r as any)?.cost
+                    };
+                  });
+                  
+                  try {
+                    await copyAllToClipboard(exportData);
+                    alert('✅ All responses copied to clipboard!');
+                  } catch (error) {
+                    alert('❌ Copy failed. Please try again.');
+                    console.error('Copy error:', error);
+                  }
+                }}
+                className="px-6 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
+                style={{ backgroundColor: '#059669' }}
+                title="Copy all responses with beautiful formatting"
+              >
+                📋 Copy All
               </button>
               
               <button
@@ -6343,13 +8896,25 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     const responseNumber = index + 1;
                     
                     return (
-                      <div key={e.id} className="mb-8">
+                      <div key={e.id} className="mb-8" data-engine-id={e.id}>
                         <div className="flex items-center gap-3 mb-3 pb-2 border-b-2 border-purple-200">
                           <span className={`px-3 py-1 rounded-lg text-white font-medium ${providerStyles[e.provider] || 'bg-slate-700'}`}>
                             {e.name}
                           </span>
                           <span className="text-sm text-gray-600">({e.selectedVersion})</span>
                           <span className="ml-auto text-base font-semibold text-purple-600">{responseNumber}/{totalResponses} Engine response</span>
+                          <ExportDropdown
+                            data={{
+                              title: `${e.name} Response`,
+                              provider: e.provider,
+                              model: e.selectedVersion,
+                              prompt: prompt,
+                              response: content,
+                              timestamp: new Date(),
+                              tokensUsed: r?.tokensOut,
+                              cost: r?.costUSD,
+                            }}
+                          />
                         </div>
                         <div className="prose prose-sm max-w-none">
                           <EnhancedMarkdownRenderer content={content} />
@@ -6470,6 +9035,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                         prompt: errorItem.prompt,
                         outCap: errorItem.outCap
                       });
+                      setShowErrorDetails(true);
                     }}
                     className="flex-1 px-2 py-1 bg-gray-100 text-gray-700 text-[10px] font-medium rounded hover:bg-gray-200 transition"
                   >
@@ -6497,17 +9063,17 @@ My specific issue: [describe - losing clients after first project, can't grow ac
       )}
 
       {/* Error Recovery Panel - Detailed View */}
-      {/* Disabled automatic display - only show when user clicks "View full error details" */}
-      {/* {currentError && (
+      {showErrorDetails && currentError && (
         <ErrorRecoveryPanel 
           error={currentError} 
           onDismiss={() => {
+            setShowErrorDetails(false);
             setCurrentError(null);
             setLastFailedRequest(null);
           }}
           onRetry={lastFailedRequest ? handleRetry : undefined}
         />
-      )} */}
+      )}
 
       {/* Engine Recommendations Sidebar */}
       {showEngineRecommendations && (
@@ -6620,6 +9186,19 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           </div>
         </>
       )}
+      
+      {/* Super Debug Panel */}
+      <SuperDebugPanel 
+        isOpen={superDebugMode}
+        onClose={() => setSuperDebugMode(false)}
+        onOpenFullDebug={() => setConsoleVisible(true)}
+      />
+      
+      {/* Balance Manager Modal */}
+      <BalanceManager 
+        isOpen={showBalanceManager}
+        onClose={() => setShowBalanceManager(false)}
+      />
     </div>
   );
 }

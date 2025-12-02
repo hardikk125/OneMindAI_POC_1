@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OneMindAI - Authentication & Credit System Architecture</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
+    * { font-family: 'Inter', sans-serif; }
+    
+    .slide {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 4rem;
+      scroll-snap-align: start;
+    }
+    
+    html {
+      scroll-snap-type: y mandatory;
+      scroll-behavior: smooth;
+    }
+    
+    .gradient-text {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .flow-arrow {
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .scale-badge {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+    
+    .nav-dot {
+      transition: all 0.3s ease;
+    }
+    
+    .nav-dot:hover, .nav-dot.active {
+      transform: scale(1.5);
+      background: #667eea;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white">
+  
+  <!-- Navigation Dots -->
+  <nav class="fixed right-8 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-3">
+    <a href="#slide1" class="nav-dot w-3 h-3 rounded-full bg-gray-600"></a>
+    <a href="#slide2" class="nav-dot w-3 h-3 rounded-full bg-gray-600"></a>
+    <a href="#slide3" class="nav-dot w-3 h-3 rounded-full bg-gray-600"></a>
+    <a href="#slide4" class="nav-dot w-3 h-3 rounded-full bg-gray-600"></a>
+    <a href="#slide5" class="nav-dot w-3 h-3 rounded-full bg-gray-600"></a>
+    <a href="#slide6" class="nav-dot w-3 h-3 rounded-full bg-gray-600"></a>
+    <a href="#slide7" class="nav-dot w-3 h-3 rounded-full bg-gray-600"></a>
+    <a href="#slide8" class="nav-dot w-3 h-3 rounded-full bg-gray-600"></a>
+  </nav>
+
+  <!-- ============================================== -->
+  <!-- SLIDE 1: Title -->
+  <!-- ============================================== -->
+  <section id="slide1" class="slide bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
+    <div class="max-w-6xl mx-auto text-center">
+      <div class="mb-8">
+        <span class="px-4 py-2 bg-purple-500/20 text-purple-300 rounded-full text-sm font-medium">
+          Component 9: User Authentication
+        </span>
+      </div>
+      
+      <h1 class="text-7xl font-bold mb-6">
+        <span class="gradient-text">Authentication</span> &<br>
+        <span class="gradient-text">Credit System</span>
+      </h1>
+      
+      <p class="text-2xl text-gray-400 mb-12 max-w-3xl mx-auto">
+        Enterprise-grade security with Supabase Auth, atomic credit operations, 
+        and scalable architecture for millions of users.
+      </p>
+      
+      <div class="flex justify-center gap-6">
+        <div class="card rounded-2xl px-8 py-4">
+          <div class="text-3xl font-bold text-green-400">100%</div>
+          <div class="text-gray-400">Secure</div>
+        </div>
+        <div class="card rounded-2xl px-8 py-4">
+          <div class="text-3xl font-bold text-blue-400">∞</div>
+          <div class="text-gray-400">Scalable</div>
+        </div>
+        <div class="card rounded-2xl px-8 py-4">
+          <div class="text-3xl font-bold text-purple-400">PKCE</div>
+          <div class="text-gray-400">Auth Flow</div>
+        </div>
+      </div>
+      
+      <div class="mt-16 text-gray-500">
+        ↓ Scroll to explore
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- SLIDE 2: Architecture Overview -->
+  <!-- ============================================== -->
+  <section id="slide2" class="slide bg-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold mb-4">System Architecture</h2>
+      <p class="text-xl text-gray-400 mb-12">Three-tier architecture with clear separation of concerns</p>
+      
+      <div class="grid grid-cols-3 gap-8">
+        <!-- Frontend -->
+        <div class="card rounded-2xl p-8">
+          <div class="w-16 h-16 bg-blue-500/20 rounded-2xl flex items-center justify-center mb-6">
+            <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <h3 class="text-2xl font-bold mb-4">Frontend (React)</h3>
+          <ul class="space-y-3 text-gray-400">
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-blue-400 rounded-full"></span>
+              AuthProvider Context
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-blue-400 rounded-full"></span>
+              AuthModal Component
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-blue-400 rounded-full"></span>
+              UserMenu Component
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-blue-400 rounded-full"></span>
+              ProtectedRoute Guard
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-blue-400 rounded-full"></span>
+              Credit Service Client
+            </li>
+          </ul>
+        </div>
+        
+        <!-- Arrow -->
+        <div class="flex items-center justify-center">
+          <div class="text-center">
+            <div class="flow-arrow text-4xl text-purple-400 mb-4">⟷</div>
+            <div class="text-gray-500 text-sm">
+              HTTPS + JWT<br>
+              Row Level Security
+            </div>
+          </div>
+        </div>
+        
+        <!-- Backend -->
+        <div class="card rounded-2xl p-8">
+          <div class="w-16 h-16 bg-green-500/20 rounded-2xl flex items-center justify-center mb-6">
+            <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+            </svg>
+          </div>
+          <h3 class="text-2xl font-bold mb-4">Supabase (Backend)</h3>
+          <ul class="space-y-3 text-gray-400">
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+              PostgreSQL Database
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+              Auth Service (GoTrue)
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+              RPC Functions
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+              Row Level Security
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+              Realtime Subscriptions
+            </li>
+          </ul>
+        </div>
+      </div>
+      
+      <!-- Database Tables -->
+      <div class="mt-12 card rounded-2xl p-8">
+        <h3 class="text-xl font-bold mb-6">Database Schema</h3>
+        <div class="grid grid-cols-6 gap-4">
+          <div class="bg-purple-500/20 rounded-xl p-4 text-center">
+            <div class="text-purple-300 font-semibold">profiles</div>
+            <div class="text-xs text-gray-500 mt-1">User info</div>
+          </div>
+          <div class="bg-yellow-500/20 rounded-xl p-4 text-center">
+            <div class="text-yellow-300 font-semibold">credits</div>
+            <div class="text-xs text-gray-500 mt-1">Balance</div>
+          </div>
+          <div class="bg-blue-500/20 rounded-xl p-4 text-center">
+            <div class="text-blue-300 font-semibold">transactions</div>
+            <div class="text-xs text-gray-500 mt-1">Audit log</div>
+          </div>
+          <div class="bg-green-500/20 rounded-xl p-4 text-center">
+            <div class="text-green-300 font-semibold">api_usage</div>
+            <div class="text-xs text-gray-500 mt-1">Analytics</div>
+          </div>
+          <div class="bg-pink-500/20 rounded-xl p-4 text-center">
+            <div class="text-pink-300 font-semibold">conversations</div>
+            <div class="text-xs text-gray-500 mt-1">Chat history</div>
+          </div>
+          <div class="bg-cyan-500/20 rounded-xl p-4 text-center">
+            <div class="text-cyan-300 font-semibold">messages</div>
+            <div class="text-xs text-gray-500 mt-1">Chat messages</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- SLIDE 3: Authentication Flow -->
+  <!-- ============================================== -->
+  <section id="slide3" class="slide bg-gradient-to-br from-gray-900 via-blue-900/10 to-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold mb-4">Authentication Flow</h2>
+      <p class="text-xl text-gray-400 mb-12">PKCE (Proof Key for Code Exchange) - Most secure flow for SPAs</p>
+      
+      <!-- Flow Diagram -->
+      <div class="card rounded-2xl p-8 mb-8">
+        <div class="flex items-center justify-between">
+          <!-- Step 1 -->
+          <div class="text-center">
+            <div class="w-20 h-20 bg-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span class="text-3xl">👤</span>
+            </div>
+            <div class="font-semibold">User</div>
+            <div class="text-sm text-gray-500">Enters credentials</div>
+          </div>
+          
+          <div class="flow-arrow text-2xl text-gray-600">→</div>
+          
+          <!-- Step 2 -->
+          <div class="text-center">
+            <div class="w-20 h-20 bg-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span class="text-3xl">🔐</span>
+            </div>
+            <div class="font-semibold">PKCE Challenge</div>
+            <div class="text-sm text-gray-500">Generate verifier</div>
+          </div>
+          
+          <div class="flow-arrow text-2xl text-gray-600">→</div>
+          
+          <!-- Step 3 -->
+          <div class="text-center">
+            <div class="w-20 h-20 bg-green-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span class="text-3xl">🏛️</span>
+            </div>
+            <div class="font-semibold">Supabase Auth</div>
+            <div class="text-sm text-gray-500">Validate & issue JWT</div>
+          </div>
+          
+          <div class="flow-arrow text-2xl text-gray-600">→</div>
+          
+          <!-- Step 4 -->
+          <div class="text-center">
+            <div class="w-20 h-20 bg-yellow-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span class="text-3xl">🎫</span>
+            </div>
+            <div class="font-semibold">JWT Token</div>
+            <div class="text-sm text-gray-500">Stored in localStorage</div>
+          </div>
+          
+          <div class="flow-arrow text-2xl text-gray-600">→</div>
+          
+          <!-- Step 5 -->
+          <div class="text-center">
+            <div class="w-20 h-20 bg-cyan-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span class="text-3xl">✅</span>
+            </div>
+            <div class="font-semibold">Authenticated</div>
+            <div class="text-sm text-gray-500">Access granted</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Auth Methods -->
+      <div class="grid grid-cols-3 gap-6">
+        <div class="card rounded-xl p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="font-semibold">Email/Password</div>
+              <div class="text-sm text-gray-500">Traditional auth</div>
+            </div>
+          </div>
+          <ul class="text-sm text-gray-400 space-y-2">
+            <li>• Email verification required</li>
+            <li>• Password strength validation</li>
+            <li>• Secure password reset flow</li>
+          </ul>
+        </div>
+        
+        <div class="card rounded-xl p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-red-400" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="font-semibold">Google OAuth</div>
+              <div class="text-sm text-gray-500">One-click sign in</div>
+            </div>
+          </div>
+          <ul class="text-sm text-gray-400 space-y-2">
+            <li>• No password needed</li>
+            <li>• Trusted identity provider</li>
+            <li>• Auto profile sync</li>
+          </ul>
+        </div>
+        
+        <div class="card rounded-xl p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="font-semibold">GitHub OAuth</div>
+              <div class="text-sm text-gray-500">Developer-friendly</div>
+            </div>
+          </div>
+          <ul class="text-sm text-gray-400 space-y-2">
+            <li>• Perfect for developers</li>
+            <li>• Access to GitHub profile</li>
+            <li>• Quick onboarding</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- SLIDE 4: Credit System Flow -->
+  <!-- ============================================== -->
+  <section id="slide4" class="slide bg-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold mb-4">Credit System Flow</h2>
+      <p class="text-xl text-gray-400 mb-12">Atomic operations ensure data integrity at any scale</p>
+      
+      <!-- Credit Flow -->
+      <div class="card rounded-2xl p-8 mb-8">
+        <div class="grid grid-cols-5 gap-4 items-center">
+          <!-- User Request -->
+          <div class="text-center">
+            <div class="w-16 h-16 bg-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">💬</span>
+            </div>
+            <div class="font-semibold text-sm">User Request</div>
+            <div class="text-xs text-gray-500">"Explain quantum..."</div>
+          </div>
+          
+          <div class="flow-arrow text-xl text-gray-600 text-center">→</div>
+          
+          <!-- Check Balance -->
+          <div class="text-center">
+            <div class="w-16 h-16 bg-yellow-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">💰</span>
+            </div>
+            <div class="font-semibold text-sm">Check Balance</div>
+            <div class="text-xs text-gray-500">Has enough credits?</div>
+          </div>
+          
+          <div class="flow-arrow text-xl text-gray-600 text-center">→</div>
+          
+          <!-- AI Request -->
+          <div class="text-center">
+            <div class="w-16 h-16 bg-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">🤖</span>
+            </div>
+            <div class="font-semibold text-sm">AI Request</div>
+            <div class="text-xs text-gray-500">Call provider API</div>
+          </div>
+        </div>
+        
+        <div class="flex justify-center my-6">
+          <div class="flow-arrow text-xl text-gray-600">↓</div>
+        </div>
+        
+        <div class="grid grid-cols-5 gap-4 items-center">
+          <!-- Response -->
+          <div class="text-center">
+            <div class="w-16 h-16 bg-green-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">✅</span>
+            </div>
+            <div class="font-semibold text-sm">Response</div>
+            <div class="text-xs text-gray-500">Show to user</div>
+          </div>
+          
+          <div class="flow-arrow text-xl text-gray-600 text-center">←</div>
+          
+          <!-- Log Usage -->
+          <div class="text-center">
+            <div class="w-16 h-16 bg-cyan-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">📊</span>
+            </div>
+            <div class="font-semibold text-sm">Log Usage</div>
+            <div class="text-xs text-gray-500">Analytics tracking</div>
+          </div>
+          
+          <div class="flow-arrow text-xl text-gray-600 text-center">←</div>
+          
+          <!-- Deduct Credits -->
+          <div class="text-center">
+            <div class="w-16 h-16 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">➖</span>
+            </div>
+            <div class="font-semibold text-sm">Deduct Credits</div>
+            <div class="text-xs text-green-400">AFTER success only!</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Key Point -->
+      <div class="bg-green-500/10 border border-green-500/30 rounded-xl p-6 mb-8">
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+            <span class="text-2xl">💡</span>
+          </div>
+          <div>
+            <h4 class="font-bold text-green-400 mb-2">Critical: Deduct AFTER Success</h4>
+            <p class="text-gray-400">
+              Credits are only deducted <strong class="text-white">after</strong> a successful API response. 
+              If the AI request fails, the user keeps their credits. This prevents charging for failed requests.
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Atomic Operations -->
+      <div class="grid grid-cols-2 gap-6">
+        <div class="card rounded-xl p-6">
+          <h4 class="font-bold mb-4 flex items-center gap-2">
+            <span class="text-red-400">⚛️</span> Atomic Deduction
+          </h4>
+          <pre class="bg-gray-800 rounded-lg p-4 text-sm overflow-x-auto"><code class="text-green-400">-- PostgreSQL RPC Function
+CREATE FUNCTION deduct_credits(
+  p_user_id UUID,
+  p_amount INTEGER
+) RETURNS BOOLEAN AS $$
+BEGIN
+  -- Lock row for update
+  SELECT balance FROM credits
+  WHERE user_id = p_user_id
+  <span class="text-yellow-400">FOR UPDATE;</span>
+  
+  -- Check & deduct atomically
+  UPDATE credits
+  SET balance = balance - p_amount
+  WHERE user_id = p_user_id
+    AND balance >= p_amount;
+    
+  RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql;</code></pre>
+        </div>
+        
+        <div class="card rounded-xl p-6">
+          <h4 class="font-bold mb-4 flex items-center gap-2">
+            <span class="text-green-400">📝</span> Transaction Audit Log
+          </h4>
+          <pre class="bg-gray-800 rounded-lg p-4 text-sm overflow-x-auto"><code class="text-blue-400">// Every credit change is logged
+{
+  id: "uuid",
+  user_id: "user-123",
+  amount: -5,
+  type: "usage",
+  description: "GPT-4o request",
+  provider: "openai",
+  model: "gpt-4o",
+  tokens_used: 1500,
+  created_at: "2024-01-15T10:30:00Z"
+}</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- SLIDE 5: Credit Pricing -->
+  <!-- ============================================== -->
+  <section id="slide5" class="slide bg-gradient-to-br from-gray-900 via-yellow-900/10 to-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold mb-4">Credit Pricing Model</h2>
+      <p class="text-xl text-gray-400 mb-12">Transparent pricing based on actual API costs</p>
+      
+      <!-- Signup Bonus -->
+      <div class="card rounded-2xl p-6 mb-8 border-2 border-yellow-500/30">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <div class="w-16 h-16 bg-yellow-500/20 rounded-2xl flex items-center justify-center">
+              <span class="text-3xl">🎁</span>
+            </div>
+            <div>
+              <div class="text-2xl font-bold">Welcome Bonus</div>
+              <div class="text-gray-400">Every new user gets free credits to start</div>
+            </div>
+          </div>
+          <div class="text-5xl font-bold text-yellow-400">+100</div>
+        </div>
+      </div>
+      
+      <!-- Pricing Table -->
+      <div class="card rounded-2xl overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-800">
+            <tr>
+              <th class="text-left p-4">Provider</th>
+              <th class="text-left p-4">Model</th>
+              <th class="text-right p-4">Input (per 1M tokens)</th>
+              <th class="text-right p-4">Output (per 1M tokens)</th>
+              <th class="text-center p-4">Cost Level</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-800">
+            <tr class="hover:bg-gray-800/50">
+              <td class="p-4 font-semibold">OpenAI</td>
+              <td class="p-4 text-gray-400">GPT-4.1</td>
+              <td class="p-4 text-right">100 credits</td>
+              <td class="p-4 text-right">300 credits</td>
+              <td class="p-4 text-center"><span class="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm">Premium</span></td>
+            </tr>
+            <tr class="hover:bg-gray-800/50">
+              <td class="p-4 font-semibold">OpenAI</td>
+              <td class="p-4 text-gray-400">GPT-4o</td>
+              <td class="p-4 text-right">25 credits</td>
+              <td class="p-4 text-right">100 credits</td>
+              <td class="p-4 text-center"><span class="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm">Standard</span></td>
+            </tr>
+            <tr class="hover:bg-gray-800/50">
+              <td class="p-4 font-semibold">Anthropic</td>
+              <td class="p-4 text-gray-400">Claude 3.5 Sonnet</td>
+              <td class="p-4 text-right">30 credits</td>
+              <td class="p-4 text-right">150 credits</td>
+              <td class="p-4 text-center"><span class="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm">Standard</span></td>
+            </tr>
+            <tr class="hover:bg-gray-800/50">
+              <td class="p-4 font-semibold">Anthropic</td>
+              <td class="p-4 text-gray-400">Claude 3 Haiku</td>
+              <td class="p-4 text-right">2.5 credits</td>
+              <td class="p-4 text-right">12.5 credits</td>
+              <td class="p-4 text-center"><span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">Budget</span></td>
+            </tr>
+            <tr class="hover:bg-gray-800/50 bg-green-500/5">
+              <td class="p-4 font-semibold">Google</td>
+              <td class="p-4 text-gray-400">Gemini Flash</td>
+              <td class="p-4 text-right text-green-400">FREE</td>
+              <td class="p-4 text-right text-green-400">FREE</td>
+              <td class="p-4 text-center"><span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">Free Tier</span></td>
+            </tr>
+            <tr class="hover:bg-gray-800/50">
+              <td class="p-4 font-semibold">DeepSeek</td>
+              <td class="p-4 text-gray-400">DeepSeek Chat</td>
+              <td class="p-4 text-right">1.4 credits</td>
+              <td class="p-4 text-right">2.8 credits</td>
+              <td class="p-4 text-center"><span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">Budget</span></td>
+            </tr>
+            <tr class="hover:bg-gray-800/50">
+              <td class="p-4 font-semibold">Groq</td>
+              <td class="p-4 text-gray-400">Llama 3.3 70B</td>
+              <td class="p-4 text-right">0.59 credits</td>
+              <td class="p-4 text-right">0.79 credits</td>
+              <td class="p-4 text-center"><span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">Budget</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- SLIDE 6: Security Features -->
+  <!-- ============================================== -->
+  <section id="slide6" class="slide bg-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold mb-4">Security Features</h2>
+      <p class="text-xl text-gray-400 mb-12">Enterprise-grade security at every layer</p>
+      
+      <div class="grid grid-cols-2 gap-6">
+        <!-- PKCE -->
+        <div class="card rounded-xl p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
+              <span class="text-2xl">🔐</span>
+            </div>
+            <div>
+              <div class="font-bold text-lg">PKCE Auth Flow</div>
+              <div class="text-sm text-gray-500">Proof Key for Code Exchange</div>
+            </div>
+          </div>
+          <p class="text-gray-400 text-sm mb-4">
+            The most secure OAuth flow for single-page applications. Prevents authorization code interception attacks.
+          </p>
+          <div class="bg-gray-800 rounded-lg p-3 text-xs">
+            <code class="text-green-400">flowType: 'pkce'</code>
+          </div>
+        </div>
+        
+        <!-- Row Level Security -->
+        <div class="card rounded-xl p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+              <span class="text-2xl">🛡️</span>
+            </div>
+            <div>
+              <div class="font-bold text-lg">Row Level Security</div>
+              <div class="text-sm text-gray-500">Database-level access control</div>
+            </div>
+          </div>
+          <p class="text-gray-400 text-sm mb-4">
+            Users can only access their own data. Enforced at PostgreSQL level - impossible to bypass.
+          </p>
+          <div class="bg-gray-800 rounded-lg p-3 text-xs">
+            <code class="text-blue-400">USING (auth.uid() = user_id)</code>
+          </div>
+        </div>
+        
+        <!-- JWT Tokens -->
+        <div class="card rounded-xl p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+              <span class="text-2xl">🎫</span>
+            </div>
+            <div>
+              <div class="font-bold text-lg">JWT Tokens</div>
+              <div class="text-sm text-gray-500">Stateless authentication</div>
+            </div>
+          </div>
+          <p class="text-gray-400 text-sm mb-4">
+            Short-lived access tokens with automatic refresh. No session storage needed on server.
+          </p>
+          <div class="bg-gray-800 rounded-lg p-3 text-xs">
+            <code class="text-yellow-400">autoRefreshToken: true</code>
+          </div>
+        </div>
+        
+        <!-- No Service Key in Frontend -->
+        <div class="card rounded-xl p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+              <span class="text-2xl">🚫</span>
+            </div>
+            <div>
+              <div class="font-bold text-lg">No Service Key Exposure</div>
+              <div class="text-sm text-gray-500">Backend-only secrets</div>
+            </div>
+          </div>
+          <p class="text-gray-400 text-sm mb-4">
+            Service role key never touches the frontend. Only anon key is used in browser.
+          </p>
+          <div class="bg-gray-800 rounded-lg p-3 text-xs">
+            <code class="text-red-400">SUPABASE_SERVICE_KEY → Backend only</code>
+          </div>
+        </div>
+        
+        <!-- Password Validation -->
+        <div class="card rounded-xl p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+              <span class="text-2xl">✓</span>
+            </div>
+            <div>
+              <div class="font-bold text-lg">Password Strength</div>
+              <div class="text-sm text-gray-500">Client + server validation</div>
+            </div>
+          </div>
+          <p class="text-gray-400 text-sm mb-4">
+            Minimum 8 characters, uppercase, lowercase, and numbers required.
+          </p>
+          <div class="bg-gray-800 rounded-lg p-3 text-xs">
+            <code class="text-green-400">/[A-Z]/ && /[a-z]/ && /[0-9]/</code>
+          </div>
+        </div>
+        
+        <!-- Atomic Operations -->
+        <div class="card rounded-xl p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center">
+              <span class="text-2xl">⚛️</span>
+            </div>
+            <div>
+              <div class="font-bold text-lg">Atomic Credit Operations</div>
+              <div class="text-sm text-gray-500">Race condition proof</div>
+            </div>
+          </div>
+          <p class="text-gray-400 text-sm mb-4">
+            Credit deductions use row-level locks. No double-spending possible.
+          </p>
+          <div class="bg-gray-800 rounded-lg p-3 text-xs">
+            <code class="text-cyan-400">SELECT ... FOR UPDATE</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- SLIDE 7: Scalability -->
+  <!-- ============================================== -->
+  <section id="slide7" class="slide bg-gradient-to-br from-gray-900 via-green-900/10 to-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold mb-4">Why It's Scalable</h2>
+      <p class="text-xl text-gray-400 mb-12">Built for millions of users from day one</p>
+      
+      <div class="grid grid-cols-3 gap-6 mb-12">
+        <!-- Supabase -->
+        <div class="card rounded-2xl p-8 text-center">
+          <div class="scale-badge w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <span class="text-4xl">🚀</span>
+          </div>
+          <h3 class="text-2xl font-bold mb-2">Supabase</h3>
+          <p class="text-gray-400 mb-4">Managed PostgreSQL with auto-scaling</p>
+          <div class="text-3xl font-bold text-green-400">∞</div>
+          <div class="text-sm text-gray-500">Connections via Pooler</div>
+        </div>
+        
+        <!-- Stateless -->
+        <div class="card rounded-2xl p-8 text-center">
+          <div class="scale-badge w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <span class="text-4xl">⚡</span>
+          </div>
+          <h3 class="text-2xl font-bold mb-2">Stateless Auth</h3>
+          <p class="text-gray-400 mb-4">JWT tokens require no server state</p>
+          <div class="text-3xl font-bold text-green-400">0</div>
+          <div class="text-sm text-gray-500">Session storage needed</div>
+        </div>
+        
+        <!-- Edge -->
+        <div class="card rounded-2xl p-8 text-center">
+          <div class="scale-badge w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <span class="text-4xl">🌍</span>
+          </div>
+          <h3 class="text-2xl font-bold mb-2">Edge Ready</h3>
+          <p class="text-gray-400 mb-4">Deploy frontend to CDN edge nodes</p>
+          <div class="text-3xl font-bold text-green-400">&lt;50ms</div>
+          <div class="text-sm text-gray-500">Global latency</div>
+        </div>
+      </div>
+      
+      <!-- Scaling Strategies -->
+      <div class="card rounded-2xl p-8">
+        <h3 class="text-xl font-bold mb-6">Scaling Strategies</h3>
+        
+        <div class="space-y-6">
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span class="font-bold text-blue-400">1</span>
+            </div>
+            <div>
+              <div class="font-semibold mb-1">Connection Pooling</div>
+              <p class="text-gray-400 text-sm">
+                Supabase uses PgBouncer for connection pooling. Thousands of concurrent users share a pool of database connections.
+              </p>
+            </div>
+          </div>
+          
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span class="font-bold text-purple-400">2</span>
+            </div>
+            <div>
+              <div class="font-semibold mb-1">Indexed Queries</div>
+              <p class="text-gray-400 text-sm">
+                All frequently queried columns (user_id, created_at) have indexes. O(log n) lookup time regardless of table size.
+              </p>
+            </div>
+          </div>
+          
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span class="font-bold text-green-400">3</span>
+            </div>
+            <div>
+              <div class="font-semibold mb-1">RPC Functions</div>
+              <p class="text-gray-400 text-sm">
+                Credit operations run as stored procedures. Single round-trip instead of multiple queries. Reduces latency and load.
+              </p>
+            </div>
+          </div>
+          
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span class="font-bold text-yellow-400">4</span>
+            </div>
+            <div>
+              <div class="font-semibold mb-1">Horizontal Scaling</div>
+              <p class="text-gray-400 text-sm">
+                Supabase Pro/Enterprise supports read replicas. Scale reads infinitely while writes go to primary.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- SLIDE 8: File Structure & Summary -->
+  <!-- ============================================== -->
+  <section id="slide8" class="slide bg-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold mb-4">Implementation Summary</h2>
+      <p class="text-xl text-gray-400 mb-12">Complete file structure and usage</p>
+      
+      <div class="grid grid-cols-2 gap-8">
+        <!-- File Structure -->
+        <div class="card rounded-2xl p-6">
+          <h3 class="text-xl font-bold mb-4">📁 File Structure</h3>
+          <pre class="text-sm text-gray-400 leading-relaxed"><code>src/
+├── lib/
+│   └── supabase/
+│       ├── <span class="text-blue-400">client.ts</span>        # Supabase client
+│       ├── <span class="text-purple-400">types.ts</span>         # TypeScript types
+│       ├── <span class="text-green-400">auth-context.tsx</span> # AuthProvider
+│       ├── <span class="text-yellow-400">credit-service.ts</span># Credit operations
+│       └── <span class="text-cyan-400">index.ts</span>         # Barrel exports
+│
+├── components/
+│   └── auth/
+│       ├── <span class="text-pink-400">AuthModal.tsx</span>    # Login/Signup UI
+│       ├── <span class="text-orange-400">UserMenu.tsx</span>     # User dropdown
+│       ├── <span class="text-red-400">ProtectedRoute.tsx</span># Auth guard
+│       └── <span class="text-gray-400">index.ts</span>         # Exports
+│
+supabase/
+└── migrations/
+    └── <span class="text-green-400">001_initial_schema.sql</span></code></pre>
+        </div>
+        
+        <!-- Usage Example -->
+        <div class="card rounded-2xl p-6">
+          <h3 class="text-xl font-bold mb-4">💻 Usage Example</h3>
+          <pre class="text-sm leading-relaxed overflow-x-auto"><code><span class="text-gray-500">// 1. Wrap app with AuthProvider</span>
+<span class="text-purple-400">import</span> { AuthProvider } <span class="text-purple-400">from</span> <span class="text-green-400">'@/lib/supabase'</span>;
+
+<span class="text-blue-400">&lt;AuthProvider&gt;</span>
+  <span class="text-blue-400">&lt;App /&gt;</span>
+<span class="text-blue-400">&lt;/AuthProvider&gt;</span>
+
+<span class="text-gray-500">// 2. Use auth hook in components</span>
+<span class="text-purple-400">const</span> { 
+  user, 
+  credits, 
+  signIn, 
+  signOut,
+  isAuthenticated 
+} = <span class="text-yellow-400">useAuth</span>();
+
+<span class="text-gray-500">// 3. Protect routes</span>
+<span class="text-blue-400">&lt;ProtectedRoute&gt;</span>
+  <span class="text-blue-400">&lt;Dashboard /&gt;</span>
+<span class="text-blue-400">&lt;/ProtectedRoute&gt;</span>
+
+<span class="text-gray-500">// 4. Deduct credits after API success</span>
+<span class="text-purple-400">await</span> <span class="text-yellow-400">deductCredits</span>(
+  userId, 
+  <span class="text-cyan-400">5</span>, 
+  <span class="text-green-400">'openai'</span>, 
+  <span class="text-green-400">'gpt-4o'</span>, 
+  <span class="text-cyan-400">1500</span>
+);</code></pre>
+        </div>
+      </div>
+      
+      <!-- Summary Stats -->
+      <div class="mt-8 grid grid-cols-4 gap-4">
+        <div class="card rounded-xl p-6 text-center">
+          <div class="text-4xl font-bold text-blue-400 mb-2">10</div>
+          <div class="text-gray-400">Files Created</div>
+        </div>
+        <div class="card rounded-xl p-6 text-center">
+          <div class="text-4xl font-bold text-purple-400 mb-2">6</div>
+          <div class="text-gray-400">Database Tables</div>
+        </div>
+        <div class="card rounded-xl p-6 text-center">
+          <div class="text-4xl font-bold text-green-400 mb-2">3</div>
+          <div class="text-gray-400">RPC Functions</div>
+        </div>
+        <div class="card rounded-xl p-6 text-center">
+          <div class="text-4xl font-bold text-yellow-400 mb-2">100%</div>
+          <div class="text-gray-400">Type Safe</div>
+        </div>
+      </div>
+      
+      <!-- Final CTA -->
+      <div class="mt-12 text-center">
+        <div class="inline-flex items-center gap-4 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl px-8 py-4">
+          <span class="text-2xl">🎉</span>
+          <span class="text-xl font-bold">Ready for Production</span>
+          <span class="text-2xl">🚀</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // Highlight active nav dot on scroll
+    const slides = document.querySelectorAll('.slide');
+    const navDots = document.querySelectorAll('.nav-dot');
+    
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const index = Array.from(slides).indexOf(entry.target);
+          navDots.forEach((dot, i) => {
+            dot.classList.toggle('active', i === index);
+          });
+        }
+      });
+    }, { threshold: 0.5 });
+    
+    slides.forEach(slide => observer.observe(slide));
+  </script>
+</body>
+</html>

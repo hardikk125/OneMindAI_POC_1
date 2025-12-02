@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐒 Chaos Monkey Analysis - Interactive Graph View</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 350px 1fr 400px;
+            height: 100vh;
+        }
+
+        /* Left Sidebar - Stats & Controls */
+        .sidebar-left {
+            background: rgba(30, 41, 59, 0.8);
+            border-right: 1px solid rgba(255,255,255,0.1);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .logo-icon {
+            font-size: 2rem;
+        }
+
+        .logo h1 {
+            font-size: 1.3rem;
+            background: linear-gradient(135deg, #ec4899, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo span {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-card.green { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); }
+        .stat-card.purple { background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); }
+        .stat-card.yellow { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); }
+        .stat-card.red { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #3b82f6;
+        }
+
+        .stat-card.green .stat-value { color: #10b981; }
+        .stat-card.purple .stat-value { color: #8b5cf6; }
+        .stat-card.yellow .stat-value { color: #f59e0b; }
+        .stat-card.red .stat-value { color: #ef4444; }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 5px;
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .category-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 25px;
+        }
+
+        .category-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .category-item:hover {
+            background: rgba(59, 130, 246, 0.2);
+            transform: translateX(5px);
+        }
+
+        .category-item.active {
+            background: rgba(59, 130, 246, 0.3);
+            border-left: 3px solid #3b82f6;
+        }
+
+        .category-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .category-name {
+            flex: 1;
+            font-size: 0.9rem;
+        }
+
+        .category-count {
+            background: rgba(255,255,255,0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+        }
+
+        /* Center - Graph Visualization */
+        .graph-container {
+            position: relative;
+            background: radial-gradient(circle at center, rgba(59, 130, 246, 0.05) 0%, transparent 70%);
+        }
+
+        #graph-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .graph-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            background: rgba(30, 41, 59, 0.9);
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .graph-btn {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #e2e8f0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .graph-btn:hover {
+            background: rgba(59, 130, 246, 0.4);
+        }
+
+        .graph-title {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 1.5rem;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .graph-subtitle {
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        /* Right Sidebar - Editor Panel */
+        .sidebar-right {
+            background: rgba(30, 41, 59, 0.8);
+            border-left: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .editor-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .editor-title {
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+
+        .editor-subtitle {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .editor-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .editor-field {
+            margin-bottom: 20px;
+        }
+
+        .field-label {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .field-input {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 12px 15px;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .field-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        textarea.field-input {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        select.field-input {
+            cursor: pointer;
+        }
+
+        .confidence-slider {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .confidence-slider input[type="range"] {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 8px;
+            background: rgba(59, 130, 246, 0.2);
+            border-radius: 4px;
+        }
+
+        .confidence-slider input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .confidence-value {
+            min-width: 50px;
+            text-align: center;
+            font-weight: bold;
+            color: #3b82f6;
+        }
+
+        .editor-actions {
+            padding: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(100, 116, 139, 0.2);
+            color: #94a3b8;
+            border: 1px solid rgba(100, 116, 139, 0.3);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        /* Node Tooltip */
+        .node-tooltip {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            border-radius: 12px;
+            padding: 15px;
+            max-width: 300px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        .node-tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip-title {
+            font-weight: bold;
+            color: #3b82f6;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        .tooltip-value {
+            color: #cbd5e0;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .tooltip-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tooltip-tag {
+            background: rgba(59, 130, 246, 0.2);
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        /* History Panel */
+        .history-panel {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+        }
+
+        .history-time {
+            color: #64748b;
+            white-space: nowrap;
+        }
+
+        .history-action {
+            color: #10b981;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(59, 130, 246, 0.2);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 280px 1fr 350px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr auto;
+            }
+            
+            .sidebar-left, .sidebar-right {
+                max-height: 300px;
+            }
+        }
+
+        /* Node styles */
+        .node {
+            cursor: pointer;
+        }
+
+        .node:hover {
+            filter: brightness(1.2);
+        }
+
+        .link {
+            stroke: rgba(148, 163, 184, 0.3);
+            stroke-width: 1;
+        }
+
+        .link.dashed {
+            stroke-dasharray: 5, 5;
+        }
+
+        .node-label {
+            font-size: 10px;
+            fill: #e2e8f0;
+            pointer-events: none;
+            text-anchor: middle;
+        }
+
+        /* Segment Selector */
+        .segment-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 25px;
+        }
+
+        .segment-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .segment-item:hover {
+            background: rgba(59, 130, 246, 0.15);
+            transform: translateX(5px);
+        }
+
+        .segment-item.active {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+            border-color: #3b82f6;
+        }
+
+        .segment-item.active[data-segment="OneMindAI Best Response"] {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2));
+            border-color: #10b981;
+        }
+
+        .segment-icon {
+            font-size: 1.5rem;
+        }
+
+        .segment-name {
+            flex: 1;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .segment-count {
+            background: rgba(255,255,255,0.1);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+
+        .segment-item.active .segment-count {
+            background: rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+        }
+
+        .segment-item.active[data-segment="OneMindAI Best Response"] .segment-count {
+            background: rgba(16, 185, 129, 0.3);
+            color: #34d399;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Sidebar -->
+        <div class="sidebar-left">
+            <div class="logo">
+                <span class="logo-icon" id="logo-icon">🐒</span>
+                <div>
+                    <h1 id="logo-title">Chaos Monkey</h1>
+                    <span>Analysis Dashboard</span>
+                </div>
+            </div>
+
+            <div class="section-title">🎯 Select Component</div>
+            <div class="segment-selector" id="segment-selector">
+                <div class="segment-item active" data-segment="Chaos Monkey" onclick="selectSegment('Chaos Monkey')">
+                    <span class="segment-icon">🐒</span>
+                    <span class="segment-name">Chaos Monkey</span>
+                    <span class="segment-count" id="count-chaos">21</span>
+                </div>
+                <div class="segment-item" data-segment="OneMindAI Best Response" onclick="selectSegment('OneMindAI Best Response')">
+                    <span class="segment-icon">🧠</span>
+                    <span class="segment-name">OneMindAI Best Response</span>
+                    <span class="segment-count" id="count-onemind">30</span>
+                </div>
+            </div>
+
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-card green">
+                    <div class="stat-value" id="stat-confidence">--</div>
+                    <div class="stat-label">Confidence %</div>
+                </div>
+                <div class="stat-card purple">
+                    <div class="stat-value" id="stat-items">--</div>
+                    <div class="stat-label">Total Items</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-ai">--</div>
+                    <div class="stat-label">AI Achievable</div>
+                </div>
+                <div class="stat-card yellow">
+                    <div class="stat-value" id="stat-manual">--</div>
+                    <div class="stat-label">Manual Required</div>
+                </div>
+            </div>
+
+            <div class="section-title">📂 Categories</div>
+            <div class="category-list" id="category-list">
+                <!-- Populated by JS -->
+            </div>
+
+            <div class="section-title">📜 Recent Changes</div>
+            <div class="history-panel" id="history-panel">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <!-- Center - Graph -->
+        <div class="graph-container">
+            <div class="graph-title">
+                <span>🗺️ Dependency Map</span>
+                <span class="graph-subtitle">Click nodes to edit</span>
+            </div>
+            <svg id="graph-canvas"></svg>
+            <div class="graph-controls">
+                <button class="graph-btn" onclick="resetZoom()">🔄 Reset View</button>
+                <button class="graph-btn" onclick="toggleLabels()">🏷️ Toggle Labels</button>
+                <button class="graph-btn" onclick="exportData()">📥 Export CSV</button>
+                <button class="graph-btn" onclick="addNewNode()">➕ Add Node</button>
+            </div>
+            <div class="node-tooltip" id="node-tooltip">
+                <div class="tooltip-title" id="tooltip-title"></div>
+                <div class="tooltip-value" id="tooltip-value"></div>
+                <div class="tooltip-meta" id="tooltip-meta"></div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar - Editor -->
+        <div class="sidebar-right">
+            <div class="editor-header">
+                <div class="editor-title" id="editor-title">Select a Node</div>
+                <div class="editor-subtitle" id="editor-subtitle">Click on any node in the graph to edit its properties</div>
+            </div>
+            
+            <div class="editor-content" id="editor-content">
+                <div class="empty-state">
+                    <div class="empty-state-icon">👆</div>
+                    <p>Select a node from the graph to view and edit its details</p>
+                </div>
+            </div>
+
+            <div class="editor-actions" id="editor-actions" style="display: none;">
+                <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveChanges()">💾 Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API Base URL
+        const API_BASE = 'http://localhost:3847/api/chaos-analysis';
+        
+        // State
+        let graphData = { nodes: [], links: [] };
+        let analysisData = [];
+        let selectedNode = null;
+        let showLabels = true;
+        let simulation = null;
+        let svg, g, zoom;
+
+        // Current segment
+        let currentSegment = 'Chaos Monkey';
+        let allData = [];
+
+        // Segment configurations
+        const segmentConfig = {
+            'Chaos Monkey': {
+                icon: '🐒',
+                title: 'Chaos Monkey',
+                centralColor: '#ec4899',
+                description: 'Automated Testing Framework'
+            },
+            'OneMindAI Best Response': {
+                icon: '🧠',
+                title: 'OneMindAI Best Response',
+                centralColor: '#10b981',
+                description: 'Multi-AI Aggregation Platform'
+            }
+        };
+
+        // Category colors
+        const categoryColors = {
+            benefit: '#10b981',
+            value: '#3b82f6',
+            dependency: '#f59e0b',
+            risk: '#ef4444',
+            metric: '#8b5cf6',
+            definition: '#6b7280',
+            central: '#ec4899',
+            category: '#64748b',
+            'dependency-ref': '#94a3b8'
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadData();
+            initGraph();
+            await loadHistory();
+            updateSegmentCounts();
+        });
+
+        // Select segment
+        function selectSegment(segment) {
+            currentSegment = segment;
+            
+            // Update UI
+            document.querySelectorAll('.segment-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.segment === segment) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // Update logo
+            const config = segmentConfig[segment];
+            document.getElementById('logo-icon').textContent = config.icon;
+            document.getElementById('logo-title').textContent = config.title;
+            
+            // Update graph title
+            document.querySelector('.graph-title span:first-child').textContent = 
+                `🗺️ ${config.title} Dependency Map`;
+            
+            // Reload data for this segment
+            loadDataForSegment(segment);
+        }
+
+        // Update segment counts
+        function updateSegmentCounts() {
+            const chaosCount = allData.filter(d => d.segment === 'Chaos Monkey').length;
+            const onemindCount = allData.filter(d => d.segment === 'OneMindAI Best Response').length;
+            
+            document.getElementById('count-chaos').textContent = chaosCount;
+            document.getElementById('count-onemind').textContent = onemindCount;
+        }
+
+        // Load data for specific segment
+        async function loadDataForSegment(segment) {
+            const filteredData = allData.filter(d => d.segment === segment);
+            analysisData = filteredData;
+            
+            // Calculate stats for this segment
+            const stats = {
+                totalItems: filteredData.length,
+                avgConfidence: Math.round(filteredData.reduce((sum, d) => sum + (parseInt(d.confidence_level) || 0), 0) / filteredData.length) || 0,
+                aiAchievable: filteredData.filter(d => d.ai_achievable === 'Yes').length,
+                manualRequired: filteredData.filter(d => d.ai_achievable === 'Partial' || d.ai_achievable === 'No').length
+            };
+            
+            updateStats(stats);
+            
+            // Group by category
+            const grouped = {
+                definition: filteredData.filter(d => d.category === 'definition'),
+                benefits: filteredData.filter(d => d.category === 'benefit'),
+                values: filteredData.filter(d => d.category === 'value'),
+                dependencies: filteredData.filter(d => d.category === 'dependency'),
+                risks: filteredData.filter(d => d.category === 'risk'),
+                metrics: filteredData.filter(d => d.category === 'metric')
+            };
+            
+            updateCategories(grouped);
+            
+            // Rebuild graph for this segment
+            await loadGraphForSegment(segment);
+        }
+
+        // Load graph for specific segment
+        async function loadGraphForSegment(segment) {
+            try {
+                const response = await fetch(`${API_BASE}/graph?segment=${encodeURIComponent(segment)}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    graphData = result;
+                    
+                    // Update central node color based on segment
+                    const config = segmentConfig[segment];
+                    graphData.nodes.forEach(node => {
+                        if (node.type === 'central') {
+                            node.color = config.centralColor;
+                            node.label = config.title;
+                        }
+                    });
+                    
+                    // Rebuild graph
+                    svg.selectAll('*').remove();
+                    initGraph();
+                }
+            } catch (error) {
+                console.error('Failed to load graph:', error);
+            }
+        }
+
+        // Load analysis data
+        async function loadData() {
+            try {
+                const response = await fetch(API_BASE);
+                const result = await response.json();
+                
+                if (result.success) {
+                    allData = result.data;
+                    analysisData = allData.filter(d => d.segment === currentSegment);
+                    updateStats(result.stats);
+                    updateCategories(result.grouped);
+                    updateSegmentCounts();
+                }
+
+                // Load graph data
+                const graphResponse = await fetch(`${API_BASE}/graph?segment=${encodeURIComponent(currentSegment)}`);
+                const graphResult = await graphResponse.json();
+                
+                if (graphResult.success) {
+                    graphData = graphResult;
+                }
+            } catch (error) {
+                console.error('Failed to load data:', error);
+            }
+        }
+
+        // Update stats display
+        function updateStats(stats) {
+            document.getElementById('stat-confidence').textContent = stats.avgConfidence + '%';
+            document.getElementById('stat-items').textContent = stats.totalItems;
+            document.getElementById('stat-ai').textContent = stats.aiAchievable;
+            document.getElementById('stat-manual').textContent = stats.manualRequired;
+        }
+
+        // Update category list
+        function updateCategories(grouped) {
+            const container = document.getElementById('category-list');
+            container.innerHTML = '';
+            
+            const categories = [
+                { key: 'benefits', label: 'Benefits', color: categoryColors.benefit },
+                { key: 'values', label: 'Values', color: categoryColors.value },
+                { key: 'dependencies', label: 'Dependencies', color: categoryColors.dependency },
+                { key: 'risks', label: 'Risks', color: categoryColors.risk },
+                { key: 'metrics', label: 'Metrics', color: categoryColors.metric }
+            ];
+
+            categories.forEach(cat => {
+                const count = grouped[cat.key]?.length || 0;
+                const item = document.createElement('div');
+                item.className = 'category-item';
+                item.innerHTML = `
+                    <div class="category-dot" style="background: ${cat.color}"></div>
+                    <span class="category-name">${cat.label}</span>
+                    <span class="category-count">${count}</span>
+                `;
+                item.onclick = () => filterByCategory(cat.key);
+                container.appendChild(item);
+            });
+        }
+
+        // Initialize D3 graph
+        function initGraph() {
+            const container = document.querySelector('.graph-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            svg = d3.select('#graph-canvas')
+                .attr('width', width)
+                .attr('height', height);
+
+            // Add zoom behavior
+            zoom = d3.zoom()
+                .scaleExtent([0.3, 3])
+                .on('zoom', (event) => {
+                    g.attr('transform', event.transform);
+                });
+
+            svg.call(zoom);
+
+            g = svg.append('g');
+
+            // Create simulation
+            simulation = d3.forceSimulation(graphData.nodes)
+                .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(100))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(d => d.size + 10));
+
+            // Draw links
+            const links = g.append('g')
+                .selectAll('line')
+                .data(graphData.links)
+                .enter()
+                .append('line')
+                .attr('class', d => `link ${d.dashed ? 'dashed' : ''}`)
+                .attr('stroke-opacity', d => d.strength);
+
+            // Draw nodes
+            const nodes = g.append('g')
+                .selectAll('circle')
+                .data(graphData.nodes)
+                .enter()
+                .append('circle')
+                .attr('class', 'node')
+                .attr('r', d => d.size)
+                .attr('fill', d => d.color || categoryColors[d.type] || '#64748b')
+                .on('click', (event, d) => selectNode(d))
+                .on('mouseover', (event, d) => showTooltip(event, d))
+                .on('mouseout', hideTooltip)
+                .call(d3.drag()
+                    .on('start', dragStarted)
+                    .on('drag', dragged)
+                    .on('end', dragEnded));
+
+            // Draw labels
+            const labels = g.append('g')
+                .selectAll('text')
+                .data(graphData.nodes)
+                .enter()
+                .append('text')
+                .attr('class', 'node-label')
+                .attr('dy', d => d.size + 15)
+                .text(d => d.label);
+
+            // Update positions on tick
+            simulation.on('tick', () => {
+                links
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                nodes
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+
+                labels
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y)
+                    .style('display', showLabels ? 'block' : 'none');
+            });
+        }
+
+        // Drag functions
+        function dragStarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragEnded(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Show tooltip
+        function showTooltip(event, d) {
+            const tooltip = document.getElementById('node-tooltip');
+            document.getElementById('tooltip-title').textContent = d.label;
+            document.getElementById('tooltip-value').textContent = d.value || d.type;
+            
+            const meta = document.getElementById('tooltip-meta');
+            meta.innerHTML = '';
+            
+            if (d.confidence) {
+                meta.innerHTML += `<span class="tooltip-tag">Confidence: ${d.confidence}%</span>`;
+            }
+            if (d.aiAchievable) {
+                meta.innerHTML += `<span class="tooltip-tag">AI: ${d.aiAchievable}</span>`;
+            }
+            if (d.manualEffort) {
+                meta.innerHTML += `<span class="tooltip-tag">Effort: ${d.manualEffort}</span>`;
+            }
+
+            tooltip.style.left = event.pageX + 15 + 'px';
+            tooltip.style.top = event.pageY + 15 + 'px';
+            tooltip.classList.add('visible');
+        }
+
+        function hideTooltip() {
+            document.getElementById('node-tooltip').classList.remove('visible');
+        }
+
+        // Select node for editing
+        function selectNode(node) {
+            selectedNode = node;
+            
+            // Find the full data for this node
+            const nodeData = analysisData.find(d => d.id === parseInt(node.id.replace('node-', '')));
+            
+            if (!nodeData && node.type !== 'item') {
+                // Category or central node - show info only
+                showNodeInfo(node);
+                return;
+            }
+
+            document.getElementById('editor-title').textContent = node.label;
+            document.getElementById('editor-subtitle').textContent = `Category: ${node.category || node.type}`;
+            
+            const content = document.getElementById('editor-content');
+            content.innerHTML = `
+                <div class="editor-field">
+                    <label class="field-label">📝 Field Name</label>
+                    <input type="text" class="field-input" id="edit-field" value="${nodeData?.field || node.label}">
+                </div>
+                
+                <div class="editor-field">
+                    <label class="field-label">💬 Value / Description</label>
+                    <textarea class="field-input" id="edit-value">${nodeData?.value || node.value || ''}</textarea>
+                </div>
+                
+                <div class="editor-field">
+                    <label class="field-label">📊 Category</label>
+                    <select class="field-input" id="edit-category">
+                        <option value="benefit" ${nodeData?.category === 'benefit' ? 'selected' : ''}>Benefit</option>
+                        <option value="value" ${nodeData?.category === 'value' ? 'selected' : ''}>Value</option>
+                        <option value="dependency" ${nodeData?.category === 'dependency' ? 'selected' : ''}>Dependency</option>
+                        <option value="risk" ${nodeData?.category === 'risk' ? 'selected' : ''}>Risk</option>
+                        <option value="metric" ${nodeData?.category === 'metric' ? 'selected' : ''}>Metric</option>
+                    </select>
+                </div>
+                
+                <div class="editor-field">
+                    <label class="field-label">🎯 Confidence Level</label>
+                    <div class="confidence-slider">
+                        <input type="range" min="0" max="100" value="${nodeData?.confidence_level || 50}" 
+                               id="edit-confidence" oninput="updateConfidenceDisplay(this.value)">
+                        <span class="confidence-value" id="confidence-display">${nodeData?.confidence_level || 50}%</span>
+                    </div>
+                </div>
+                
+                <div class="editor-field">
+                    <label class="field-label">🤖 AI Achievable</label>
+                    <select class="field-input" id="edit-ai">
+                        <option value="Yes" ${nodeData?.ai_achievable === 'Yes' ? 'selected' : ''}>Yes - Fully Automated</option>
+                        <option value="Partial" ${nodeData?.ai_achievable === 'Partial' ? 'selected' : ''}>Partial - Needs Review</option>
+                        <option value="No" ${nodeData?.ai_achievable === 'No' ? 'selected' : ''}>No - Manual Only</option>
+                    </select>
+                </div>
+                
+                <div class="editor-field">
+                    <label class="field-label">💪 Manual Effort</label>
+                    <select class="field-input" id="edit-effort">
+                        <option value="Low" ${nodeData?.manual_effort === 'Low' ? 'selected' : ''}>Low</option>
+                        <option value="Medium" ${nodeData?.manual_effort === 'Medium' ? 'selected' : ''}>Medium</option>
+                        <option value="High" ${nodeData?.manual_effort === 'High' ? 'selected' : ''}>High</option>
+                        <option value="Very High" ${nodeData?.manual_effort === 'Very High' ? 'selected' : ''}>Very High</option>
+                    </select>
+                </div>
+                
+                <div class="editor-field">
+                    <label class="field-label">🔗 Dependencies (pipe-separated)</label>
+                    <input type="text" class="field-input" id="edit-dependencies" 
+                           value="${nodeData?.dependencies || ''}" placeholder="e.g., API Integration|Error Handling">
+                </div>
+                
+                <div class="editor-field">
+                    <label class="field-label">⚠️ Impact if Missing</label>
+                    <textarea class="field-input" id="edit-impact">${nodeData?.impact_if_missing || ''}</textarea>
+                </div>
+            `;
+
+            document.getElementById('editor-actions').style.display = 'flex';
+        }
+
+        function showNodeInfo(node) {
+            document.getElementById('editor-title').textContent = node.label;
+            document.getElementById('editor-subtitle').textContent = node.type === 'central' ? 'Central Node' : 'Category Node';
+            
+            const content = document.getElementById('editor-content');
+            content.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">${node.type === 'central' ? '🐒' : '📁'}</div>
+                    <p>${node.type === 'central' ? 'This is the central Chaos Monkey node. Click on connected nodes to edit their properties.' : 'This is a category grouping node. Click on child nodes to edit.'}</p>
+                </div>
+            `;
+            document.getElementById('editor-actions').style.display = 'none';
+        }
+
+        function updateConfidenceDisplay(value) {
+            document.getElementById('confidence-display').textContent = value + '%';
+        }
+
+        // Save changes
+        async function saveChanges() {
+            if (!selectedNode) return;
+
+            const nodeId = selectedNode.id.replace('node-', '');
+            const updates = {
+                field: document.getElementById('edit-field').value,
+                value: document.getElementById('edit-value').value,
+                category: document.getElementById('edit-category').value,
+                confidence_level: document.getElementById('edit-confidence').value,
+                ai_achievable: document.getElementById('edit-ai').value,
+                manual_effort: document.getElementById('edit-effort').value,
+                dependencies: document.getElementById('edit-dependencies').value,
+                impact_if_missing: document.getElementById('edit-impact').value,
+                updated_by: 'user'
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/${nodeId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updates)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Changes saved successfully!');
+                    await loadData();
+                    await loadHistory();
+                    // Refresh graph
+                    svg.selectAll('*').remove();
+                    initGraph();
+                }
+            } catch (error) {
+                console.error('Failed to save:', error);
+                alert('❌ Failed to save changes');
+            }
+        }
+
+        function cancelEdit() {
+            selectedNode = null;
+            document.getElementById('editor-content').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">👆</div>
+                    <p>Select a node from the graph to view and edit its details</p>
+                </div>
+            `;
+            document.getElementById('editor-actions').style.display = 'none';
+            document.getElementById('editor-title').textContent = 'Select a Node';
+            document.getElementById('editor-subtitle').textContent = 'Click on any node in the graph to edit its properties';
+        }
+
+        // Load change history
+        async function loadHistory() {
+            try {
+                const response = await fetch(`${API_BASE}/history`);
+                const result = await response.json();
+                
+                const container = document.getElementById('history-panel');
+                container.innerHTML = '';
+
+                if (result.changes && result.changes.length > 0) {
+                    result.changes.slice(-10).reverse().forEach(change => {
+                        const time = new Date(change.timestamp).toLocaleString();
+                        const item = document.createElement('div');
+                        item.className = 'history-item';
+                        item.innerHTML = `
+                            <span class="history-time">${time.split(',')[1]}</span>
+                            <span class="history-action">${change.action || 'updated'}</span>
+                            <span>${change.field}</span>
+                        `;
+                        container.appendChild(item);
+                    });
+                } else {
+                    container.innerHTML = '<div class="empty-state"><p>No changes yet</p></div>';
+                }
+            } catch (error) {
+                console.error('Failed to load history:', error);
+            }
+        }
+
+        // Graph controls
+        function resetZoom() {
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity
+            );
+        }
+
+        function toggleLabels() {
+            showLabels = !showLabels;
+            g.selectAll('.node-label').style('display', showLabels ? 'block' : 'none');
+        }
+
+        function exportData() {
+            window.open(`${API_BASE}`, '_blank');
+        }
+
+        async function addNewNode() {
+            const field = prompt('Enter field name:');
+            if (!field) return;
+
+            const value = prompt('Enter description:');
+            const category = prompt('Enter category (benefit/value/dependency/risk/metric):') || 'benefit';
+
+            try {
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        segment: 'Chaos Monkey',
+                        field,
+                        value,
+                        category,
+                        dependencies: '',
+                        confidence_level: '50',
+                        manual_effort: 'Medium',
+                        ai_achievable: 'Yes',
+                        impact_if_missing: 'To be determined'
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert('✅ Node added successfully!');
+                    await loadData();
+                    svg.selectAll('*').remove();
+                    initGraph();
+                }
+            } catch (error) {
+                console.error('Failed to add node:', error);
+                alert('❌ Failed to add node');
+            }
+        }
+
+        function filterByCategory(category) {
+            // Highlight nodes of this category
+            g.selectAll('.node')
+                .attr('opacity', d => {
+                    if (d.category === category.replace('s', '') || d.type === 'central' || d.type === 'category') {
+                        return 1;
+                    }
+                    return 0.2;
+                });
+
+            // Reset after 3 seconds
+            setTimeout(() => {
+                g.selectAll('.node').attr('opacity', 1);
+            }, 3000);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const container = document.querySelector('.graph-container');
+            svg.attr('width', container.clientWidth).attr('height', container.clientHeight);
+            simulation.force('center', d3.forceCenter(container.clientWidth / 2, container.clientHeight / 2));
+            simulation.alpha(0.3).restart();
+        });
+    </script>
+</body>
+</html>

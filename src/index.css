@@ -57,14 +57,18 @@
 /* Prose styling for markdown content */
 .prose {
   color: #374151;
-  line-height: 1.6;
+  line-height: 1.5;
+}
+
+.prose-sm {
+  line-height: 1.5;
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
   color: #111827;
   font-weight: 600;
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
+  margin-top: 0.75em;
+  margin-bottom: 0.35em;
 }
 
 .prose h1 { font-size: 1.5em; }
@@ -72,7 +76,85 @@
 .prose h3 { font-size: 1.1em; }
 
 .prose p {
-  margin-bottom: 1em;
+  margin-bottom: 0.5em;
+  margin-top: 0;
+}
+
+/* Reduce whitespace in markdown content */
+.markdown-content p {
+  margin-bottom: 0.5em;
+  margin-top: 0;
+}
+
+.markdown-content p:empty {
+  display: none;
+}
+
+.markdown-content br + br {
+  display: none;
+}
+
+/* Tighter spacing for consecutive paragraphs */
+.markdown-content p + p {
+  margin-top: 0.5em;
+}
+
+/* Reduce heading margins */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+
+/* Tighter list spacing */
+.markdown-content ul,
+.markdown-content ol {
+  margin-top: 0.25em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-content li {
+  margin-bottom: 0.15em;
+}
+
+/* Selectable markdown renderer - tighter spacing */
+.prose.prose-sm p {
+  margin-bottom: 0.35em;
+  margin-top: 0;
+}
+
+.prose.prose-sm h1,
+.prose.prose-sm h2,
+.prose.prose-sm h3,
+.prose.prose-sm h4,
+.prose.prose-sm h5,
+.prose.prose-sm h6 {
+  margin-top: 0.5em;
+  margin-bottom: 0.25em;
+}
+
+.prose.prose-sm ul,
+.prose.prose-sm ol {
+  margin-top: 0.2em;
+  margin-bottom: 0.35em;
+  padding-left: 1.25em;
+}
+
+.prose.prose-sm li {
+  margin-bottom: 0.1em;
+}
+
+.prose.prose-sm hr {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose.prose-sm blockquote {
+  margin-top: 0.35em;
+  margin-bottom: 0.35em;
+  padding-left: 0.75em;
 }
 
 .prose ul, .prose ol {

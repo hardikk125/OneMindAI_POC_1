@@ -7,6 +7,7 @@ import { extractMermaidCharts, detectAndConvertTextCharts, convertTablesToCharts
 import { ScrollProgress } from './ui/scroll-progress';
 import { terminalLogger } from '../lib/terminal-logger';
 import * as echarts from 'echarts';
+import { superDebugBus } from '../lib/super-debug-bus';
 
 // Configure marked to support GFM tables
 marked.setOptions({
@@ -27,16 +28,144 @@ export default function EnhancedMarkdownRenderer({ content, isStreaming = false 
   const [tableCharts, setTableCharts] = useState<Array<{id: string, config: any, sourceTable: string}>>([]);
   const [copied, setCopied] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Super Debug: Component render tracking
+  useEffect(() => {
+    superDebugBus.emit('COMPONENT_RENDER', 'EnhancedMarkdownRenderer mounted/updated', {
+      details: { contentLength: content?.length || 0, isStreaming }
+    });
+  }, [content, isStreaming]);
 
-  // Copy entire response to clipboard
+  // Copy entire response to clipboard with beautiful HTML formatting
   const handleCopyAll = async () => {
     try {
-      await navigator.clipboard.writeText(content);
+      // Format the content as beautiful HTML
+      const formattedHtml = formatContentAsHtml(content);
+      
+      // Create both HTML and plain text versions
+      const htmlBlob = new Blob([formattedHtml], { type: 'text/html' });
+      const textBlob = new Blob([content], { type: 'text/plain' });
+      
+      try {
+        // Try the modern clipboard API with multiple formats
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': htmlBlob,
+            'text/plain': textBlob
+          })
+        ]);
+      } catch (e) {
+        // Fallback: copy plain text only
+        await navigator.clipboard.writeText(content);
+      }
+      
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
     }
+  };
+  
+  // Format content as beautiful HTML with styled tables
+  const formatContentAsHtml = (text: string): string => {
+    let html = text;
+    
+    // Escape HTML helper
+    const escapeHtml = (str: string) => str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+    
+    // Extract and protect code blocks
+    const codeBlocks: string[] = [];
+    html = html.replace(/```([^\n]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+      const placeholder = `___CODE_BLOCK_${codeBlocks.length}___`;
+      const escapedCode = escapeHtml(code.trim());
+      codeBlocks.push(`
+        <pre style="background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.5; margin: 12px 0;">
+          <code>${escapedCode}</code>
+        </pre>
+      `);
+      return placeholder;
+    });
+    
+    // Extract and protect inline code
+    const inlineCodes: string[] = [];
+    html = html.replace(/`([^`]+)`/g, (match, code) => {
+      const placeholder = `___INLINE_CODE_${inlineCodes.length}___`;
+      inlineCodes.push(`<code style="background: #f1f5f9; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 13px;">${escapeHtml(code)}</code>`);
+      return placeholder;
+    });
+    
+    // Extract and process tables
+    const tableRegex = /(\|[^\n]+\|\n\|[-:\s|]+\|\n(?:\|[^\n]*\|\n?)*)/g;
+    html = html.replace(tableRegex, (match) => {
+      const lines = match.trim().split('\n');
+      if (lines.length < 3) return match;
+      
+      const headerRow = lines[0];
+      const dataRows = lines.slice(2);
+      const headers = headerRow.split('|').map(h => h.trim()).filter(h => h);
+      
+      let tableHtml = `
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <thead>
+            <tr style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">
+              ${headers.map(h => `<th style="padding: 12px 16px; text-align: left; color: white; font-weight: 600; border: 1px solid #2563eb;">${escapeHtml(h)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      dataRows.forEach((row, rowIndex) => {
+        const cells = row.split('|').map(c => c.trim()).filter(c => c);
+        const bgColor = rowIndex % 2 === 0 ? '#f8fafc' : '#ffffff';
+        tableHtml += `
+          <tr style="background: ${bgColor};">
+            ${cells.map(c => `<td style="padding: 10px 16px; border: 1px solid #e2e8f0; color: #374151;">${escapeHtml(c)}</td>`).join('')}
+          </tr>
+        `;
+      });
+      
+      tableHtml += `</tbody></table>`;
+      return tableHtml;
+    });
+    
+    // Headers
+    html = html.replace(/^### (.+)$/gim, '<h3 style="color: #1e40af; font-size: 16px; font-weight: 600; margin: 16px 0 8px 0;">$1</h3>');
+    html = html.replace(/^## (.+)$/gim, '<h2 style="color: #1e40af; font-size: 18px; font-weight: 700; margin: 20px 0 10px 0;">$1</h2>');
+    html = html.replace(/^# (.+)$/gim, '<h1 style="color: #1e40af; font-size: 22px; font-weight: 700; margin: 24px 0 12px 0;">$1</h1>');
+    
+    // Bold and italic
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight: 600;">$1</strong>');
+    html = html.replace(/__(.+?)__/g, '<strong style="font-weight: 600;">$1</strong>');
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    
+    // Lists
+    html = html.replace(/^\* (.+)$/gim, '<li style="margin: 4px 0; margin-left: 20px;">$1</li>');
+    html = html.replace(/^- (.+)$/gim, '<li style="margin: 4px 0; margin-left: 20px;">$1</li>');
+    html = html.replace(/^\d+\. (.+)$/gim, '<li style="margin: 4px 0; margin-left: 20px;">$1</li>');
+    
+    // Paragraphs and line breaks
+    html = html.replace(/\n\n+/g, '</p><p style="margin: 12px 0;">');
+    html = html.replace(/\n/g, '<br>');
+    
+    // Wrap in container
+    html = `<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; line-height: 1.7; color: #1f2937;"><p style="margin: 12px 0;">${html}</p></div>`;
+    
+    // Restore code blocks
+    codeBlocks.forEach((code, index) => {
+      html = html.replace(`___CODE_BLOCK_${index}___`, code);
+    });
+    
+    // Restore inline code
+    inlineCodes.forEach((code, index) => {
+      html = html.replace(`___INLINE_CODE_${index}___`, code);
+    });
+    
+    return html;
   };
 
   // Copy to clipboard function
@@ -68,18 +197,41 @@ export default function EnhancedMarkdownRenderer({ content, isStreaming = false 
 
     // Convert tables to charts FIRST (before markdown processing)
     terminalLogger.libraryTriggered('Table Detection', 'Scanning for chartable tables', content.substring(0, 100));
+    
+    // Super Debug: File handoff and library trigger
+    superDebugBus.emitFileHandoff('OneMindAI.tsx', 'EnhancedMarkdownRenderer.tsx', 'Raw streaming content');
+    superDebugBus.emitLibrary('chart-utils', 'convertTablesToCharts()', 'Detecting chartable tables in content', content.substring(0, 100));
+    
+    const startTableDetection = Date.now();
     const { content: contentWithChartPlaceholders, charts: detectedTableCharts } = convertTablesToCharts(content);
     setTableCharts(detectedTableCharts);
     
     if (detectedTableCharts.length > 0) {
       console.log(`[TERMINAL] ✅ Detected ${detectedTableCharts.length} chartable table(s)`);
+      
+      // Super Debug: Table detected
+      superDebugBus.emit('TABLE_DETECTED', `Detected ${detectedTableCharts.length} chartable table(s)`, {
+        details: { tableCount: detectedTableCharts.length },
+        processingTime: Date.now() - startTableDetection
+      });
+      
       detectedTableCharts.forEach((chart, index) => {
         terminalLogger.chartRendered('table-generated', chart.config.series?.length || 0, 'ECharts');
+        
+        // Super Debug: Chart generated
+        superDebugBus.emit('CHART_GENERATED', `Chart ${index + 1} generated from table`, {
+          details: { chartType: chart.config.series?.[0]?.type || 'unknown', seriesCount: chart.config.series?.length || 0 },
+          library: 'ECharts'
+        });
+        superDebugBus.emitLibrary('ECharts', 'setOption()', 'Rendering chart from table data', JSON.stringify(chart.config).substring(0, 100));
       });
     }
 
     // Extract code blocks
     terminalLogger.libraryTriggered('Regex', 'Code Block Extraction', contentWithChartPlaceholders.substring(0, 100));
+    
+    // Super Debug: Code block extraction
+    superDebugBus.emitLibrary('Regex', 'exec()', 'Extracting code blocks from content', contentWithChartPlaceholders.substring(0, 100));
     
     const extractedCodeBlocks: Array<{code: string, language: string, id: string}> = [];
     const codeBlockRegex = /```([^\n]*)\n([\s\S]*?)```/g;
@@ -90,21 +242,83 @@ export default function EnhancedMarkdownRenderer({ content, isStreaming = false 
       const code = match[2].trim();
       const id = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      // Check if this is chart-related code
-      if (language === 'python' && (
+      // Check if this is chart-related code (language-agnostic for matplotlib)
+      const isPythonChart = (
         code.includes('matplotlib') || 
         code.includes('seaborn') || 
         code.includes('plt.') ||
+        code.includes('plt.barh') ||
+        code.includes('plt.bar') ||
+        code.includes('plt.pie') ||
+        code.includes('plt.scatter') ||
+        code.includes('plt.plot') ||
+        code.includes('plt.hist') ||
+        code.includes('plt.heatmap') ||
         code.includes('sns.') ||
         code.includes('import pandas') ||
         code.includes('DataFrame')
-      )) {
+      );
+      
+      // Check for Chart.js code (any language)
+      const isChartJs = (
+        code.includes('new Chart(') ||
+        code.includes('Chart.register') ||
+        code.includes('Chart(ctx') ||
+        /type:\s*['"](?:bar|line|pie|doughnut|radar|scatter|polarArea|bubble)['"]/.test(code)
+      );
+      
+      // Check for ASCII/text-based charts (bar charts with | and block characters)
+      const isAsciiChart = (
+        /^\s*\|?\s*\w+\s*[█▓▒░■□▪▫]+/m.test(code) ||
+        /[█▓▒░]{3,}/.test(code) ||
+        /^\s*\d+[\s,]*\|/m.test(code)
+      );
+      
+      // Check for D3.js code
+      const isD3Chart = (
+        code.includes('d3.') ||
+        code.includes("from 'd3'") ||
+        code.includes('import * as d3')
+      );
+      
+      // Check for Plotly code
+      const isPlotlyChart = (
+        code.includes('plotly') ||
+        code.includes('Plotly') ||
+        code.includes('go.Bar') ||
+        code.includes('go.Scatter') ||
+        code.includes('go.Pie')
+      );
+      
+      // Check for HTML with embedded charts
+      const isHtmlChart = (
+        code.includes('<canvas') && (code.includes('Chart') || code.includes('chart'))
+      );
+      
+      const isChartCode = isPythonChart || isChartJs || isAsciiChart || isD3Chart || isPlotlyChart || isHtmlChart;
+      
+      console.log(`[ChartDetection] Language: ${language}, isPython: ${isPythonChart}, isChartJs: ${isChartJs}, isAscii: ${isAsciiChart}, detected: ${isChartCode}`);
+      console.log(`[ChartDetection] Code snippet: ${code.substring(0, 100)}...`);
+      
+      if (isChartCode) {
         extractedCodeBlocks.push({ code, language, id });
         terminalLogger.codeBlockExtracted(language, code.length, id);
+        console.log(`[ChartDetection] ✅ Added chart code block: ${id}`);
+        
+        // Super Debug: Code block extracted
+        superDebugBus.emit('CODE_BLOCK_EXTRACTED', `Code block extracted: ${language} (${code.length} chars)`, {
+          details: { language, codeLength: code.length, id },
+          codeSnippet: code.substring(0, 100)
+        });
       }
     }
     
     setCodeBlocks(extractedCodeBlocks);
+    
+    // Super Debug: State update
+    if (extractedCodeBlocks.length > 0) {
+      superDebugBus.emitStateUpdate('codeBlocks', '[]', `[${extractedCodeBlocks.length} blocks]`);
+    }
 
     // DISABLED: Mermaid chart extraction (using ECharts instead)
     // const contentWithMermaid = detectAndConvertTextCharts(contentWithChartPlaceholders);
@@ -158,7 +372,32 @@ export default function EnhancedMarkdownRenderer({ content, isStreaming = false 
         'HTML output'
       );
       
+      // Super Debug: Markdown library trigger
+      superDebugBus.emitLibrary('marked', 'parse()', 'Converting markdown to HTML', processedText.substring(0, 100));
+      
+      const startParse = Date.now();
       const html = marked.parse(processedText) as string;
+      const parseTime = Date.now() - startParse;
+      
+      // Count elements in the content
+      const elementsDetected = {
+        tables: (html.match(/<table/g) || []).length,
+        codeBlocks: (html.match(/<pre><code/g) || []).length,
+        images: (html.match(/<img/g) || []).length,
+        links: (html.match(/<a /g) || []).length,
+        lists: (html.match(/<ul|<ol/g) || []).length,
+        headings: (html.match(/<h[1-6]/g) || []).length
+      };
+      
+      // Super Debug: Markdown parsed
+      superDebugBus.emit('MARKDOWN_PARSE', `Markdown parsed: ${processedText.length} → ${html.length} chars`, {
+        inputSize: processedText.length,
+        outputSize: html.length,
+        processingTime: parseTime,
+        elementsDetected,
+        inputPreview: processedText.substring(0, 100),
+        outputPreview: html.substring(0, 100)
+      });
       
       terminalLogger.markdownParsed(
         processedText.length, 
@@ -166,8 +405,26 @@ export default function EnhancedMarkdownRenderer({ content, isStreaming = false 
         ['tables', 'bold', 'italic', 'links', 'lists']
       );
       
-      // Process with marked - no inline copy buttons for now to avoid HTML escaping issues
-      const finalHtml = html;
+      // Clean up excessive whitespace and empty paragraphs
+      let finalHtml = html
+        // Remove empty paragraphs
+        .replace(/<p>\s*<\/p>/g, '')
+        // Remove multiple consecutive <br> tags
+        .replace(/(<br\s*\/?>\s*){2,}/g, '<br>')
+        // Remove <br> at the start of paragraphs
+        .replace(/<p>\s*<br\s*\/?>/g, '<p>')
+        // Remove <br> at the end of paragraphs
+        .replace(/<br\s*\/?>\s*<\/p>/g, '</p>')
+        // Remove excessive whitespace between elements
+        .replace(/>\s{2,}</g, '> <')
+        // Clean up whitespace around list items
+        .replace(/<\/li>\s+<li>/g, '</li><li>');
+      
+      // Super Debug: DOM injection
+      superDebugBus.emit('DOM_INJECT', `HTML injected: ${finalHtml.length} bytes`, {
+        outputSize: finalHtml.length,
+        processingTime: parseTime
+      });
 
       setImages(foundImages);
       return finalHtml;
@@ -247,11 +504,15 @@ export default function EnhancedMarkdownRenderer({ content, isStreaming = false 
         />
       </div>
       
-      {/* Copy All Button */}
+      {/* Copy All Button - Always visible */}
       <button
         onClick={handleCopyAll}
-        className="absolute top-2 right-0 z-10 flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-700"
-        title="Copy entire response"
+        className={`absolute top-2 right-0 z-10 flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md text-white transition-all shadow-md ${
+          copied 
+            ? 'bg-green-600 hover:bg-green-700' 
+            : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
+        }`}
+        title="Copy response with beautiful formatting"
       >
         {copied ? (
           <>
@@ -265,7 +526,7 @@ export default function EnhancedMarkdownRenderer({ content, isStreaming = false 
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
             </svg>
-            Copy All
+            📋 Copy
           </>
         )}
       </button>

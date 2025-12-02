@@ -25,3 +25,12 @@ npm-debug.log*
 # Temporary files
 *.tmp
 *.temp
+
+# Environment variables (CRITICAL - never commit!)
+.env
+.env.local
+.env.*.local
+
+# API Keys backup files
+*-api-keys*
+*_api_keys*

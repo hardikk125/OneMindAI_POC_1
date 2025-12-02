@@ -61,16 +61,64 @@ export function extractMermaidCharts(content: string): ChartExtractionResult {
 }
 
 /**
- * Check if content contains any Mermaid charts
+ * Check if content contains any charts (Mermaid, ASCII, matplotlib, Chart.js, etc.)
  * 
  * @param content - The content to check
  * @returns true if content contains charts, false otherwise
  */
 export function hasCharts(content: string): boolean {
+  // Mermaid charts
   const mermaidBlockRegex = /```mermaid\n([\s\S]*?)```/g;
   const standaloneMermaidRegex = /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph|xychart-beta)/gm;
   
-  return mermaidBlockRegex.test(content) || standaloneMermaidRegex.test(content);
+  // Python matplotlib/seaborn charts
+  const matplotlibRegex = /(?:import\s+matplotlib|from\s+matplotlib|plt\.|sns\.|seaborn)/i;
+  const pythonChartRegex = /(?:\.bar\(|\.pie\(|\.scatter\(|\.plot\(|\.hist\(|\.heatmap\(|\.boxplot\(|\.imshow\()/;
+  
+  // Chart.js patterns
+  const chartJsRegex = /(?:new\s+Chart\(|Chart\.register|type:\s*['"](?:bar|line|pie|doughnut|radar|scatter|bubble|polarArea)['"]|chartjs|chart\.js)/i;
+  
+  // ASCII/Text-based bar charts (like the one in the image)
+  const asciiBarChartRegex = /^\s*\d+\s*\|\s*[█▓▒░■□▪▫●○◆◇★☆\-=\#\*]+/m;
+  const asciiBarChartAlt = /[█▓▒░]{3,}|[■□▪▫]{3,}|[\-=\#\*]{5,}\s*\w+/;
+  
+  // Text-based horizontal bar patterns (numbers on left, bars on right)
+  const textBarPattern = /^\s*\d+\s*\|[\s\S]*?(?:January|February|March|April|May|June|July|August|September|October|November|December|\w+\s*\(\d+[KkMm]?\))/m;
+  
+  // D3.js patterns
+  const d3Regex = /(?:d3\.|import\s+\*\s+as\s+d3|from\s+['"]d3['"])/i;
+  
+  // Plotly patterns
+  const plotlyRegex = /(?:plotly\.|Plotly\.|import\s+plotly|go\.(?:Bar|Scatter|Pie|Heatmap|Line))/i;
+  
+  // Recharts patterns (React)
+  const rechartsRegex = /(?:from\s+['"]recharts['"]|<(?:BarChart|LineChart|PieChart|AreaChart|ScatterChart|RadarChart))/i;
+  
+  // ApexCharts patterns
+  const apexChartsRegex = /(?:ApexCharts|new\s+ApexCharts|apexcharts)/i;
+  
+  // Highcharts patterns
+  const highchartsRegex = /(?:Highcharts\.|highcharts|chart:\s*\{\s*type:\s*['"])/i;
+  
+  // ECharts patterns
+  const echartsRegex = /(?:echarts\.|ECharts|setOption\s*\(\s*\{)/i;
+  
+  return (
+    mermaidBlockRegex.test(content) || 
+    standaloneMermaidRegex.test(content) ||
+    matplotlibRegex.test(content) ||
+    pythonChartRegex.test(content) ||
+    chartJsRegex.test(content) ||
+    asciiBarChartRegex.test(content) ||
+    asciiBarChartAlt.test(content) ||
+    textBarPattern.test(content) ||
+    d3Regex.test(content) ||
+    plotlyRegex.test(content) ||
+    rechartsRegex.test(content) ||
+    apexChartsRegex.test(content) ||
+    highchartsRegex.test(content) ||
+    echartsRegex.test(content)
+  );
 }
 
 /**
@@ -666,4 +714,125 @@ export function convertTablesToCharts(content: string): {
   });
   
   return { content: processedContent, charts };
+}
+
+/**
+ * Detect chart type from content
+ * 
+ * @param content - The content to analyze
+ * @returns Object with chart type and library detected
+ */
+export function detectChartLibrary(content: string): { library: string; chartType: string } | null {
+  // Mermaid
+  if (/```mermaid|^(graph|flowchart|sequenceDiagram|pie|gantt|xychart)/m.test(content)) {
+    return { library: 'mermaid', chartType: 'diagram' };
+  }
+  
+  // Python matplotlib/seaborn
+  if (/matplotlib|plt\.|seaborn|sns\./.test(content)) {
+    if (/\.heatmap\(|\.imshow\(/.test(content)) return { library: 'matplotlib', chartType: 'heatmap' };
+    if (/\.bar\(|\.barh\(/.test(content)) return { library: 'matplotlib', chartType: 'bar' };
+    if (/\.pie\(/.test(content)) return { library: 'matplotlib', chartType: 'pie' };
+    if (/\.scatter\(/.test(content)) return { library: 'matplotlib', chartType: 'scatter' };
+    if (/\.plot\(/.test(content)) return { library: 'matplotlib', chartType: 'line' };
+    if (/\.hist\(/.test(content)) return { library: 'matplotlib', chartType: 'histogram' };
+    if (/\.boxplot\(/.test(content)) return { library: 'matplotlib', chartType: 'boxplot' };
+    return { library: 'matplotlib', chartType: 'unknown' };
+  }
+  
+  // Chart.js
+  if (/Chart\(|chartjs|chart\.js/i.test(content)) {
+    const typeMatch = content.match(/type:\s*['"](\w+)['"]/);
+    return { library: 'chartjs', chartType: typeMatch ? typeMatch[1] : 'unknown' };
+  }
+  
+  // ASCII/Text bar chart
+  if (/^\s*\d+\s*\|[\s█▓▒░■□▪▫●○◆◇★☆\-=\#\*]+/m.test(content) || /[█▓▒░]{3,}/.test(content)) {
+    return { library: 'ascii', chartType: 'bar' };
+  }
+  
+  // D3.js
+  if (/d3\.|from\s+['"]d3['"]/i.test(content)) {
+    return { library: 'd3', chartType: 'custom' };
+  }
+  
+  // Plotly
+  if (/plotly\.|Plotly\./i.test(content)) {
+    if (/go\.Heatmap|Heatmap\(/.test(content)) return { library: 'plotly', chartType: 'heatmap' };
+    if (/go\.Bar|Bar\(/.test(content)) return { library: 'plotly', chartType: 'bar' };
+    if (/go\.Pie|Pie\(/.test(content)) return { library: 'plotly', chartType: 'pie' };
+    if (/go\.Scatter|Scatter\(/.test(content)) return { library: 'plotly', chartType: 'scatter' };
+    return { library: 'plotly', chartType: 'unknown' };
+  }
+  
+  // Recharts
+  if (/recharts|<(?:BarChart|LineChart|PieChart)/i.test(content)) {
+    if (/<BarChart/.test(content)) return { library: 'recharts', chartType: 'bar' };
+    if (/<LineChart/.test(content)) return { library: 'recharts', chartType: 'line' };
+    if (/<PieChart/.test(content)) return { library: 'recharts', chartType: 'pie' };
+    if (/<AreaChart/.test(content)) return { library: 'recharts', chartType: 'area' };
+    if (/<ScatterChart/.test(content)) return { library: 'recharts', chartType: 'scatter' };
+    return { library: 'recharts', chartType: 'unknown' };
+  }
+  
+  // Highcharts
+  if (/Highcharts\./i.test(content)) {
+    return { library: 'highcharts', chartType: 'unknown' };
+  }
+  
+  // ECharts
+  if (/echarts\.|setOption\s*\(/i.test(content)) {
+    return { library: 'echarts', chartType: 'unknown' };
+  }
+  
+  // ApexCharts
+  if (/ApexCharts/i.test(content)) {
+    return { library: 'apexcharts', chartType: 'unknown' };
+  }
+  
+  return null;
+}
+
+/**
+ * Extract ASCII bar chart data and convert to structured format
+ * 
+ * @param content - The ASCII chart content
+ * @returns Extracted chart data or null
+ */
+export function extractAsciiBarChart(content: string): { labels: string[]; values: number[]; title?: string } | null {
+  const lines = content.split('\n');
+  const labels: string[] = [];
+  const values: number[] = [];
+  let title: string | undefined;
+  
+  // Look for title (usually before the chart)
+  const titleMatch = content.match(/^([A-Z][^|\n]+(?:\(\d{4}\))?)\s*$/m);
+  if (titleMatch) {
+    title = titleMatch[1].trim();
+  }
+  
+  // Pattern: "120 | ████████████████████████████████████████ December (120K)"
+  const barPattern = /^\s*(\d+)\s*\|\s*[█▓▒░■□▪▫●○◆◇★☆\-=\#\*\s]+\s*(\w+)\s*\((\d+[KkMm]?)\)/;
+  
+  for (const line of lines) {
+    const match = line.match(barPattern);
+    if (match) {
+      const label = match[2];
+      let value = match[3];
+      
+      // Convert K/M notation
+      let numValue = parseFloat(value.replace(/[KkMm]/g, ''));
+      if (/[Kk]/.test(value)) numValue *= 1000;
+      if (/[Mm]/.test(value)) numValue *= 1000000;
+      
+      labels.push(label);
+      values.push(numValue);
+    }
+  }
+  
+  if (labels.length > 0) {
+    return { labels, values, title };
+  }
+  
+  return null;
 }

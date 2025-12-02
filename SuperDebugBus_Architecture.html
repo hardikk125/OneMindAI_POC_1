@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Debug Bus - Architecture & Flow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            min-height: 100vh;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 12, 41, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .nav-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nav-link {
+            padding: 8px 16px;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 20px;
+            color: #a5b4fc;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.85rem;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(99, 102, 241, 0.4);
+            color: white;
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 100px 30px 50px;
+        }
+
+        /* Sections */
+        .section {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 60px 0;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.3rem;
+            color: #94a3b8;
+            max-width: 700px;
+            margin: 0 auto 40px;
+        }
+
+        /* Cards */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin: 40px 0;
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 16px;
+            padding: 25px;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(99, 102, 241, 0.5);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+
+        .card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 10px;
+            color: #a5b4fc;
+        }
+
+        .card p {
+            color: #94a3b8;
+            line-height: 1.6;
+        }
+
+        /* Architecture Diagram */
+        .architecture {
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 20px;
+            padding: 40px;
+            margin: 40px 0;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        .architecture h2 {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #a5b4fc;
+        }
+
+        /* Flow Diagram */
+        .flow-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .flow-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .flow-box {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.3));
+            border: 2px solid rgba(99, 102, 241, 0.5);
+            border-radius: 12px;
+            padding: 20px 30px;
+            text-align: center;
+            min-width: 200px;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .flow-box:hover {
+            transform: scale(1.05);
+            border-color: #667eea;
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.4);
+        }
+
+        .flow-box.emitter {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.3));
+            border-color: rgba(16, 185, 129, 0.5);
+        }
+
+        .flow-box.storage {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(217, 119, 6, 0.3));
+            border-color: rgba(245, 158, 11, 0.5);
+            min-width: 300px;
+        }
+
+        .flow-box.panel {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.3), rgba(219, 39, 119, 0.3));
+            border-color: rgba(236, 72, 153, 0.5);
+        }
+
+        .flow-box h4 {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+
+        .flow-box p {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        .flow-arrow {
+            font-size: 2rem;
+            color: #667eea;
+            animation: pulse 2s infinite;
+        }
+
+        .flow-arrow.down {
+            transform: rotate(90deg);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        /* Memory Diagram */
+        .memory-diagram {
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 16px;
+            padding: 30px;
+            margin: 30px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            overflow-x: auto;
+        }
+
+        .memory-title {
+            color: #fbbf24;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .memory-block {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .memory-block-title {
+            color: #a5b4fc;
+            font-weight: bold;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .memory-item {
+            display: flex;
+            align-items: flex-start;
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .memory-key {
+            color: #f472b6;
+            min-width: 200px;
+        }
+
+        .memory-value {
+            color: #6ee7b7;
+        }
+
+        .memory-type {
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+
+        /* Code Block */
+        .code-block {
+            background: rgba(15, 23, 42, 0.95);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            position: relative;
+        }
+
+        .code-block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        .code-block-title {
+            color: #a5b4fc;
+            font-weight: bold;
+        }
+
+        .code-block-lang {
+            background: rgba(99, 102, 241, 0.3);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: #c4b5fd;
+        }
+
+        .code-line {
+            display: flex;
+            line-height: 1.8;
+        }
+
+        .line-number {
+            color: #4b5563;
+            min-width: 40px;
+            text-align: right;
+            padding-right: 15px;
+            user-select: none;
+        }
+
+        .code-content {
+            flex: 1;
+        }
+
+        .keyword { color: #c792ea; }
+        .string { color: #c3e88d; }
+        .number { color: #f78c6c; }
+        .comment { color: #546e7a; }
+        .function { color: #82aaff; }
+        .property { color: #f07178; }
+        .type { color: #ffcb6b; }
+
+        /* Interactive Demo */
+        .demo-container {
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 16px;
+            padding: 30px;
+            margin: 30px 0;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .demo-title {
+            font-size: 1.3rem;
+            color: #a5b4fc;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .demo-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .demo-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+
+        .demo-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .demo-btn.secondary {
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+        }
+
+        .demo-output {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .demo-output .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+        }
+
+        .demo-output .timestamp {
+            color: #64748b;
+        }
+
+        .demo-output .event-type {
+            color: #a5b4fc;
+            font-weight: bold;
+        }
+
+        .demo-output .message {
+            color: #e2e8f0;
+        }
+
+        /* Event Types Grid */
+        .event-types-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 30px 0;
+        }
+
+        .event-type-card {
+            background: rgba(30, 41, 59, 0.6);
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid;
+            transition: all 0.3s;
+        }
+
+        .event-type-card:hover {
+            transform: translateX(5px);
+        }
+
+        .event-type-card.pipeline { border-color: #fbbf24; }
+        .event-type-card.streaming { border-color: #22d3ee; }
+        .event-type-card.processing { border-color: #10b981; }
+        .event-type-card.state { border-color: #ec4899; }
+        .event-type-card.error { border-color: #ef4444; }
+
+        .event-type-name {
+            font-weight: bold;
+            color: #e2e8f0;
+            margin-bottom: 5px;
+        }
+
+        .event-type-desc {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+            margin: 40px 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(180deg, #667eea, #764ba2, #f093fb);
+            border-radius: 3px;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding: 20px 0;
+            padding-left: 30px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -32px;
+            top: 25px;
+            width: 16px;
+            height: 16px;
+            background: #667eea;
+            border-radius: 50%;
+            border: 3px solid #1e293b;
+        }
+
+        .timeline-item h4 {
+            color: #a5b4fc;
+            margin-bottom: 8px;
+        }
+
+        .timeline-item p {
+            color: #94a3b8;
+            font-size: 0.95rem;
+        }
+
+        /* Stats Display */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: rgba(30, 41, 59, 0.6);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .flow-row {
+                flex-direction: column;
+            }
+
+            .flow-arrow {
+                transform: rotate(90deg) !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-title">🔧 Super Debug Bus</div>
+        <div class="nav-links">
+            <div class="nav-link active" onclick="showSection('overview')">Overview</div>
+            <div class="nav-link" onclick="showSection('architecture')">Architecture</div>
+            <div class="nav-link" onclick="showSection('storage')">Storage</div>
+            <div class="nav-link" onclick="showSection('events')">Event Types</div>
+            <div class="nav-link" onclick="showSection('flow')">Data Flow</div>
+            <div class="nav-link" onclick="showSection('demo')">Live Demo</div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Overview Section -->
+        <div id="overview" class="section active">
+            <div class="hero">
+                <h1>🔧 Super Debug Bus</h1>
+                <p>A real-time event system that captures, stores, and displays every action in your application - from API calls to DOM updates.</p>
+            </div>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon">📡</div>
+                    <h3>Real-Time Capture</h3>
+                    <p>Events are captured the moment they happen - API calls, library triggers, state changes, and more. No delay, no polling.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">💾</div>
+                    <h3>In-Memory Storage</h3>
+                    <p>Up to 5,000 events stored in browser memory. Access historical data even after closing the debug panel.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🔔</div>
+                    <h3>Pub/Sub Pattern</h3>
+                    <p>Components subscribe to events. When new events arrive, all subscribers are notified instantly.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📊</div>
+                    <h3>Statistics Tracking</h3>
+                    <p>Automatic tracking of chunks, tokens, errors, retries, and library usage across your entire session.</p>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-events">5000</div>
+                    <div class="stat-label">Max Events</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">15+</div>
+                    <div class="stat-label">Event Types</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">∞</div>
+                    <div class="stat-label">Subscribers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">&lt;1ms</div>
+                    <div class="stat-label">Emit Latency</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Section -->
+        <div id="architecture" class="section">
+            <h2 style="text-align: center; margin-bottom: 40px; font-size: 2rem;">System Architecture</h2>
+
+            <div class="architecture">
+                <h2>🏗️ Component Interaction Flow</h2>
+                
+                <div class="flow-container">
+                    <!-- Emitters Row -->
+                    <div class="flow-row">
+                        <div class="flow-box emitter" onclick="highlightFlow('emitter')">
+                            <h4>📤 OneMindAI.tsx</h4>
+                            <p>API calls, streaming, errors</p>
+                        </div>
+                        <div class="flow-box emitter" onclick="highlightFlow('emitter')">
+                            <h4>📤 MarkdownRenderer</h4>
+                            <p>Parsing, tables, charts</p>
+                        </div>
+                        <div class="flow-box emitter" onclick="highlightFlow('emitter')">
+                            <h4>📤 Other Components</h4>
+                            <p>State updates, DOM changes</p>
+                        </div>
+                    </div>
+
+                    <div class="flow-arrow down">⬇️</div>
+
+                    <!-- Bus Row -->
+                    <div class="flow-row">
+                        <div class="flow-box storage" onclick="highlightFlow('storage')">
+                            <h4>🚌 Super Debug Bus (Singleton)</h4>
+                            <p>Central event hub - stores up to 5000 events in memory</p>
+                            <div style="margin-top: 10px; font-size: 0.8rem; color: #fbbf24;">
+                                private events: DebugEvent[] = []
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flow-arrow down">⬇️</div>
+
+                    <!-- Panel Row -->
+                    <div class="flow-row">
+                        <div class="flow-box panel" onclick="highlightFlow('panel')">
+                            <h4>🖥️ Super Debug Panel</h4>
+                            <p>Subscribes to events, displays UI</p>
+                        </div>
+                        <div class="flow-box panel" onclick="highlightFlow('panel')">
+                            <h4>📊 Flow Tree</h4>
+                            <p>Visual execution timeline</p>
+                        </div>
+                        <div class="flow-box panel" onclick="highlightFlow('panel')">
+                            <h4>📚 Library Monitor</h4>
+                            <p>Tracks library usage</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-block-header">
+                    <span class="code-block-title">Singleton Pattern</span>
+                    <span class="code-block-lang">TypeScript</span>
+                </div>
+                <div class="code-line"><span class="line-number">1</span><span class="code-content"><span class="comment">// Only ONE instance exists for the entire app</span></span></div>
+                <div class="code-line"><span class="line-number">2</span><span class="code-content"><span class="keyword">class</span> <span class="type">SuperDebugBus</span> {</span></div>
+                <div class="code-line"><span class="line-number">3</span><span class="code-content">  <span class="keyword">private</span> <span class="property">events</span>: <span class="type">DebugEvent</span>[] = [];  <span class="comment">// Stored in RAM</span></span></div>
+                <div class="code-line"><span class="line-number">4</span><span class="code-content">  <span class="keyword">private</span> <span class="property">listeners</span>: <span class="type">Set</span>&lt;<span class="type">Function</span>&gt; = <span class="keyword">new</span> <span class="function">Set</span>();</span></div>
+                <div class="code-line"><span class="line-number">5</span><span class="code-content">  <span class="keyword">private</span> <span class="property">maxEvents</span> = <span class="number">5000</span>;</span></div>
+                <div class="code-line"><span class="line-number">6</span><span class="code-content">}</span></div>
+                <div class="code-line"><span class="line-number">7</span><span class="code-content"></span></div>
+                <div class="code-line"><span class="line-number">8</span><span class="code-content"><span class="comment">// Singleton export - same instance everywhere</span></span></div>
+                <div class="code-line"><span class="line-number">9</span><span class="code-content"><span class="keyword">export const</span> <span class="property">superDebugBus</span> = <span class="keyword">new</span> <span class="function">SuperDebugBus</span>();</span></div>
+            </div>
+        </div>
+
+        <!-- Storage Section -->
+        <div id="storage" class="section">
+            <h2 style="text-align: center; margin-bottom: 40px; font-size: 2rem;">💾 Where Data is Stored</h2>
+
+            <div class="memory-diagram">
+                <div class="memory-title">
+                    <span>🖥️</span> BROWSER MEMORY (RAM) - Not persisted to disk
+                </div>
+
+                <div class="memory-block">
+                    <div class="memory-block-title">
+                        <span>📦</span> superDebugBus (Singleton Instance)
+                    </div>
+                    
+                    <div class="memory-item">
+                        <span class="memory-key">private events:</span>
+                        <span class="memory-value">DebugEvent[]</span>
+                        <span class="memory-type"> // Array of up to 5000 events</span>
+                    </div>
+                    
+                    <div style="margin-left: 40px; margin-top: 10px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                        <div style="color: #64748b; margin-bottom: 10px;">Example stored events:</div>
+                        <div class="memory-item">
+                            <span class="memory-value">[0]</span>
+                            <span class="memory-type"> { type: 'PIPELINE_START', timestamp: 1701234567890, ... }</span>
+                        </div>
+                        <div class="memory-item">
+                            <span class="memory-value">[1]</span>
+                            <span class="memory-type"> { type: 'LIBRARY_TRIGGERED', library: 'openai', ... }</span>
+                        </div>
+                        <div class="memory-item">
+                            <span class="memory-value">[2]</span>
+                            <span class="memory-type"> { type: 'CHUNK_RECEIVED', chunkIndex: 1, ... }</span>
+                        </div>
+                        <div class="memory-item">
+                            <span class="memory-value">...</span>
+                            <span class="memory-type"> // Up to 5000 events</span>
+                        </div>
+                    </div>
+
+                    <div class="memory-item" style="margin-top: 15px;">
+                        <span class="memory-key">private stats:</span>
+                        <span class="memory-value">Object</span>
+                    </div>
+                    
+                    <div style="margin-left: 40px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                        <div class="memory-item">
+                            <span class="memory-key">totalChunks:</span>
+                            <span class="memory-value">number</span>
+                        </div>
+                        <div class="memory-item">
+                            <span class="memory-key">totalErrors:</span>
+                            <span class="memory-value">number</span>
+                        </div>
+                        <div class="memory-item">
+                            <span class="memory-key">libraryTriggers:</span>
+                            <span class="memory-value">Map&lt;string, number&gt;</span>
+                        </div>
+                        <div class="memory-item">
+                            <span class="memory-key">fileHandoffs:</span>
+                            <span class="memory-value">Map&lt;string, number&gt;</span>
+                        </div>
+                    </div>
+
+                    <div class="memory-item" style="margin-top: 15px;">
+                        <span class="memory-key">private listeners:</span>
+                        <span class="memory-value">Set&lt;Function&gt;</span>
+                        <span class="memory-type"> // Subscriber callbacks</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon">✅</div>
+                    <h3>What IS Stored</h3>
+                    <p>• All events in memory array<br>• Statistics (chunks, errors, etc.)<br>• Library trigger counts<br>• File handoff tracking</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">❌</div>
+                    <h3>What is NOT Stored</h3>
+                    <p>• Nothing in localStorage<br>• Nothing in IndexedDB<br>• Nothing on server<br>• Lost on page refresh</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">⏱️</div>
+                    <h3>Lifetime</h3>
+                    <p>• Created when app loads<br>• Persists during session<br>• Cleared on refresh<br>• Manual clear available</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-block-header">
+                    <span class="code-block-title">How to Access Stored Events (Browser Console)</span>
+                    <span class="code-block-lang">JavaScript</span>
+                </div>
+                <div class="code-line"><span class="line-number">1</span><span class="code-content"><span class="comment">// See all stored events</span></span></div>
+                <div class="code-line"><span class="line-number">2</span><span class="code-content"><span class="property">superDebugBus</span>.<span class="function">getEvents</span>()</span></div>
+                <div class="code-line"><span class="line-number">3</span><span class="code-content"></span></div>
+                <div class="code-line"><span class="line-number">4</span><span class="code-content"><span class="comment">// Inspect internal state</span></span></div>
+                <div class="code-line"><span class="line-number">5</span><span class="code-content"><span class="property">superDebugBus</span>.<span class="function">debugInspect</span>()</span></div>
+                <div class="code-line"><span class="line-number">6</span><span class="code-content"></span></div>
+                <div class="code-line"><span class="line-number">7</span><span class="code-content"><span class="comment">// Get statistics</span></span></div>
+                <div class="code-line"><span class="line-number">8</span><span class="code-content"><span class="property">superDebugBus</span>.<span class="function">getStats</span>()</span></div>
+                <div class="code-line"><span class="line-number">9</span><span class="code-content"></span></div>
+                <div class="code-line"><span class="line-number">10</span><span class="code-content"><span class="comment">// Filter by event type</span></span></div>
+                <div class="code-line"><span class="line-number">11</span><span class="code-content"><span class="property">superDebugBus</span>.<span class="function">getEventsByType</span>(<span class="string">'LIBRARY_TRIGGERED'</span>)</span></div>
+            </div>
+        </div>
+
+        <!-- Event Types Section -->
+        <div id="events" class="section">
+            <h2 style="text-align: center; margin-bottom: 40px; font-size: 2rem;">📋 Event Types</h2>
+
+            <div class="event-types-grid">
+                <!-- Pipeline Events -->
+                <div class="event-type-card pipeline">
+                    <div class="event-type-name">PIPELINE_START</div>
+                    <div class="event-type-desc">User clicks "Run Live" - execution begins</div>
+                </div>
+                <div class="event-type-card pipeline">
+                    <div class="event-type-name">PIPELINE_STEP</div>
+                    <div class="event-type-desc">Each step in the execution pipeline</div>
+                </div>
+                <div class="event-type-card pipeline">
+                    <div class="event-type-name">PIPELINE_END</div>
+                    <div class="event-type-desc">All engines completed</div>
+                </div>
+                <div class="event-type-card pipeline">
+                    <div class="event-type-name">FUNCTION_ENTER</div>
+                    <div class="event-type-desc">Function execution started</div>
+                </div>
+                <div class="event-type-card pipeline">
+                    <div class="event-type-name">FUNCTION_EXIT</div>
+                    <div class="event-type-desc">Function execution completed</div>
+                </div>
+                <div class="event-type-card pipeline">
+                    <div class="event-type-name">FILE_HANDOFF</div>
+                    <div class="event-type-desc">Data passed between files</div>
+                </div>
+
+                <!-- Streaming Events -->
+                <div class="event-type-card streaming">
+                    <div class="event-type-name">STREAM_START</div>
+                    <div class="event-type-desc">API streaming initiated</div>
+                </div>
+                <div class="event-type-card streaming">
+                    <div class="event-type-name">CHUNK_RECEIVED</div>
+                    <div class="event-type-desc">New chunk from API stream</div>
+                </div>
+                <div class="event-type-card streaming">
+                    <div class="event-type-name">CHUNK_MERGED</div>
+                    <div class="event-type-desc">Chunk merged into content</div>
+                </div>
+                <div class="event-type-card streaming">
+                    <div class="event-type-name">STREAM_END</div>
+                    <div class="event-type-desc">API streaming completed</div>
+                </div>
+
+                <!-- Processing Events -->
+                <div class="event-type-card processing">
+                    <div class="event-type-name">LIBRARY_TRIGGERED</div>
+                    <div class="event-type-desc">External library called (marked, ECharts, etc.)</div>
+                </div>
+                <div class="event-type-card processing">
+                    <div class="event-type-name">MARKDOWN_PARSE</div>
+                    <div class="event-type-desc">Markdown converted to HTML</div>
+                </div>
+                <div class="event-type-card processing">
+                    <div class="event-type-name">TABLE_DETECTED</div>
+                    <div class="event-type-desc">Chartable table found in content</div>
+                </div>
+                <div class="event-type-card processing">
+                    <div class="event-type-name">CHART_GENERATED</div>
+                    <div class="event-type-desc">ECharts visualization created</div>
+                </div>
+                <div class="event-type-card processing">
+                    <div class="event-type-name">CODE_BLOCK_EXTRACTED</div>
+                    <div class="event-type-desc">Code block parsed from markdown</div>
+                </div>
+
+                <!-- State Events -->
+                <div class="event-type-card state">
+                    <div class="event-type-name">STATE_UPDATE</div>
+                    <div class="event-type-desc">React state changed</div>
+                </div>
+                <div class="event-type-card state">
+                    <div class="event-type-name">DOM_INJECT</div>
+                    <div class="event-type-desc">HTML injected into DOM</div>
+                </div>
+                <div class="event-type-card state">
+                    <div class="event-type-name">COMPONENT_RENDER</div>
+                    <div class="event-type-desc">React component rendered</div>
+                </div>
+
+                <!-- Error Events -->
+                <div class="event-type-card error">
+                    <div class="event-type-name">ERROR_CAUGHT</div>
+                    <div class="event-type-desc">Error captured with explanation</div>
+                </div>
+                <div class="event-type-card error">
+                    <div class="event-type-name">AUTO_RETRY_START</div>
+                    <div class="event-type-desc">Automatic retry initiated</div>
+                </div>
+                <div class="event-type-card error">
+                    <div class="event-type-name">AUTO_RETRY_END</div>
+                    <div class="event-type-desc">Retry completed</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Flow Section -->
+        <div id="flow" class="section">
+            <h2 style="text-align: center; margin-bottom: 40px; font-size: 2rem;">🔄 Complete Data Flow</h2>
+
+            <div class="timeline">
+                <div class="timeline-item">
+                    <h4>1️⃣ User Clicks "Run Live"</h4>
+                    <p>OneMindAI.tsx emits <code>PIPELINE_START</code> event with selected engines and prompt info.</p>
+                </div>
+                <div class="timeline-item">
+                    <h4>2️⃣ Event Captured by Bus</h4>
+                    <p>superDebugBus.emit() is called. Event is created with timestamp, source file, and data.</p>
+                </div>
+                <div class="timeline-item">
+                    <h4>3️⃣ Event Stored in Memory</h4>
+                    <p>Event pushed to <code>this.events[]</code> array. If over 5000, oldest event is removed.</p>
+                </div>
+                <div class="timeline-item">
+                    <h4>4️⃣ Statistics Updated</h4>
+                    <p>Counters for chunks, errors, library triggers are incremented based on event type.</p>
+                </div>
+                <div class="timeline-item">
+                    <h4>5️⃣ Subscribers Notified</h4>
+                    <p>All registered listener functions are called with the new event.</p>
+                </div>
+                <div class="timeline-item">
+                    <h4>6️⃣ Panel Updates UI</h4>
+                    <p>SuperDebugPanel receives event via subscription, updates React state, re-renders.</p>
+                </div>
+                <div class="timeline-item">
+                    <h4>7️⃣ User Sees Update</h4>
+                    <p>New event appears in Flow Tree, Library Triggers, or relevant section instantly.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-block-header">
+                    <span class="code-block-title">emit() Function - The Heart of the System</span>
+                    <span class="code-block-lang">TypeScript</span>
+                </div>
+                <div class="code-line"><span class="line-number">1</span><span class="code-content"><span class="function">emit</span>(<span class="property">type</span>: <span class="type">DebugEventType</span>, <span class="property">message</span>: <span class="type">string</span>, <span class="property">data</span>: <span class="type">object</span>) {</span></div>
+                <div class="code-line"><span class="line-number">2</span><span class="code-content">  <span class="comment">// 1. Create event object</span></span></div>
+                <div class="code-line"><span class="line-number">3</span><span class="code-content">  <span class="keyword">const</span> <span class="property">event</span> = {</span></div>
+                <div class="code-line"><span class="line-number">4</span><span class="code-content">    <span class="property">id</span>: <span class="keyword">this</span>.<span class="function">generateId</span>(),</span></div>
+                <div class="code-line"><span class="line-number">5</span><span class="code-content">    <span class="property">type</span>, <span class="property">message</span>,</span></div>
+                <div class="code-line"><span class="line-number">6</span><span class="code-content">    <span class="property">timestamp</span>: <span class="type">Date</span>.<span class="function">now</span>(),</span></div>
+                <div class="code-line"><span class="line-number">7</span><span class="code-content">    <span class="property">source</span>: <span class="function">getCallerInfo</span>(), <span class="comment">// Auto-detect file/function</span></span></div>
+                <div class="code-line"><span class="line-number">8</span><span class="code-content">    <span class="property">data</span></span></div>
+                <div class="code-line"><span class="line-number">9</span><span class="code-content">  };</span></div>
+                <div class="code-line"><span class="line-number">10</span><span class="code-content"></span></div>
+                <div class="code-line"><span class="line-number">11</span><span class="code-content">  <span class="comment">// 2. Store in memory</span></span></div>
+                <div class="code-line"><span class="line-number">12</span><span class="code-content">  <span class="keyword">this</span>.<span class="property">events</span>.<span class="function">push</span>(<span class="property">event</span>);</span></div>
+                <div class="code-line"><span class="line-number">13</span><span class="code-content">  <span class="keyword">if</span> (<span class="keyword">this</span>.<span class="property">events</span>.<span class="property">length</span> > <span class="keyword">this</span>.<span class="property">maxEvents</span>) {</span></div>
+                <div class="code-line"><span class="line-number">14</span><span class="code-content">    <span class="keyword">this</span>.<span class="property">events</span>.<span class="function">shift</span>(); <span class="comment">// Remove oldest</span></span></div>
+                <div class="code-line"><span class="line-number">15</span><span class="code-content">  }</span></div>
+                <div class="code-line"><span class="line-number">16</span><span class="code-content"></span></div>
+                <div class="code-line"><span class="line-number">17</span><span class="code-content">  <span class="comment">// 3. Notify all subscribers</span></span></div>
+                <div class="code-line"><span class="line-number">18</span><span class="code-content">  <span class="keyword">this</span>.<span class="property">listeners</span>.<span class="function">forEach</span>(<span class="property">fn</span> => <span class="function">fn</span>(<span class="property">event</span>));</span></div>
+                <div class="code-line"><span class="line-number">19</span><span class="code-content">}</span></div>
+            </div>
+        </div>
+
+        <!-- Live Demo Section -->
+        <div id="demo" class="section">
+            <h2 style="text-align: center; margin-bottom: 40px; font-size: 2rem;">🎮 Interactive Demo</h2>
+
+            <div class="demo-container">
+                <div class="demo-title">
+                    <span>🔬</span> Simulate Debug Events
+                </div>
+                
+                <div class="demo-buttons">
+                    <button class="demo-btn" onclick="simulateEvent('PIPELINE_START')">🚀 Pipeline Start</button>
+                    <button class="demo-btn" onclick="simulateEvent('LIBRARY_TRIGGERED')">📚 Library Trigger</button>
+                    <button class="demo-btn" onclick="simulateEvent('CHUNK_RECEIVED')">📦 Chunk Received</button>
+                    <button class="demo-btn" onclick="simulateEvent('MARKDOWN_PARSE')">📝 Markdown Parse</button>
+                    <button class="demo-btn" onclick="simulateEvent('ERROR_CAUGHT')">❌ Error Caught</button>
+                    <button class="demo-btn secondary" onclick="clearDemo()">🗑️ Clear Log</button>
+                </div>
+
+                <div class="demo-output" id="demo-output">
+                    <div style="color: #64748b;">Click buttons above to simulate events...</div>
+                </div>
+            </div>
+
+            <div class="demo-container">
+                <div class="demo-title">
+                    <span>📊</span> Simulated Storage State
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="demo-events">0</div>
+                        <div class="stat-label">Events Stored</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="demo-chunks">0</div>
+                        <div class="stat-label">Chunks</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="demo-libraries">0</div>
+                        <div class="stat-label">Libraries</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="demo-errors">0</div>
+                        <div class="stat-label">Errors</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Navigation
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            
+            document.getElementById(sectionId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Demo state
+        let demoEvents = [];
+        let demoStats = { chunks: 0, libraries: 0, errors: 0 };
+
+        function simulateEvent(type) {
+            const timestamp = new Date().toLocaleTimeString();
+            const id = Math.random().toString(36).substr(2, 9);
+            
+            const eventData = {
+                'PIPELINE_START': { icon: '🚀', message: 'User clicked "Run Live" - Starting execution pipeline', color: '#fbbf24' },
+                'LIBRARY_TRIGGERED': { icon: '📚', message: `openai.chat.completions.create() triggered`, color: '#10b981' },
+                'CHUNK_RECEIVED': { icon: '📦', message: `Chunk #${demoStats.chunks + 1} received (${Math.floor(Math.random() * 100) + 20} chars)`, color: '#22d3ee' },
+                'MARKDOWN_PARSE': { icon: '📝', message: `Markdown parsed: ${Math.floor(Math.random() * 5000)} → ${Math.floor(Math.random() * 8000)} chars`, color: '#a855f7' },
+                'ERROR_CAUGHT': { icon: '❌', message: 'Rate limit exceeded (429) - Auto-retry in 5s', color: '#ef4444' }
+            };
+
+            const data = eventData[type];
+            
+            // Update stats
+            if (type === 'CHUNK_RECEIVED') demoStats.chunks++;
+            if (type === 'LIBRARY_TRIGGERED') demoStats.libraries++;
+            if (type === 'ERROR_CAUGHT') demoStats.errors++;
+            
+            demoEvents.push({ type, ...data, timestamp, id });
+
+            // Update output
+            const output = document.getElementById('demo-output');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="timestamp">[${timestamp}]</span>
+                <span class="event-type" style="color: ${data.color}">${data.icon} ${type}</span>
+                <span class="message">${data.message}</span>
+            `;
+            output.appendChild(entry);
+            output.scrollTop = output.scrollHeight;
+
+            // Update stats display
+            document.getElementById('demo-events').textContent = demoEvents.length;
+            document.getElementById('demo-chunks').textContent = demoStats.chunks;
+            document.getElementById('demo-libraries').textContent = demoStats.libraries;
+            document.getElementById('demo-errors').textContent = demoStats.errors;
+        }
+
+        function clearDemo() {
+            demoEvents = [];
+            demoStats = { chunks: 0, libraries: 0, errors: 0 };
+            document.getElementById('demo-output').innerHTML = '<div style="color: #64748b;">Log cleared. Click buttons to simulate events...</div>';
+            document.getElementById('demo-events').textContent = '0';
+            document.getElementById('demo-chunks').textContent = '0';
+            document.getElementById('demo-libraries').textContent = '0';
+            document.getElementById('demo-errors').textContent = '0';
+        }
+
+        function highlightFlow(type) {
+            // Visual feedback when clicking flow boxes
+            const boxes = document.querySelectorAll(`.flow-box.${type}`);
+            boxes.forEach(box => {
+                box.style.transform = 'scale(1.1)';
+                box.style.boxShadow = '0 0 40px rgba(99, 102, 241, 0.6)';
+                setTimeout(() => {
+                    box.style.transform = '';
+                    box.style.boxShadow = '';
+                }, 300);
+            });
+        }
+
+        // Animate stats on load
+        function animateValue(id, start, end, duration) {
+            const obj = document.getElementById(id);
+            const range = end - start;
+            const startTime = performance.now();
+            
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const value = Math.floor(start + range * progress);
+                obj.textContent = value;
+                if (progress < 1) requestAnimationFrame(update);
+            }
+            requestAnimationFrame(update);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            animateValue('stat-events', 0, 5000, 1500);
+        });
+    </script>
+</body>
+</html>

@@ -216,10 +216,10 @@ export function ExportDropdown({ data, className = '' }: ExportButtonProps) {
       {showMenu && (
         <>
           <div
-            className="fixed inset-0 z-10"
+            className="fixed inset-0 z-[100]"
             onClick={() => setShowMenu(false)}
           />
-          <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-20 overflow-hidden">
+          <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[101] overflow-visible" style={{ minWidth: '220px' }}>
             <div className="p-2 space-y-1">
               <button
                 onClick={() => handleExport('word')}

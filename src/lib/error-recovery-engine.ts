@@ -1692,9 +1692,11 @@ const CLAUDE_ERROR_PATTERNS = {
 };
 
 function detectClaudeError(error: any): string {
-  const statusCode = error.statusCode || error.status;
-  const message = (error.message || '').toLowerCase();
-  const errorType = (error.error?.type || '').toLowerCase();
+  const statusCode = error.statusCode || error.status || error.status_code;
+  const message = (error.message || JSON.stringify(error) || '').toLowerCase();
+  const errorType = (error.error?.type || error.type || '').toLowerCase();
+  
+  console.log('[detectClaudeError] Input:', { statusCode, message: message.substring(0, 200), errorType });
   
   // Check error type from API response first
   if (errorType.includes('authentication_error')) return 'CLAUDE_AUTHENTICATION_ERROR';
@@ -1706,7 +1708,7 @@ function detectClaudeError(error: any): string {
   if (errorType.includes('overloaded_error')) return 'CLAUDE_OVERLOADED';
   if (errorType.includes('invalid_request_error')) return 'CLAUDE_INVALID_REQUEST';
   
-  // Check each Claude error pattern
+  // Check each Claude error pattern with status code + message
   for (const [code, pattern] of Object.entries(CLAUDE_ERROR_PATTERNS)) {
     // Check status code match
     if (pattern.codes.length > 0 && pattern.codes.includes(statusCode)) {
@@ -1727,6 +1729,65 @@ function detectClaudeError(error: any): string {
   if (statusCode === 500) return 'CLAUDE_API_ERROR';
   if (statusCode === 529) return 'CLAUDE_OVERLOADED';
   
+  // ===== NEW: Fallback to message pattern matching ALONE (when status code is missing) =====
+  // Authentication errors - check for API key related messages
+  if (message.includes('api key') || message.includes('invalid key') || message.includes('expired key') ||
+      message.includes('authentication') || message.includes('unauthorized') || message.includes('401') ||
+      message.includes('invalid_api_key') || message.includes('invalid or expired')) {
+    console.log('[detectClaudeError] Matched AUTHENTICATION via message pattern');
+    return 'CLAUDE_AUTHENTICATION_ERROR';
+  }
+  
+  // Permission errors
+  if (message.includes('permission') || message.includes('forbidden') || message.includes('403') ||
+      message.includes('access denied') || message.includes('not have permission')) {
+    console.log('[detectClaudeError] Matched PERMISSION via message pattern');
+    return 'CLAUDE_PERMISSION_ERROR';
+  }
+  
+  // Rate limit errors
+  if (message.includes('rate limit') || message.includes('too many requests') || message.includes('429') ||
+      message.includes('quota exceeded')) {
+    console.log('[detectClaudeError] Matched RATE_LIMIT via message pattern');
+    return 'CLAUDE_RATE_LIMIT';
+  }
+  
+  // Not found errors
+  if (message.includes('not found') || message.includes('404') || message.includes('model not found') ||
+      message.includes('resource could not be found')) {
+    console.log('[detectClaudeError] Matched NOT_FOUND via message pattern');
+    return 'CLAUDE_NOT_FOUND';
+  }
+  
+  // Request too large
+  if (message.includes('too large') || message.includes('413') || message.includes('exceeds maximum') ||
+      message.includes('payload too large')) {
+    console.log('[detectClaudeError] Matched REQUEST_TOO_LARGE via message pattern');
+    return 'CLAUDE_REQUEST_TOO_LARGE';
+  }
+  
+  // Server/API errors
+  if (message.includes('server error') || message.includes('500') || message.includes('internal error') ||
+      message.includes('unexpected error')) {
+    console.log('[detectClaudeError] Matched API_ERROR via message pattern');
+    return 'CLAUDE_API_ERROR';
+  }
+  
+  // Overloaded errors
+  if (message.includes('overloaded') || message.includes('529') || message.includes('high traffic') ||
+      message.includes('temporarily overloaded')) {
+    console.log('[detectClaudeError] Matched OVERLOADED via message pattern');
+    return 'CLAUDE_OVERLOADED';
+  }
+  
+  // Invalid request
+  if (message.includes('bad request') || message.includes('400') || message.includes('malformed') ||
+      message.includes('invalid request')) {
+    console.log('[detectClaudeError] Matched INVALID_REQUEST via message pattern');
+    return 'CLAUDE_INVALID_REQUEST';
+  }
+  
+  console.log('[detectClaudeError] No pattern matched, returning UNKNOWN_ERROR');
   return 'UNKNOWN_ERROR';
 }
 

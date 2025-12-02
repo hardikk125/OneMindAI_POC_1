@@ -42,6 +42,12 @@ export const ChartCodeRenderer: React.FC<ChartCodeRendererProps> = ({ code, lang
   const detectChartType = (code: string): any => {
     console.log('Detecting chart type in code:', code.substring(0, 200));
     
+    // Check for ASCII/text-based bar charts first
+    if (/[█▓▒░]{3,}/.test(code) || /^\s*\|?\s*\w+\s+[█▓▒░■□]+/m.test(code)) {
+      console.log('Detected ASCII bar chart');
+      return extractAsciiBarChartData(code);
+    }
+    
     // Check if this is a subplot/multiple chart code
     if (code.includes('subplots') || code.includes('add_subplot')) {
       console.log('Detected multiple subplots, extracting all charts');
@@ -53,6 +59,12 @@ export const ChartCodeRenderer: React.FC<ChartCodeRendererProps> = ({ code, lang
     if (code.includes('sns.heatmap') || code.includes('plt.imshow') || code.includes('seaborn.heatmap')) {
       console.log('Detected heatmap');
       return extractHeatmapData(code);
+    }
+    
+    // Detect horizontal bar chart (plt.barh)
+    if (code.includes('.barh(') || code.includes('plt.barh')) {
+      console.log('Detected horizontal bar chart');
+      return extractHorizontalBarChartData(code);
     }
     
     // Detect bar chart
@@ -328,6 +340,139 @@ export const ChartCodeRenderer: React.FC<ChartCodeRendererProps> = ({ code, lang
     }
     
     console.log('Could not extract bar data, returning null');
+    return null;
+  };
+
+  // Extract horizontal bar chart data (plt.barh)
+  const extractHorizontalBarChartData = (code: string): any => {
+    console.log('Extracting horizontal bar chart data...');
+    
+    let labels: string[] = [];
+    let values: number[] = [];
+    let title = '';
+    
+    // Try to find title from plt.title()
+    const titleMatch = code.match(/plt\.title\(['"](.*?)['"]\)/);
+    if (titleMatch) {
+      title = titleMatch[1];
+    }
+    
+    // Pattern 1: Multi-line array for months/labels (handles line breaks)
+    const labelsMatch = code.match(/(?:months|labels|categories|y)\s*=\s*\[([\s\S]*?)\]/);
+    if (labelsMatch) {
+      // Extract all quoted strings from the array
+      const quotedStrings = labelsMatch[1].match(/['"]([^'"]+)['"]/g);
+      if (quotedStrings) {
+        labels = quotedStrings.map(s => s.replace(/['"]/g, ''));
+      }
+    }
+    
+    // Pattern 2: Single-line or multi-line values array
+    const valuesMatch = code.match(/(?:traffic|values|data|x)\s*=\s*\[([\s\S]*?)\]/);
+    if (valuesMatch) {
+      // Extract all numbers from the array
+      const numbers = valuesMatch[1].match(/\d+(?:\.\d+)?/g);
+      if (numbers) {
+        values = numbers.map(n => parseFloat(n));
+      }
+    }
+    
+    // Pattern 3: Try to extract from barh() call directly
+    if ((!labels.length || !values.length)) {
+      const barhMatch = code.match(/\.barh\s*\(\s*(\w+)\s*,\s*(\w+)/);
+      if (barhMatch) {
+        const labelsVar = barhMatch[1];
+        const valuesVar = barhMatch[2];
+        
+        // Find the labels variable definition (multi-line support)
+        const labelsVarMatch = code.match(new RegExp(labelsVar + '\\s*=\\s*\\[([\\s\\S]*?)\\]'));
+        if (labelsVarMatch && !labels.length) {
+          const quotedStrings = labelsVarMatch[1].match(/['"]([^'"]+)['"]/g);
+          if (quotedStrings) {
+            labels = quotedStrings.map(s => s.replace(/['"]/g, ''));
+          }
+        }
+        
+        // Find the values variable definition
+        const valuesVarMatch = code.match(new RegExp(valuesVar + '\\s*=\\s*\\[([\\s\\S]*?)\\]'));
+        if (valuesVarMatch && !values.length) {
+          const numbers = valuesVarMatch[1].match(/\d+(?:\.\d+)?/g);
+          if (numbers) {
+            values = numbers.map(n => parseFloat(n));
+          }
+        }
+      }
+    }
+    
+    if (labels.length > 0 && values.length > 0) {
+      console.log('Extracted horizontal bar data:', { labels, values, title });
+      return {
+        type: 'horizontalBar',
+        categories: labels,
+        values: values,
+        title: title
+      };
+    }
+    
+    console.log('Could not extract horizontal bar data');
+    return null;
+  };
+
+  // Extract ASCII bar chart data
+  const extractAsciiBarChartData = (code: string): any => {
+    console.log('Extracting ASCII bar chart data...');
+    
+    const lines = code.split('\n');
+    const labels: string[] = [];
+    const values: number[] = [];
+    let title = '';
+    
+    // Look for title
+    const titleMatch = code.match(/^([A-Za-z][^\n|]+(?:\([^)]+\))?)\s*$/m);
+    if (titleMatch) {
+      title = titleMatch[1].trim();
+    }
+    
+    // Pattern 1: "| December  ████████████████████████████████████████  35,000 |"
+    const pattern1 = /\|\s*(\w+)\s+[█▓▒░■□▪▫]+\s+([\d,]+)\s*\|/g;
+    let match;
+    while ((match = pattern1.exec(code)) !== null) {
+      labels.push(match[1]);
+      values.push(parseFloat(match[2].replace(/,/g, '')));
+    }
+    
+    // Pattern 2: "120 | ████████████████████████████████████████ December (120K)"
+    if (labels.length === 0) {
+      const pattern2 = /^\s*(\d+)\s*\|\s*[█▓▒░■□▪▫\s]+\s*(\w+)\s*\((\d+[KkMm]?)\)/gm;
+      while ((match = pattern2.exec(code)) !== null) {
+        labels.push(match[2]);
+        let value = match[3];
+        let numValue = parseFloat(value.replace(/[KkMm]/g, ''));
+        if (/[Kk]/.test(value)) numValue *= 1000;
+        if (/[Mm]/.test(value)) numValue *= 1000000;
+        values.push(numValue);
+      }
+    }
+    
+    // Pattern 3: Simple "Label  ████████  Value"
+    if (labels.length === 0) {
+      const pattern3 = /^\s*(\w+)\s+[█▓▒░■□▪▫]+\s+([\d,]+)/gm;
+      while ((match = pattern3.exec(code)) !== null) {
+        labels.push(match[1]);
+        values.push(parseFloat(match[2].replace(/,/g, '')));
+      }
+    }
+    
+    if (labels.length > 0 && values.length > 0) {
+      console.log('Extracted ASCII bar data:', { labels, values, title });
+      return {
+        type: 'horizontalBar',
+        categories: labels,
+        values: values,
+        title: title
+      };
+    }
+    
     return null;
   };
 
@@ -633,6 +778,28 @@ export const ChartCodeRenderer: React.FC<ChartCodeRendererProps> = ({ code, lang
             type: 'bar',
             itemStyle: { color: '#5470c6' },
             label: { show: true, position: 'top' }
+          }]
+        };
+        break;
+
+      case 'horizontalBar':
+        option = {
+          title: chartData.title ? { text: chartData.title, left: 'center' } : undefined,
+          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+          grid: { left: '15%', right: '10%', bottom: '10%', containLabel: true },
+          xAxis: { type: 'value' },
+          yAxis: { type: 'category', data: chartData.categories },
+          series: [{
+            data: chartData.values,
+            type: 'bar',
+            itemStyle: { 
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: '#83bff6' },
+                { offset: 0.5, color: '#188df0' },
+                { offset: 1, color: '#188df0' }
+              ])
+            },
+            label: { show: true, position: 'right', formatter: '{c}' }
           }]
         };
         break;

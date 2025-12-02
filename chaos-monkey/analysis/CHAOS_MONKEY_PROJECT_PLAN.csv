@@ -1,0 +1,159 @@
+COMPONENT OVERVIEW
+Field,Value
+Component Name,Chaos Monkey Testing Suite
+Component ID,CM-001
+Description,"Automated testing framework that simulates failures, edge cases, and chaos scenarios to ensure OneMindAI platform resilience before production launch"
+Purpose,"Proactively discover bugs, security vulnerabilities, and performance issues before users encounter them"
+Owner,Development Team
+Start Date,Day 1
+Target Completion,Day 5
+Status,Not Started
+
+VALUE & BENEFITS IF IMPLEMENTED
+Benefit Category,Specific Benefit,Quantifiable Impact,Business Value
+Quality Assurance,"Catches 95% of bugs before production","Reduces post-launch bug fixes by 95%","$10,000+ saved per prevented incident"
+Developer Confidence,"95%+ confidence in deployments","Faster release cycles - deploy daily vs weekly","3-4x faster time to market"
+Security Validation,"Tests for SQL injection, XSS, CSRF attacks","Prevents data breaches","Avoids $50,000+ legal/reputation costs"
+Load Testing,"Validates 50+ concurrent user handling","Ensures uptime during traffic spikes","Prevents revenue loss from downtime"
+Documentation,"Auto-generates test reports","Reduces manual documentation by 80%","Saves 8+ hours per release"
+Regression Prevention,"Catches breaking changes automatically","Prevents 90% of regression bugs","Maintains user trust and retention"
+API Reliability,"Tests all 12 AI provider integrations","Ensures consistent AI responses","Better user experience across providers"
+Error Handling,"Validates all error paths","Consistent error messages","Reduces user confusion and support tickets"
+
+CONSEQUENCES IF NOT IMPLEMENTED
+Risk Category,Specific Risk,Probability,Impact Severity,Potential Cost
+Production Failures,"Unhandled errors crash the app for users",High,Critical,"$5,000-$20,000 per incident + user churn"
+Security Breaches,"Vulnerabilities exploited by hackers",Medium,Critical,"$50,000+ legal fees + reputation damage"
+Performance Issues,"System crashes during traffic spikes",High,High,"Lost revenue + user abandonment"
+Slow Releases,"Fear of deploying leads to 2-week cycles",Very High,Medium,"Competitors move faster, lose market share"
+Manual Testing Burden,"10x longer testing, still miss edge cases",Very High,Medium,"40+ hours wasted per release"
+Inconsistent Errors,"Raw stack traces shown to users",High,Medium,"Poor UX, increased support tickets"
+No Visibility,"No metrics on system reliability",Very High,Low,"Cannot prove system quality to stakeholders"
+Regression Bugs,"New features break existing functionality",High,High,"User frustration, negative reviews"
+
+PRIORITY ASSESSMENT
+Criteria,Score (1-10),Justification
+Business Impact,9,"Directly affects launch readiness and user experience"
+Technical Risk,8,"Without testing, production failures are almost certain"
+Time Sensitivity,9,"Must complete before Day 10 launch"
+Resource Availability,7,"Can be largely automated with AI assistance"
+Dependency Factor,8,"Other components depend on validated APIs"
+Overall Priority,CRITICAL,"Must-have for production launch"
+
+TASK BREAKDOWN - DETAILED ACTIVITIES
+Task ID,Task Name,Description,Manual Effort (Hours),AI-Assisted Effort (Hours),Time Saved,Confidence Level,Dependencies,Deliverable
+CM-T01,Project Setup,"Install dependencies, configure environment, set up folder structure",2,0.5,75%,98%,Node.js installed,"chaos-monkey/ folder with package.json"
+CM-T02,API Test Suite Development,"Create 15 tests for all AI provider endpoints - invalid keys, missing body, malformed JSON, oversized payloads",8,2,75%,95%,CM-T01,"15 passing API tests"
+CM-T03,Security Test Suite Development,"Create 10 tests - SQL injection, XSS (7 payloads), path traversal, command injection, CORS validation",12,3,75%,92%,CM-T01,"10 security tests with attack payloads"
+CM-T04,Load Test Suite Development,"Create 7 tests - 10/50/100 concurrent requests, rapid fire, sustained load, spike test, response time validation",6,1.5,75%,90%,CM-T01,"7 load tests with metrics collection"
+CM-T05,UI Test Suite Development,"Create 6 tests - rapid clicks, extreme input, browser navigation, console errors, memory monitoring",8,2,75%,85%,CM-T01 + Puppeteer,"6 UI chaos tests"
+CM-T06,Provider Test Suite Development,"Create 6 tests - timeout handling, fallback logic, streaming interruption, multi-provider concurrent",6,1.5,75%,88%,CM-T01 + API keys,"6 provider resilience tests"
+CM-T07,Export Test Suite Development,"Create 4 tests - large PDF, special chars in Word, malformed markdown, concurrent exports",4,1,75%,90%,CM-T01 + Export utils,"4 export chaos tests"
+CM-T08,Dashboard Development,"Build web dashboard with real-time test results, WebSocket updates, filtering, export",16,4,75%,92%,CM-T01,"Interactive dashboard at localhost:4000"
+CM-T09,CLI Development,"Build command-line interface for CI/CD integration with JSON output",4,1,75%,95%,CM-T01,"cli.js with --suite and --json flags"
+CM-T10,Report Generator,"Build HTML report generator with charts, pass/fail summary, recommendations",6,1.5,75%,90%,CM-T01,"generate-report.js producing HTML reports"
+CM-T11,CI/CD Integration,"Create GitHub Actions workflow for automated testing on push/PR",3,0.75,75%,95%,CM-T09,".github/workflows/chaos-test.yml"
+CM-T12,Documentation,"Write README, inline comments, usage examples, troubleshooting guide",4,1,75%,98%,All tasks,"README.md + inline docs"
+CM-T13,Integration Testing,"Run full test suite against OneMindAI, fix discovered issues",8,2,75%,85%,All tasks,"All tests passing, issues logged"
+CM-T14,Performance Optimization,"Optimize test execution speed, parallel running, resource cleanup",4,1,75%,88%,CM-T13,"Tests complete in <60 seconds"
+
+TOTAL EFFORT SUMMARY
+Metric,Manual Approach,AI-Assisted Approach,Difference
+Total Hours,91,22.75,68.25 hours saved
+Total Days (8hr/day),11.4 days,2.8 days,8.6 days saved
+Effort Reduction,-,75%,-
+Recommended Approach,-,AI-Assisted,-
+
+TESTING & VALIDATION CRITERIA
+Test Category,Pass Criteria,Measurement Method,Minimum Threshold,Target Threshold
+API Tests,"All 15 tests pass with correct error codes",Automated test runner,100% pass rate,100% pass rate
+Security Tests,"No vulnerabilities detected, all attacks blocked",Security scan + manual review,100% blocked,100% blocked
+Load Tests,"System handles 50 concurrent users without degradation",Response time metrics,<2s avg response,<1s avg response
+UI Tests,"No console errors, memory stable under 500MB",Browser DevTools monitoring,0 errors,0 errors + <300MB
+Provider Tests,"Fallback works, timeouts handled gracefully",Simulated failure injection,100% recovery,100% recovery + <5s
+Export Tests,"All formats generate correctly without corruption",File validation + manual check,100% valid files,100% valid files
+Overall Suite,"48 tests pass, <5% flaky tests",CI/CD pipeline results,95% stable,100% stable
+
+CONFIDENCE LEVELS BY TASK
+Task ID,Technical Confidence,Execution Confidence,Risk Level,Mitigation Strategy
+CM-T01,98%,99%,Very Low,"Standard setup, well-documented"
+CM-T02,95%,92%,Low,"Use existing API patterns, mock responses for testing"
+CM-T03,92%,88%,Medium,"Reference OWASP guidelines, use proven attack payloads"
+CM-T04,90%,85%,Medium,"Start with lower concurrency, scale up gradually"
+CM-T05,85%,80%,Medium,"Puppeteer can be flaky, add retries and timeouts"
+CM-T06,88%,85%,Medium,"Depends on provider availability, use mocks as fallback"
+CM-T07,90%,90%,Low,"Export utils already exist, just need chaos scenarios"
+CM-T08,92%,88%,Low,"Standard React/HTML dashboard, WebSocket well-supported"
+CM-T09,95%,95%,Very Low,"Simple CLI with commander.js or yargs"
+CM-T10,90%,90%,Low,"HTML generation straightforward, charts with Chart.js"
+CM-T11,95%,92%,Low,"GitHub Actions well-documented, many examples available"
+CM-T12,98%,95%,Very Low,"Documentation is straightforward"
+CM-T13,85%,80%,Medium,"May discover unexpected issues, budget extra time"
+CM-T14,88%,85%,Low,"Standard optimization techniques"
+OVERALL,92%,89%,Low-Medium,"AI assistance significantly reduces risk"
+
+ALTERNATE APPROACHES
+Approach,Description,Pros,Cons,Effort,Recommendation
+Current Plan (Chaos Monkey),"Custom-built testing framework tailored to OneMindAI","Fully customized, no external dependencies, complete control","Requires development time, maintenance burden",22.75 hrs (AI-assisted),RECOMMENDED
+Jest + Supertest,"Use standard Node.js testing libraries","Well-documented, large community, easy setup","Less chaos-focused, need custom chaos logic",15 hrs,Good alternative for API tests only
+Playwright,"Use Playwright for E2E testing","Excellent browser automation, cross-browser support","Heavier setup, overkill for API chaos",20 hrs,Good for UI tests only
+k6 Load Testing,"Use k6 for load/performance testing","Industry standard, excellent metrics, cloud option","Separate tool, learning curve, Go-based",10 hrs,Good complement for load tests
+Artillery,"Use Artillery for load testing","YAML config, easy to use, good reports","Less flexible than custom solution",8 hrs,Good alternative for load tests
+Postman/Newman,"Use Postman collections for API testing","Visual interface, easy to share, CI integration","Less programmatic control, paid features",12 hrs,Good for manual API exploration
+No Testing,"Skip automated testing, rely on manual QA","Zero development time","High risk, slow, error-prone, not scalable",0 hrs,NOT RECOMMENDED
+Hybrid Approach,"Chaos Monkey + k6 + Playwright","Best of all worlds, comprehensive coverage","Multiple tools to maintain, higher complexity",30 hrs,Consider for enterprise scale
+
+SUPPORTING DATA & THEORY
+Concept,Explanation,Application to OneMindAI,Reference
+Chaos Engineering,"Discipline of experimenting on a system to build confidence in its capability to withstand turbulent conditions","Inject failures into AI provider calls, test error handling, validate fallbacks","Netflix Chaos Monkey (2011)"
+Shift-Left Testing,"Move testing earlier in development cycle to catch bugs sooner when they're cheaper to fix","Run Chaos Monkey on every PR, not just before release","IBM Systems Sciences Institute: Bug fix cost 100x higher in production"
+Test Pyramid,"More unit tests, fewer integration tests, fewest E2E tests for optimal coverage and speed","API tests (base) → Security tests (middle) → UI tests (top)","Martin Fowler's Test Pyramid"
+Fault Injection,"Deliberately introduce faults to test system resilience","Simulate API timeouts, rate limits, invalid responses","Netflix Fault Injection Testing"
+Canary Testing,"Release to small subset of users first to detect issues","Run Chaos Monkey in staging before production","Google SRE practices"
+Circuit Breaker Pattern,"Prevent cascading failures by failing fast when a service is down","Test that OneMindAI gracefully handles provider outages","Michael Nygard's Release It!"
+Rate Limiting,"Control request frequency to prevent abuse and ensure fair usage","Test that rate limits are enforced and bypass attempts fail","API Gateway best practices"
+Graceful Degradation,"System continues to function with reduced capability when components fail","Test fallback to other AI providers when one fails","Resilience engineering principles"
+
+DAILY SCHEDULE (AI-ASSISTED)
+Day,Tasks,Hours,Cumulative Progress,Milestone
+Day 1,CM-T01 (Setup) + CM-T02 (API Tests),2.5,11%,Environment ready + API tests complete
+Day 2,CM-T03 (Security Tests) + CM-T04 (Load Tests),4.5,31%,Security + Load tests complete
+Day 3,CM-T05 (UI Tests) + CM-T06 (Provider Tests) + CM-T07 (Export Tests),5,53%,All test suites complete
+Day 4,CM-T08 (Dashboard) + CM-T09 (CLI),5,75%,Dashboard + CLI ready
+Day 5,CM-T10 (Reports) + CM-T11 (CI/CD) + CM-T12 (Docs),3.25,89%,Reports + CI/CD + Docs complete
+Day 6,CM-T13 (Integration) + CM-T14 (Optimization),3,100%,All tasks complete + optimized
+BUFFER,Bug fixes and unexpected issues,2,-,Contingency time
+TOTAL,-,25.25 hrs,-,Complete Chaos Monkey Suite
+
+DEPENDENCIES MAP
+This Component Depends On,This Component Is Required By
+Node.js runtime,All OneMindAI testing
+OneMindAI running (localhost:5173),Integration testing
+API keys for AI providers,Provider chaos tests
+Puppeteer/Chrome,UI chaos tests
+Express.js,Dashboard server
+WebSocket,Real-time updates
+-,Production deployment (must pass before launch)
+-,CI/CD pipeline (runs on every PR)
+-,Developer confidence (enables faster releases)
+
+RISK REGISTER
+Risk ID,Risk Description,Probability,Impact,Risk Score,Mitigation,Contingency
+R01,Puppeteer installation fails on Windows,Medium,Medium,6,Use --ignore-scripts flag or Docker,Skip UI tests initially
+R02,AI provider rate limits during testing,High,Low,4,Use mock responses for most tests,Reduce concurrent test count
+R03,Tests are flaky/inconsistent,Medium,Medium,6,Add retries and longer timeouts,Mark flaky tests and fix iteratively
+R04,Dashboard WebSocket connection issues,Low,Low,2,Fallback to polling,Use CLI for results
+R05,CI/CD integration fails,Low,Medium,3,Test locally first with act,Run tests manually before merge
+R06,Test suite takes too long (>5 min),Medium,Low,3,Parallelize tests,Accept longer runtime initially
+R07,Security tests trigger false positives,Medium,Low,3,Whitelist known patterns,Manual review of flagged items
+
+SUCCESS METRICS
+Metric,Target,Measurement,Frequency
+Test Coverage,48 tests across 6 suites,Count of passing tests,Per run
+Execution Time,<60 seconds for full suite,Timer in test runner,Per run
+Pass Rate,>95% consistent passes,Pass count / Total count,Daily
+Bug Detection,>10 bugs found before launch,Issue tracker,Pre-launch
+False Positive Rate,<5% of security alerts,Manual review,Weekly
+Developer Adoption,100% of PRs run Chaos Monkey,CI/CD logs,Per PR
+Time to Fix,<2 hours for critical bugs,Issue resolution time,Per bug
+Documentation Coverage,100% of tests documented,README completeness,Once
