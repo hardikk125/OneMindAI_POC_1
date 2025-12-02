@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "buildCommand": "npm install",
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "functions": {
+    "proxy.js": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 60
+    }
+  }
+}
