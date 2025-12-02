@@ -1,28 +1,61 @@
+# =============================================================================
+# Docker Ignore - Optimize build context
+# =============================================================================
+
 # Dependencies (will be installed fresh)
 node_modules
+npm-debug.log*
 
 # Development files
 *.md
 .env
 .env.local
 .env.example
+.env.*.local
 
 # Test files
 test-*.cjs
 *.test.js
+__tests__
+coverage
 
 # Git
 .git
 .gitignore
+.gitattributes
 
-# IDE
+# IDE & Editors
 .vscode
 .idea
-
-# Logs
-*.log
-npm-debug.log*
+*.swp
+*.swo
+*~
 
 # OS files
 .DS_Store
 Thumbs.db
+*.tmp
+
+# Logs
+*.log
+logs
+
+# Cache
+.cache
+.npm
+.yarn
+
+# Build artifacts (if any)
+dist
+build
+.next
+
+# Documentation
+docs
+*.md
+
+# Chaos monkey (not needed in production)
+chaos-monkey
+
+# API folder (old files)
+api
