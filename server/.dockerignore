@@ -1,0 +1,28 @@
+# Dependencies (will be installed fresh)
+node_modules
+
+# Development files
+*.md
+.env
+.env.local
+.env.example
+
+# Test files
+test-*.cjs
+*.test.js
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
