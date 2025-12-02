@@ -1208,7 +1208,13 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         }
         return;
       } catch (proxyError) {
-        yield `⚠️ ${e.name}: Proxy server not available. Run 'npm run proxy' to start it.`;
+        console.error('Proxy error:', proxyError);
+        const errorMessage = proxyError instanceof Error ? proxyError.message : 'Unknown error';
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+          yield `⚠️ ${e.name}: CORS error or backend unreachable. Check ALLOWED_ORIGINS in Railway.`;
+        } else {
+          yield `⚠️ ${e.name}: ${errorMessage}`;
+        }
         return;
       }
     }
