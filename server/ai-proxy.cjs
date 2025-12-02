@@ -12,7 +12,7 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.AI_PROXY_PORT || 3002;
+const PORT = process.env.PORT || process.env.AI_PROXY_PORT || 3002;
 
 // =============================================================================
 // MIDDLEWARE
@@ -119,7 +119,7 @@ app.post('/api/openai', async (req, res) => {
       body: JSON.stringify({
         model: model || 'gpt-4o',
         messages,
-        max_tokens: max_tokens || 4000,
+        max_tokens: max_tokens || 8000,
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -180,7 +180,7 @@ app.post('/api/anthropic', async (req, res) => {
     const requestBody = {
       model: model || 'claude-3-5-sonnet-20241022',
       messages,
-      max_tokens: max_tokens || 4000,
+      max_tokens: max_tokens || 8000,
       temperature: temperature ?? 0.7,
       stream: stream ?? true
     };
@@ -331,7 +331,7 @@ app.post('/api/mistral', async (req, res) => {
       body: JSON.stringify({
         model: model || 'mistral-large-latest',
         messages,
-        max_tokens: max_tokens || 4000,
+        max_tokens: max_tokens || 8000,
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -398,7 +398,7 @@ app.post('/api/perplexity', async (req, res) => {
       body: JSON.stringify({
         model: model || 'sonar-pro',
         messages,
-        max_tokens: max_tokens || 4000,
+        max_tokens: max_tokens || 8000,
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -465,7 +465,7 @@ app.post('/api/deepseek', async (req, res) => {
       body: JSON.stringify({
         model: model || 'deepseek-chat',
         messages,
-        max_tokens: max_tokens || 4000,
+        max_tokens: max_tokens || 8000,
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -532,7 +532,7 @@ app.post('/api/groq', async (req, res) => {
       body: JSON.stringify({
         model: model || 'llama-3.3-70b-versatile',
         messages,
-        max_tokens: max_tokens || 4000,
+        max_tokens: max_tokens || 8000,
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -599,7 +599,7 @@ app.post('/api/xai', async (req, res) => {
       body: JSON.stringify({
         model: model || 'grok-beta',
         messages,
-        max_tokens: max_tokens || 4000,
+        max_tokens: max_tokens || 8000,
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -666,7 +666,7 @@ app.post('/api/kimi', async (req, res) => {
       body: JSON.stringify({
         model: model || 'moonshot-v1-128k',
         messages,
-        max_tokens: max_tokens || 4000,
+        max_tokens: max_tokens || 8000,
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -734,12 +734,12 @@ app.use((req, res) => {
 // START SERVER
 // =============================================================================
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('╔═══════════════════════════════════════════════════════════╗');
   console.log('║                                                           ║');
   console.log('║   🚀 OneMindAI Proxy Server                               ║');
-  console.log(`║   📡 Running on http://localhost:${PORT}                     ║`);
+  console.log(`║   📡 Running on port ${PORT}                               ║`);
   console.log('║                                                           ║');
   console.log('╠═══════════════════════════════════════════════════════════╣');
   console.log('║   Endpoints:                                              ║');
