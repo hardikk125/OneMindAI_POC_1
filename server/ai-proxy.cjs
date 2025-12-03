@@ -124,7 +124,10 @@ app.post('/api/openai', async (req, res) => {
           ? { max_completion_tokens: Math.min(max_tokens, 128000) }
           : { max_tokens: Math.min(max_tokens, 16384) }
         )),
-        temperature: temperature ?? 0.7,
+        // GPT-5, o1, o3 models don't support custom temperature - only default (1)
+        ...(!(model?.startsWith('gpt-5') || model?.startsWith('o1') || model?.startsWith('o3')) && {
+          temperature: temperature ?? 0.7
+        }),
         stream: stream ?? true
       })
     });
