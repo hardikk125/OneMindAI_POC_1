@@ -119,7 +119,8 @@ app.post('/api/openai', async (req, res) => {
       body: JSON.stringify({
         model: model || 'gpt-4o',
         messages,
-        ...(max_tokens && { max_tokens }),
+        // OpenAI GPT-4o supports up to 16384 output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, 16384) }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -266,11 +267,11 @@ app.post('/api/gemini', async (req, res) => {
       ? `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`
       : `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-    // Build generationConfig - no limits unless explicitly provided
+    // Build generationConfig with provider limit
     const finalGenerationConfig = generationConfig || {
       temperature: 0.7,
-      // Only include maxOutputTokens if explicitly provided, otherwise let Gemini use its default
-      ...(max_tokens && { maxOutputTokens: max_tokens })
+      // Gemini supports up to 8192 output tokens
+      ...(max_tokens && { maxOutputTokens: Math.min(max_tokens, 8192) })
     };
 
     const response = await fetch(endpoint, {
@@ -345,7 +346,8 @@ app.post('/api/mistral', async (req, res) => {
       body: JSON.stringify({
         model: model || 'mistral-large-latest',
         messages,
-        ...(max_tokens && { max_tokens }),
+        // Mistral supports up to 32768 output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, 32768) }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -412,7 +414,8 @@ app.post('/api/perplexity', async (req, res) => {
       body: JSON.stringify({
         model: model || 'sonar-pro',
         messages,
-        ...(max_tokens && { max_tokens }),
+        // Perplexity supports up to 4096 output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, 4096) }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -479,7 +482,8 @@ app.post('/api/deepseek', async (req, res) => {
       body: JSON.stringify({
         model: model || 'deepseek-chat',
         messages,
-        ...(max_tokens && { max_tokens }),
+        // DeepSeek has strict limit of 8192 max_tokens
+        max_tokens: Math.min(max_tokens || 8192, 8192),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -546,7 +550,8 @@ app.post('/api/groq', async (req, res) => {
       body: JSON.stringify({
         model: model || 'llama-3.3-70b-versatile',
         messages,
-        ...(max_tokens && { max_tokens }),
+        // Groq supports up to 8192 output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, 8192) }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -613,7 +618,8 @@ app.post('/api/xai', async (req, res) => {
       body: JSON.stringify({
         model: model || 'grok-beta',
         messages,
-        ...(max_tokens && { max_tokens }),
+        // xAI Grok supports up to 16384 output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, 16384) }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -680,7 +686,8 @@ app.post('/api/kimi', async (req, res) => {
       body: JSON.stringify({
         model: model || 'moonshot-v1-128k',
         messages,
-        ...(max_tokens && { max_tokens }),
+        // Moonshot/Kimi supports up to 8192 output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, 8192) }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
