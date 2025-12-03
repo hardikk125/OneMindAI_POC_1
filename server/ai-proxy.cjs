@@ -119,7 +119,7 @@ app.post('/api/openai', async (req, res) => {
       body: JSON.stringify({
         model: model || 'gpt-4o',
         messages,
-        max_tokens: max_tokens || 8000,
+        ...(max_tokens && { max_tokens }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -180,7 +180,8 @@ app.post('/api/anthropic', async (req, res) => {
     const requestBody = {
       model: model || 'claude-3-5-sonnet-20241022',
       messages,
-      max_tokens: max_tokens || 8000,
+      // Claude requires max_tokens - use provider's max if not specified
+      max_tokens: max_tokens || 200000,
       temperature: temperature ?? 0.7,
       stream: stream ?? true
     };
@@ -245,7 +246,7 @@ app.post('/api/gemini', async (req, res) => {
   }
 
   try {
-    const { messages, contents, model, generationConfig, stream } = req.body;
+    const { messages, contents, model, generationConfig, stream, max_tokens } = req.body;
 
     // Convert OpenAI-style messages to Gemini-style contents if needed
     let geminiContents = contents;
@@ -265,6 +266,13 @@ app.post('/api/gemini', async (req, res) => {
       ? `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}`
       : `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
+    // Build generationConfig - no limits unless explicitly provided
+    const finalGenerationConfig = generationConfig || {
+      temperature: 0.7,
+      // Only include maxOutputTokens if explicitly provided, otherwise let Gemini use its default
+      ...(max_tokens && { maxOutputTokens: max_tokens })
+    };
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -272,10 +280,7 @@ app.post('/api/gemini', async (req, res) => {
       },
       body: JSON.stringify({
         contents: geminiContents,
-        generationConfig: generationConfig || {
-          temperature: 0.7,
-          maxOutputTokens: 4000
-        }
+        generationConfig: finalGenerationConfig
       })
     });
 
@@ -340,7 +345,7 @@ app.post('/api/mistral', async (req, res) => {
       body: JSON.stringify({
         model: model || 'mistral-large-latest',
         messages,
-        max_tokens: max_tokens || 8000,
+        ...(max_tokens && { max_tokens }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -407,7 +412,7 @@ app.post('/api/perplexity', async (req, res) => {
       body: JSON.stringify({
         model: model || 'sonar-pro',
         messages,
-        max_tokens: max_tokens || 8000,
+        ...(max_tokens && { max_tokens }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -474,7 +479,7 @@ app.post('/api/deepseek', async (req, res) => {
       body: JSON.stringify({
         model: model || 'deepseek-chat',
         messages,
-        max_tokens: max_tokens || 8000,
+        ...(max_tokens && { max_tokens }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -541,7 +546,7 @@ app.post('/api/groq', async (req, res) => {
       body: JSON.stringify({
         model: model || 'llama-3.3-70b-versatile',
         messages,
-        max_tokens: max_tokens || 8000,
+        ...(max_tokens && { max_tokens }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -608,7 +613,7 @@ app.post('/api/xai', async (req, res) => {
       body: JSON.stringify({
         model: model || 'grok-beta',
         messages,
-        max_tokens: max_tokens || 8000,
+        ...(max_tokens && { max_tokens }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
@@ -675,7 +680,7 @@ app.post('/api/kimi', async (req, res) => {
       body: JSON.stringify({
         model: model || 'moonshot-v1-128k',
         messages,
-        max_tokens: max_tokens || 8000,
+        ...(max_tokens && { max_tokens }),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })

@@ -307,21 +307,21 @@ function outcomeLabel(outCap: number): string {
   if (outCap <= 4000) return "Concise report";
   return "Detailed report";
 }
-// Provider-specific max output token limits (API constraints)
+// Provider-specific max output token limits (actual API constraints - no artificial limits)
 const PROVIDER_MAX_OUTPUT: Record<string, number> = {
-  openai: 16384,      // GPT-4o max output
-  anthropic: 8192,    // Claude max output
-  gemini: 8192,       // Gemini max output
-  deepseek: 8192,     // DeepSeek max output
-  mistral: 32768,     // Mistral max output
-  perplexity: 4096,   // Perplexity max output
-  kimi: 8192,         // Kimi/Moonshot max output
-  xai: 16384,         // xAI Grok max output
-  groq: 8192,         // Groq max output
-  huggingface: 4096,  // HuggingFace max output
-  sarvam: 4096,       // Sarvam max output
-  falcon: 4096,       // Falcon max output
-  generic: 4096,      // Generic fallback
+  openai: 128000,     // GPT-4o supports up to 128k output
+  anthropic: 200000,  // Claude 3.5 supports up to 200k output
+  gemini: 65536,      // Gemini 2.0 supports up to 65k output
+  deepseek: 65536,    // DeepSeek supports up to 65k output
+  mistral: 128000,    // Mistral Large supports up to 128k output
+  perplexity: 16384,  // Perplexity max output
+  kimi: 128000,       // Kimi/Moonshot 128k context
+  xai: 131072,        // xAI Grok max output
+  groq: 32768,        // Groq max output
+  huggingface: 8192,  // HuggingFace max output
+  sarvam: 8192,       // Sarvam max output
+  falcon: 8192,       // Falcon max output
+  generic: 8192,      // Generic fallback
 };
 
 function computeOutCap(e: Engine, inputTokens: number): number {
@@ -1327,7 +1327,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         const makeClaudeRequest = async () => {
           return await client.messages.create({
             model: e.selectedVersion,
-            max_tokens: Math.max(outCap, 8000),
+            max_tokens: outCap,
             temperature: 0.7,
             messages: [{ role: 'user', content: messageContent }],
             stream: true,
@@ -1458,7 +1458,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         logger.step(6, 'Making OpenAI API call');
         logger.data('API Request', {
           model: e.selectedVersion,
-          max_tokens: Math.max(outCap, 8000),
+          max_tokens: outCap,
           temperature: 0.7,
           stream: true,
           hasImages: images.length > 0
@@ -1488,7 +1488,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           return await client.chat.completions.create({
             model: e.selectedVersion,
             messages: [{ role: 'user', content: messageContent }],
-            max_tokens: Math.max(outCap, 8000),
+            max_tokens: outCap,
             temperature: 0.7,
             stream: true,
           });
@@ -1530,7 +1530,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         logger.success('OpenAI streaming started');
         terminalLogger.streamStart(e.name);
         terminalLogger.apiCallStart('OpenAI', e.selectedVersion, {
-          maxTokens: Math.max(outCap, 8000),
+          maxTokens: outCap,
           temperature: 0.7,
           stream: true
         });
@@ -1661,7 +1661,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
             model: e.selectedVersion,
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: Math.max(outCap, 8000),
+              maxOutputTokens: outCap,
             },
           });
 
@@ -1734,7 +1734,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 8000),
+              max_tokens: outCap,
               temperature: 0.7,
               stream: true,
             }),
@@ -1849,7 +1849,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 8000),
+              max_tokens: outCap,
               temperature: 0.7,
               stream: true,
             }),
@@ -1954,7 +1954,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 8000),
+              max_tokens: outCap,
               temperature: 0.7,
               stream: true,
             }),
@@ -2073,7 +2073,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 8000),
+              max_tokens: outCap,
               temperature: 0.7,
               stream: true,
             }),
@@ -2174,7 +2174,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         const stream = await client.chat.completions.create({
           model: e.selectedVersion,
           messages: [{ role: 'user', content: enhancedPrompt }],
-          max_tokens: Math.max(outCap, 8000),
+          max_tokens: outCap,
           temperature: 0.7,
           stream: true,
         });
@@ -2201,7 +2201,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         const stream = await client.chat.completions.create({
           model: e.selectedVersion,
           messages: [{ role: 'user', content: enhancedPrompt }],
-          max_tokens: Math.max(outCap, 8000),
+          max_tokens: outCap,
           temperature: 0.7,
           stream: true,
         });
@@ -2302,7 +2302,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
-              max_tokens: Math.max(outCap, 8000),
+              max_tokens: outCap,
               temperature: 0.7,
               stream: true,
             }),
