@@ -119,8 +119,11 @@ app.post('/api/openai', async (req, res) => {
       body: JSON.stringify({
         model: model || 'gpt-4o',
         messages,
-        // OpenAI GPT-4o supports up to 16384 output tokens
-        ...(max_tokens && { max_tokens: Math.min(max_tokens, 16384) }),
+        // GPT-5+ uses max_completion_tokens, older models use max_tokens
+        ...(max_tokens && (model?.startsWith('gpt-5') || model?.startsWith('o1') || model?.startsWith('o3')
+          ? { max_completion_tokens: Math.min(max_tokens, 128000) }
+          : { max_tokens: Math.min(max_tokens, 16384) }
+        )),
         temperature: temperature ?? 0.7,
         stream: stream ?? true
       })
