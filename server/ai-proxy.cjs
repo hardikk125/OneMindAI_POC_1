@@ -136,8 +136,10 @@ app.post('/api/openai', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+      res.flushHeaders(); // Send headers immediately
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -146,7 +148,10 @@ app.post('/api/openai', async (req, res) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+          // Flush if available (works with compression middleware)
+          if (res.flush) res.flush();
         }
       } finally {
         res.end();
@@ -211,8 +216,10 @@ app.post('/api/anthropic', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -221,7 +228,9 @@ app.post('/api/anthropic', async (req, res) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+          if (res.flush) res.flush();
         }
       } finally {
         res.end();
@@ -295,8 +304,10 @@ app.post('/api/gemini', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -305,7 +316,9 @@ app.post('/api/gemini', async (req, res) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+          if (res.flush) res.flush();
         }
       } finally {
         res.end();
@@ -363,8 +376,10 @@ app.post('/api/mistral', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -373,7 +388,9 @@ app.post('/api/mistral', async (req, res) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+          if (res.flush) res.flush();
         }
       } finally {
         res.end();
@@ -431,8 +448,10 @@ app.post('/api/perplexity', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -441,7 +460,9 @@ app.post('/api/perplexity', async (req, res) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+          if (res.flush) res.flush();
         }
       } finally {
         res.end();
@@ -499,8 +520,10 @@ app.post('/api/deepseek', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -509,7 +532,9 @@ app.post('/api/deepseek', async (req, res) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+          if (res.flush) res.flush();
         }
       } finally {
         res.end();
@@ -567,8 +592,10 @@ app.post('/api/groq', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -577,7 +604,9 @@ app.post('/api/groq', async (req, res) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+          if (res.flush) res.flush();
         }
       } finally {
         res.end();
@@ -635,8 +664,10 @@ app.post('/api/xai', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -645,7 +676,9 @@ app.post('/api/xai', async (req, res) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+          if (res.flush) res.flush();
         }
       } finally {
         res.end();
@@ -703,8 +736,10 @@ app.post('/api/kimi', async (req, res) => {
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -713,7 +748,9 @@ app.post('/api/kimi', async (req, res) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+          if (res.flush) res.flush();
         }
       } finally {
         res.end();
