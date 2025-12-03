@@ -4635,39 +4635,10 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 }}
                 className="flex items-center justify-between px-4 py-2 bg-purple-100 hover:bg-purple-200 rounded-full transition-colors border border-purple-300"
               >
-                <span className="font-medium text-purple-900 text-sm">Executive roles</span>
+                <span className="font-medium text-purple-900 text-sm">Your role</span>
                 <span className="text-purple-700 ml-3">{showExecutiveRoles ? '▲' : '▼'}</span>
               </button>
-              
-              <button
-                onClick={() => {
-                  setShowOtherRoles(!showOtherRoles);
-                  setShowExecutiveRoles(false);
-                }}
-                className="flex items-center justify-between px-4 py-2 bg-purple-100 hover:bg-purple-200 rounded-full transition-colors border border-purple-300"
-              >
-                <span className="font-medium text-purple-900 text-sm">Industry Specific Personas</span>
-                <span className="text-purple-700 ml-3">{showOtherRoles ? '▲' : '▼'}</span>
-              </button>
             </div>
-
-            {/* Industry Specific Personas Dropdown */}
-            {showOtherRoles && !selectedRoleDetails && (
-              <div className="mt-2 p-2 bg-white border-2 border-purple-200 rounded-lg shadow-lg">
-                {['IT Services'].map(role => (
-                  <button
-                    key={role}
-                    onClick={() => {
-                      setSelectedRole(role);
-                      setSelectedRoleDetails({name: role, category: 'Industry'});
-                    }}
-                    className={`w-full text-left px-3 py-2 rounded hover:bg-purple-50 transition-colors ${selectedRole === role ? 'bg-purple-100 font-semibold text-purple-900' : 'text-gray-700'}`}
-                  >
-                    {role}
-                  </button>
-                ))}
-              </div>
-            )}
 
             {/* Executive Roles Dropdown */}
             {showExecutiveRoles && !selectedRoleDetails && (
@@ -6807,19 +6778,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             }}
             className="flex items-center justify-between px-4 py-2 bg-purple-100 hover:bg-purple-200 rounded-full transition-colors border border-purple-300"
           >
-            <span className="font-medium text-purple-900 text-sm">Executive roles</span>
+            <span className="font-medium text-purple-900 text-sm">Your role</span>
             <span className="text-purple-700 ml-3">{showExecutiveRoles ? '▲' : '▼'}</span>
-          </button>
-          
-          <button
-            onClick={() => {
-              setShowOtherRoles(!showOtherRoles);
-              setShowExecutiveRoles(false);
-            }}
-            className="flex items-center justify-between px-4 py-2 bg-purple-100 hover:bg-purple-200 rounded-full transition-colors border border-purple-300"
-          >
-            <span className="font-medium text-purple-900 text-sm">Industry Specific Personas</span>
-            <span className="text-purple-700 ml-3">{showOtherRoles ? '▲' : '▼'}</span>
           </button>
           
           <button
@@ -6838,24 +6798,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         </div>
         
         <div className="space-y-3">
-          {/* Industry Specific Personas Dropdown */}
-          {showOtherRoles && !selectedRoleDetails && (
-            <div className="mt-2 p-2 bg-white border-2 border-purple-200 rounded-lg shadow-lg">
-              {['IT Services'].map(role => (
-                <button
-                  key={role}
-                  onClick={() => {
-                    setSelectedRole(role);
-                    setSelectedRoleDetails({name: role, category: 'Industry'});
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded hover:bg-purple-50 transition-colors ${selectedRole === role ? 'bg-purple-100 font-semibold text-purple-900' : 'text-gray-700'}`}
-                >
-                  {role}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Executive Roles */}
           <div className="relative">
             
