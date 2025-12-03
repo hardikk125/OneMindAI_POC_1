@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OneMindAI Error Recovery Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .progress-bar { transition: width 0.5s ease-in-out; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-8">
+
+    <!-- Header -->
+    <header class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">🛡️ Error Recovery Simulation</h1>
+        <p class="text-gray-600">Interactive demo of the 25 API error scenarios and their recovery strategies.</p>
+    </header>
+
+    <!-- Provider Tabs -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-8">
+        <div class="flex gap-2 mb-4">
+            <button onclick="switchProvider('all')" id="tab-all" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium text-sm">
+                All Providers
+            </button>
+            <button onclick="switchProvider('openai')" id="tab-openai" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium text-sm hover:bg-gray-200">
+                OpenAI
+            </button>
+            <button onclick="switchProvider('deepseek')" id="tab-deepseek" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium text-sm hover:bg-gray-200">
+                DeepSeek
+            </button>
+        </div>
+        <div id="provider-info" class="text-sm text-gray-600">
+            <p><strong>All Providers:</strong> Showing error handling for all supported AI providers (OpenAI, DeepSeek, Claude, etc.)</p>
+        </div>
+    </div>
+
+    <!-- Metrics Dashboard -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Total Errors Covered</div>
+            <div class="text-3xl font-bold text-gray-900">25</div>
+            <div class="text-xs text-green-600 mt-1">100% Implementation</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Auto-Fixable</div>
+            <div class="text-3xl font-bold text-green-600">8</div>
+            <div class="text-xs text-gray-500 mt-1">32% of total (Retried)</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">Manual Fix Required</div>
+            <div class="text-3xl font-bold text-orange-600">17</div>
+            <div class="text-xs text-gray-500 mt-1">68% of total (Panels)</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="text-sm text-gray-500 mb-1">UI Features</div>
+            <div class="flex gap-2 mt-2">
+                <span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-md">Codes ✅</span>
+                <span class="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-md">Explanations ✅</span>
+                <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-md">Fix Steps ✅</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Sidebar: Error Catalog -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- Auto-Fixable Errors -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-4 bg-green-50 border-b border-green-100 flex justify-between items-center">
+                    <h2 class="font-semibold text-green-800 flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Auto-Fixable (8)
+                    </h2>
+                    <span class="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">System Handles</span>
+                </div>
+                <div class="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+                    <button onclick="simulateAutoFix('RATE_LIMIT', 429)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">RATE_LIMIT (429)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('INTERNAL_SERVER_ERROR', 500)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">INTERNAL_SERVER_ERROR (500)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('BAD_GATEWAY', 502)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">BAD_GATEWAY (502)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('ENGINE_OVERLOADED', 503)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">ENGINE_OVERLOADED (503)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('SLOW_DOWN', 503)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">SLOW_DOWN (503)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('GATEWAY_TIMEOUT', 504)" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">GATEWAY_TIMEOUT (504)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('CONNECTION_ERROR', 'ECONNREFUSED')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">CONNECTION_ERROR</span>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateAutoFix('TIMEOUT_ERROR', 'ETIMEDOUT')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">TIMEOUT_ERROR</span>
+                        <span class="text-xs text-gray-400 group-hover:text-green-600">Simulate ▶</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manual Fix Errors -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-4 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
+                    <h2 class="font-semibold text-orange-800 flex items-center gap-2">
+                        <i data-lucide="alert-triangle" class="w-4 h-4"></i> Manual Fix (17)
+                    </h2>
+                    <span class="text-xs bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full">User Must Act</span>
+                </div>
+                <div class="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+                    <!-- Auth -->
+                    <div class="p-2 bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">Authentication</div>
+                    <button onclick="simulateManualError('INVALID_AUTH')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">INVALID_AUTH (401)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('INCORRECT_API_KEY')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">INCORRECT_API_KEY (401)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('NO_ORGANIZATION')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">NO_ORGANIZATION (401)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('IP_NOT_AUTHORIZED')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">IP_NOT_AUTHORIZED (401)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+
+                    <!-- Billing -->
+                    <div class="p-2 bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">Billing</div>
+                    <button onclick="simulateManualError('INSUFFICIENT_BALANCE')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">INSUFFICIENT_BALANCE (402)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('QUOTA_EXCEEDED')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">QUOTA_EXCEEDED (429)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('BILLING_HARD_LIMIT')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">BILLING_HARD_LIMIT (429)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+
+                    <!-- Access -->
+                    <div class="p-2 bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">Access</div>
+                    <button onclick="simulateManualError('PERMISSION_DENIED')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">PERMISSION_DENIED (403)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('REGION_NOT_SUPPORTED')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">REGION_NOT_SUPPORTED (403)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('ORGANIZATION_SUSPENDED')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">ORGANIZATION_SUSPENDED (403)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('NOT_FOUND')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">NOT_FOUND (404)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+
+                    <!-- Request -->
+                    <div class="p-2 bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">Request</div>
+                    <button onclick="simulateManualError('INVALID_FORMAT')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">INVALID_FORMAT (400)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('CONTENT_POLICY_VIOLATION')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">CONTENT_POLICY_VIOLATION (400)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('TOKEN_LIMIT_EXCEEDED')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">TOKEN_LIMIT_EXCEEDED (400)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('INVALID_PARAMETERS')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">INVALID_PARAMETERS (422)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('INVALID_CONTENT_TYPE')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">INVALID_CONTENT_TYPE (415)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                    <button onclick="simulateManualError('MODEL_DEPRECATED')" class="w-full text-left p-3 hover:bg-gray-50 transition-colors flex justify-between group">
+                        <span class="text-sm font-medium text-gray-700">MODEL_DEPRECATED (410)</span>
+                        <span class="text-xs text-gray-400 group-hover:text-orange-600">Simulate ▶</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Stage: Simulation & Panels -->
+        <div class="lg:col-span-2 relative">
+            
+            <!-- Placeholder State -->
+            <div id="placeholderState" class="flex flex-col items-center justify-center h-96 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
+                <i data-lucide="play-circle" class="w-12 h-12 text-gray-300 mb-4"></i>
+                <p class="text-gray-500">Select an error from the sidebar to simulate it</p>
+            </div>
+
+            <!-- Auto-Fix Simulation View -->
+            <div id="autoFixView" class="hidden">
+                <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                            <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
+                        </div>
+                        <div>
+                            <h3 id="autoFixTitle" class="font-bold text-lg text-gray-900">Attempting Auto-Recovery...</h3>
+                            <p id="autoFixStatus" class="text-gray-500 text-sm">Detecting error type...</p>
+                        </div>
+                    </div>
+
+                    <!-- Timeline -->
+                    <div class="relative pl-8 border-l-2 border-gray-200 space-y-8" id="timeline">
+                        <!-- Timeline items will be injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Fix Panel (React Component Simulation) -->
+            <div id="errorPanel" class="hidden fixed bottom-8 right-8 w-96 max-w-[calc(100vw-2rem)] z-50 animate-slide-up">
+                <div id="panelBorder" class="rounded-lg border-2 shadow-2xl bg-white overflow-hidden">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between p-4 border-b border-gray-100 bg-opacity-50">
+                        <div class="flex items-center gap-3">
+                            <span id="severityIcon" class="text-2xl">🔴</span>
+                            <div>
+                                <h3 id="errorCodeDisplay" class="font-bold text-gray-900 text-sm uppercase tracking-wide">ERROR_CODE</h3>
+                                <p class="text-xs text-gray-500 font-medium flex items-center gap-1">
+                                    <i data-lucide="alert-triangle" class="w-3 h-3"></i> Manual action required
+                                </p>
+                            </div>
+                        </div>
+                        <button onclick="closePanel()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Content -->
+                    <div class="p-4 space-y-4">
+                        <!-- What's Happening -->
+                        <div class="flex items-start gap-3">
+                            <div class="mt-0.5 text-blue-500"><i data-lucide="info" class="w-5 h-5"></i></div>
+                            <div class="text-sm">
+                                <p class="text-gray-900 font-medium mb-1">What's happening:</p>
+                                <p id="whatItMeans" class="text-gray-600 leading-relaxed">Error explanation goes here...</p>
+                            </div>
+                        </div>
+
+                        <!-- Expandable Details -->
+                        <div id="expandedDetails" class="hidden space-y-4 border-t border-gray-100 pt-4 mt-2">
+                            <!-- Why -->
+                            <div class="flex items-start gap-3">
+                                <div class="mt-0.5 text-purple-500"><i data-lucide="help-circle" class="w-5 h-5"></i></div>
+                                <div class="text-sm">
+                                    <p class="text-gray-900 font-medium mb-1">Why this happened:</p>
+                                    <p id="whyItHappens" class="text-gray-600 leading-relaxed">Reason goes here...</p>
+                                </div>
+                            </div>
+
+                            <!-- Technical Fixes -->
+                            <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                                <p class="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                                    <i data-lucide="wrench" class="w-3 h-3"></i> Technical Fixes
+                                </p>
+                                <ul id="technicalFixes" class="text-sm text-gray-600 space-y-1.5 list-disc list-inside">
+                                    <!-- Items -->
+                                </ul>
+                            </div>
+
+                            <!-- Business Fixes -->
+                            <div class="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                                <p class="text-xs font-bold text-blue-600 uppercase mb-2 flex items-center gap-1">
+                                    <i data-lucide="briefcase" class="w-3 h-3"></i> Business Action
+                                </p>
+                                <ul id="businessFixes" class="text-sm text-gray-700 space-y-1.5 list-disc list-inside">
+                                    <!-- Items -->
+                                </ul>
+                            </div>
+                            
+                            <!-- Links -->
+                             <div class="flex gap-2 mt-2">
+                                <a href="#" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                    <i data-lucide="external-link" class="w-3 h-3"></i> OpenAI Status
+                                </a>
+                                <a href="#" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                    <i data-lucide="book-open" class="w-3 h-3"></i> Documentation
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Toggle Button -->
+                        <button onclick="toggleDetails()" class="w-full py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 rounded-md transition-colors flex items-center justify-center gap-1 group">
+                            <span id="toggleText">Show Technical Details</span>
+                            <i id="toggleIcon" data-lucide="chevron-down" class="w-4 h-4 group-hover:translate-y-0.5 transition-transform"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data & Logic -->
+    <script>
+        lucide.createIcons();
+
+        // Error Data Database
+        const ERROR_DB = {
+            // Auto-Fixable
+            RATE_LIMIT: { title: 'Rate Limit Exceeded', desc: 'You are sending requests too quickly.', steps: ['Wait 1s', 'Wait 2s', 'Wait 4s', 'Wait 8s', 'Success'] },
+            INTERNAL_SERVER_ERROR: { title: 'Internal Server Error', desc: 'OpenAI server issue.', steps: ['Wait 1s', 'Check Status Page', 'Wait 2s', 'Success'] },
+            BAD_GATEWAY: { title: 'Bad Gateway', desc: 'Proxy server received invalid response.', steps: ['Wait 1s', 'Wait 2s', 'Success'] },
+            ENGINE_OVERLOADED: { title: 'Engine Overloaded', desc: 'High traffic on OpenAI servers.', steps: ['Wait 2s', 'Wait 4s', 'Success'] },
+            SLOW_DOWN: { title: 'Slow Down', desc: 'Traffic spike detected.', steps: ['Throttle to 30%', 'Wait 15min', 'Restore Rate'] },
+            GATEWAY_TIMEOUT: { title: 'Gateway Timeout', desc: 'Server took too long to respond.', steps: ['Increase Timeout', 'Retry', 'Success'] },
+            CONNECTION_ERROR: { title: 'Connection Error', desc: 'Network connectivity issue.', steps: ['Check Network', 'Retry', 'Success'] },
+            TIMEOUT_ERROR: { title: 'Timeout Error', desc: 'Request timed out.', steps: ['Increase Timeout', 'Retry', 'Success'] },
+
+            // Manual Fix
+            INVALID_AUTH: { 
+                code: 'INVALID AUTH', 
+                severity: 'high',
+                what: 'Your API key is not being accepted by the server.',
+                why: 'Key is revoked, expired, or invalid.',
+                tech: ['Verify API key in .env', 'Check revocation status', 'Generate new key'],
+                biz: ['Contact account admin', 'Check organization access']
+            },
+            INCORRECT_API_KEY: {
+                code: 'INCORRECT API KEY',
+                severity: 'high',
+                what: 'The API key format is wrong or contains typos.',
+                why: 'Copy-paste error or extra spaces.',
+                tech: ['Clear browser cache', 'Verify no extra spaces', 'Check key format sk-...'],
+                biz: ['Regenerate key from dashboard']
+            },
+            NO_ORGANIZATION: {
+                code: 'NO ORGANIZATION',
+                severity: 'critical',
+                what: 'Account is not part of any organization.',
+                why: 'Account removed or not set up.',
+                tech: ['Join organization', 'Create new org'],
+                biz: ['Contact support']
+            },
+            IP_NOT_AUTHORIZED: {
+                code: 'IP NOT AUTHORIZED',
+                severity: 'high',
+                what: 'Your IP address is not on the allowlist.',
+                why: 'Security restriction enabled.',
+                tech: ['Add IP to allowlist', 'Use static IP'],
+                biz: ['Contact security admin']
+            },
+            INSUFFICIENT_BALANCE: {
+                code: 'INSUFFICIENT BALANCE',
+                severity: 'high',
+                what: 'No credits remaining in account.',
+                why: 'Prepaid balance exhausted.',
+                tech: ['Check balance API'],
+                biz: ['Top up credits', 'Add payment method']
+            },
+            QUOTA_EXCEEDED: {
+                code: 'QUOTA EXCEEDED',
+                severity: 'high',
+                what: 'Monthly spending limit reached.',
+                why: 'Usage exceeded budget cap.',
+                tech: ['Check usage dashboard'],
+                biz: ['Request quota increase', 'Wait for next month']
+            },
+            BILLING_HARD_LIMIT: {
+                code: 'BILLING HARD LIMIT',
+                severity: 'critical',
+                what: 'Hard billing cap hit.',
+                why: 'Safety limit triggered.',
+                tech: ['Adjust hard limit in settings'],
+                biz: ['Approve budget increase']
+            },
+            PERMISSION_DENIED: {
+                code: 'PERMISSION DENIED',
+                severity: 'high',
+                what: 'Key lacks required permissions.',
+                why: 'Role restriction.',
+                tech: ['Check key scopes'],
+                biz: ['Request permission upgrade']
+            },
+            REGION_NOT_SUPPORTED: {
+                code: 'REGION NOT SUPPORTED',
+                severity: 'critical',
+                what: 'API not available in this country.',
+                why: 'Legal/compliance restriction.',
+                tech: ['Deploy in supported region'],
+                biz: ['Contact sales']
+            },
+            ORGANIZATION_SUSPENDED: {
+                code: 'ORGANIZATION SUSPENDED',
+                severity: 'critical',
+                what: 'Account suspended by OpenAI.',
+                why: 'Policy violation or payment failure.',
+                tech: ['Check email for notice'],
+                biz: ['Contact support URGENTLY']
+            },
+            NOT_FOUND: {
+                code: 'NOT FOUND',
+                severity: 'medium',
+                what: 'Model or resource does not exist.',
+                why: 'Typo in model name.',
+                tech: ['Verify model name', 'Check deprecation'],
+                biz: ['Update configuration']
+            },
+            INVALID_FORMAT: {
+                code: 'INVALID FORMAT',
+                severity: 'medium',
+                what: 'Request JSON is malformed (param: max_tokens).',
+                why: 'Syntax error or missing field.',
+                tech: ['Fix JSON structure', 'Check param types'],
+                biz: ['Report to developer']
+            },
+            CONTENT_POLICY_VIOLATION: {
+                code: 'CONTENT POLICY VIOLATION',
+                severity: 'high',
+                what: 'Content flagged as unsafe.',
+                why: 'Violates usage guidelines.',
+                tech: ['Implement moderation API'],
+                biz: ['Review content policies']
+            },
+            TOKEN_LIMIT_EXCEEDED: {
+                code: 'TOKEN LIMIT EXCEEDED',
+                severity: 'medium',
+                what: 'Context length exceeded.',
+                why: 'Conversation too long.',
+                tech: ['Truncate history', 'Use larger model'],
+                biz: ['Start new chat']
+            },
+            INVALID_PARAMETERS: {
+                code: 'INVALID PARAMETERS',
+                severity: 'medium',
+                what: 'Parameter values out of range.',
+                why: 'Invalid temperature/top_p.',
+                tech: ['Validate inputs'],
+                biz: ['Check documentation']
+            },
+            INVALID_CONTENT_TYPE: {
+                code: 'INVALID CONTENT TYPE',
+                severity: 'medium',
+                what: 'Wrong HTTP header.',
+                why: 'Sent text/plain instead of json.',
+                tech: ['Set Content-Type: application/json'],
+                biz: ['Fix client configuration']
+            },
+            MODEL_DEPRECATED: {
+                code: 'MODEL DEPRECATED',
+                severity: 'high',
+                what: 'Model no longer available.',
+                why: 'Retired by OpenAI.',
+                tech: ['Update to gpt-4'],
+                biz: ['Plan migration']
+            }
+        };
+
+        function resetView() {
+            document.getElementById('placeholderState').classList.add('hidden');
+            document.getElementById('autoFixView').classList.add('hidden');
+            document.getElementById('errorPanel').classList.add('hidden');
+        }
+
+        function simulateAutoFix(type, code) {
+            resetView();
+            document.getElementById('autoFixView').classList.remove('hidden');
+            
+            const data = ERROR_DB[type];
+            document.getElementById('autoFixTitle').textContent = `Handling ${type} (${code})`;
+            document.getElementById('autoFixStatus').textContent = data.desc;
+            
+            const timeline = document.getElementById('timeline');
+            timeline.innerHTML = ''; // Clear previous
+
+            let step = 0;
+            
+            function addStep() {
+                if (step >= data.steps.length) return;
+                
+                const text = data.steps[step];
+                const isSuccess = text === 'Success';
+                
+                const item = document.createElement('div');
+                item.className = 'relative flex items-start gap-3 animate-slide-up';
+                item.innerHTML = `
+                    <div class="absolute -left-[37px] w-4 h-4 rounded-full border-2 border-white ${isSuccess ? 'bg-green-500' : 'bg-blue-500'} shadow-sm"></div>
+                    <div class="text-sm ${isSuccess ? 'text-green-600 font-bold' : 'text-gray-600'}">
+                        ${isSuccess ? '✅ ' : '⏳ '}${text}
+                    </div>
+                `;
+                
+                timeline.appendChild(item);
+                step++;
+                
+                if (!isSuccess) setTimeout(addStep, 1000);
+            }
+            
+            addStep();
+        }
+
+        function simulateManualError(type) {
+            resetView();
+            const panel = document.getElementById('errorPanel');
+            panel.classList.remove('hidden');
+            
+            // Reset panel state
+            const details = document.getElementById('expandedDetails');
+            details.classList.add('hidden');
+            document.getElementById('toggleText').textContent = 'Show Technical Details';
+            document.getElementById('toggleIcon').style.transform = 'rotate(0deg)';
+
+            const data = ERROR_DB[type];
+            
+            // Severity Styles
+            const borderMap = {
+                'critical': 'border-red-600 bg-red-50',
+                'high': 'border-red-400 bg-red-50',
+                'medium': 'border-orange-400 bg-orange-50'
+            };
+            const iconMap = {
+                'critical': '🚨',
+                'high': '🔴',
+                'medium': '🔶'
+            };
+
+            document.getElementById('panelBorder').className = `rounded-lg border-2 shadow-2xl overflow-hidden ${borderMap[data.severity]}`;
+            document.getElementById('severityIcon').textContent = iconMap[data.severity];
+            document.getElementById('errorCodeDisplay').textContent = data.code;
+            document.getElementById('whatItMeans').textContent = data.what;
+            document.getElementById('whyItHappens').textContent = data.why;
+            
+            // Populate lists
+            const techList = document.getElementById('technicalFixes');
+            techList.innerHTML = data.tech.map(t => `<li>${t}</li>`).join('');
+            
+            const bizList = document.getElementById('businessFixes');
+            bizList.innerHTML = data.biz.map(b => `<li>${b}</li>`).join('');
+        }
+
+        function toggleDetails() {
+            const details = document.getElementById('expandedDetails');
+            const isHidden = details.classList.contains('hidden');
+            const toggleText = document.getElementById('toggleText');
+            const toggleIcon = document.getElementById('toggleIcon');
+
+            if (isHidden) {
+                details.classList.remove('hidden');
+                toggleText.textContent = 'Hide Technical Details';
+                toggleIcon.style.transform = 'rotate(180deg)';
+            } else {
+                details.classList.add('hidden');
+                toggleText.textContent = 'Show Technical Details';
+                toggleIcon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function closePanel() {
+            document.getElementById('errorPanel').classList.add('hidden');
+            document.getElementById('placeholderState').classList.remove('hidden');
+        }
+
+        function switchProvider(provider) {
+            // Update tab styles
+            document.querySelectorAll('[id^="tab-"]').forEach(tab => {
+                tab.classList.remove('bg-blue-600', 'text-white');
+                tab.classList.add('bg-gray-100', 'text-gray-700');
+            });
+            document.getElementById(`tab-${provider}`).classList.remove('bg-gray-100', 'text-gray-700');
+            document.getElementById(`tab-${provider}`).classList.add('bg-blue-600', 'text-white');
+
+            // Update provider info
+            const infoDiv = document.getElementById('provider-info');
+            const providerInfo = {
+                all: {
+                    title: 'All Providers',
+                    desc: 'Showing error handling for all supported AI providers (OpenAI, DeepSeek, Claude, Anthropic, Gemini, etc.)',
+                    features: ['25 errors covered', 'Unified error recovery', 'Consistent UI across providers']
+                },
+                openai: {
+                    title: 'OpenAI',
+                    desc: 'Error handling for OpenAI API (GPT-4, GPT-4o, GPT-4.1, etc.)',
+                    features: [
+                        '✅ 25 errors supported',
+                        '✅ 8 auto-fixable with exponential backoff',
+                        '✅ Rate limit: 4 retries (1s → 2s → 4s → 8s)',
+                        '✅ Server errors: Automatic recovery',
+                        '✅ Retry button for manual retries',
+                        '✅ Detailed error panels with fix steps',
+                        '💰 Pricing: $2.50-$10.00 per 1M tokens'
+                    ]
+                },
+                deepseek: {
+                    title: 'DeepSeek',
+                    desc: 'Error handling for DeepSeek API (deepseek-chat, deepseek-coder)',
+                    features: [
+                        '✅ 25 errors supported (identical to OpenAI)',
+                        '✅ 8 auto-fixable with exponential backoff',
+                        '✅ Rate limit: 4 retries (1s → 2s → 4s → 8s)',
+                        '✅ Server errors: Automatic recovery',
+                        '✅ Retry button for manual retries',
+                        '✅ Detailed error panels with fix steps',
+                        '💰 Pricing: $0.14-$0.28 per 1M tokens (Ultra low cost!)',
+                        '🚀 128K context window',
+                        '⚡ Streaming support with retry messages',
+                        '📊 Same error detection priority as OpenAI'
+                    ]
+                }
+            };
+
+            const info = providerInfo[provider];
+            infoDiv.innerHTML = `
+                <p class="mb-2"><strong>${info.title}:</strong> ${info.desc}</p>
+                <ul class="list-disc list-inside space-y-1 text-xs">
+                    ${info.features.map(f => `<li>${f}</li>`).join('')}
+                </ul>
+            `;
+        }
+    </script>
+</body>
+</html>

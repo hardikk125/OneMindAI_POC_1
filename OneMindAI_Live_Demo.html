@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OneMindAI - Live Demo & Process Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        /* Animations */
+        @keyframes pulse-border {
+            0%, 100% { border-color: #3b82f6; box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+            50% { border-color: #60a5fa; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0); }
+        }
+        @keyframes typing {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes progressFill {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
+        .animate-pulse-border { animation: pulse-border 2s infinite; }
+        .animate-typing { animation: typing 1s infinite; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        .animate-progress { animation: progressFill 2s ease-out forwards; }
+        
+        /* Process step highlighting */
+        .step-active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .step-completed { background: #10b981; color: white; }
+        .step-pending { background: #e5e7eb; color: #6b7280; }
+        
+        /* Tab styles */
+        .tab-active { border-bottom: 2px solid #667eea; color: #667eea; font-weight: 600; }
+        .tab-inactive { border-bottom: 2px solid transparent; color: #6b7280; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-50">
+        <div class="flex items-center justify-between max-w-7xl mx-auto">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-lg">O</div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-900">OneMindAI</h1>
+                    <p class="text-xs text-gray-500">Multi-Provider AI Platform</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <!-- View Toggle -->
+                <div class="flex bg-gray-100 rounded-lg p-1">
+                    <button onclick="switchView('demo')" id="btn-demo" class="px-4 py-2 rounded-md text-sm font-medium transition-all bg-white shadow text-gray-900">Live Demo</button>
+                    <button onclick="switchView('process')" id="btn-process" class="px-4 py-2 rounded-md text-sm font-medium transition-all text-gray-600">Process Flow</button>
+                    <button onclick="switchView('errors')" id="btn-errors" class="px-4 py-2 rounded-md text-sm font-medium transition-all text-gray-600">Error Simulator</button>
+                </div>
+                <button onclick="openSettings()" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="settings" class="w-5 h-5 text-gray-600"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto p-6">
+        
+        <!-- ==================== LIVE DEMO VIEW ==================== -->
+        <div id="view-demo" class="view-content">
+            <div class="grid grid-cols-12 gap-6 h-[calc(100vh-180px)]">
+                
+                <!-- Left Sidebar: History -->
+                <div class="col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 overflow-y-auto">
+                    <h3 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <i data-lucide="history" class="w-4 h-4"></i> History
+                    </h3>
+                    <div class="space-y-2">
+                        <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg cursor-pointer">
+                            <p class="text-sm font-medium text-indigo-900 truncate">Current Session</p>
+                            <p class="text-xs text-indigo-600">Just now</p>
+                        </div>
+                        <div class="p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+                            <p class="text-sm font-medium text-gray-700 truncate">Code review help</p>
+                            <p class="text-xs text-gray-500">2 hours ago</p>
+                        </div>
+                        <div class="p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+                            <p class="text-sm font-medium text-gray-700 truncate">API integration</p>
+                            <p class="text-xs text-gray-500">Yesterday</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Center: Chat Area -->
+                <div class="col-span-7 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
+                    <!-- Messages -->
+                    <div id="chatMessages" class="flex-1 p-6 overflow-y-auto space-y-4">
+                        <!-- Welcome Message -->
+                        <div class="text-center py-12">
+                            <div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4">O</div>
+                            <h2 class="text-2xl font-bold text-gray-900 mb-2">Welcome to OneMindAI</h2>
+                            <p class="text-gray-600 mb-6">Send a message to get responses from multiple AI providers simultaneously</p>
+                            <div class="flex gap-2 justify-center flex-wrap">
+                                <span class="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">11 Providers</span>
+                                <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">Real-time Streaming</span>
+                                <span class="px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">Auto Error Recovery</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Input Area -->
+                    <div class="p-4 border-t border-gray-200">
+                        <div class="flex gap-3">
+                            <div class="flex-1 relative">
+                                <textarea id="promptInput" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    placeholder="Type your message... (Press Enter to send)"
+                                    rows="2"
+                                    onkeydown="handleKeyDown(event)"></textarea>
+                                <div class="absolute right-3 bottom-3 flex gap-2">
+                                    <button class="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Attach file">
+                                        <i data-lucide="paperclip" class="w-4 h-4 text-gray-400"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <button onclick="sendMessage()" 
+                                class="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center gap-2">
+                                <i data-lucide="send" class="w-4 h-4"></i>
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar: Engine Panel -->
+                <div class="col-span-3 bg-white rounded-xl shadow-sm border border-gray-200 p-4 overflow-y-auto">
+                    <h3 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <i data-lucide="cpu" class="w-4 h-4"></i> AI Engines
+                    </h3>
+                    <div id="engineList" class="space-y-3">
+                        <!-- Engine cards will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== PROCESS FLOW VIEW ==================== -->
+        <div id="view-process" class="view-content hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Execution Process Flow</h2>
+                <p class="text-gray-600 mb-8">Step-by-step visualization of how OneMindAI processes a request</p>
+                
+                <!-- Process Steps -->
+                <div class="relative">
+                    <!-- Connection Line -->
+                    <div class="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                    
+                    <div id="processSteps" class="space-y-6">
+                        <!-- Steps will be populated by JS -->
+                    </div>
+                </div>
+                
+                <!-- Control Buttons -->
+                <div class="mt-8 flex gap-4">
+                    <button onclick="runProcessDemo()" class="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center gap-2">
+                        <i data-lucide="play" class="w-4 h-4"></i>
+                        Run Demo
+                    </button>
+                    <button onclick="resetProcessDemo()" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors flex items-center gap-2">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        Reset
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Code Snippets -->
+            <div class="grid grid-cols-2 gap-6 mt-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="font-semibold text-gray-900 mb-4">Current Step Code</h3>
+                    <pre id="currentStepCode" class="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto font-mono">
+// Click "Run Demo" to see the code execution
+                    </pre>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="font-semibold text-gray-900 mb-4">Execution Log</h3>
+                    <div id="executionLog" class="bg-gray-900 text-gray-300 p-4 rounded-lg text-sm h-48 overflow-y-auto font-mono">
+                        <p class="text-gray-500">// Waiting for demo to start...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== ERROR SIMULATOR VIEW ==================== -->
+        <div id="view-errors" class="view-content hidden">
+            <div class="grid grid-cols-3 gap-6">
+                <!-- Error Selection -->
+                <div class="col-span-1 space-y-4">
+                    <!-- Auto-Fixable -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="bg-green-500 text-white px-4 py-3 font-semibold flex items-center gap-2">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            Auto-Fixable Errors
+                        </div>
+                        <div class="divide-y divide-gray-100">
+                            <button onclick="simulateError('429')" class="w-full text-left p-4 hover:bg-gray-50 transition-colors">
+                                <div class="font-medium text-gray-900">429 - Rate Limit</div>
+                                <div class="text-sm text-gray-500">Too many requests</div>
+                            </button>
+                            <button onclick="simulateError('500')" class="w-full text-left p-4 hover:bg-gray-50 transition-colors">
+                                <div class="font-medium text-gray-900">500 - Server Error</div>
+                                <div class="text-sm text-gray-500">Internal server error</div>
+                            </button>
+                            <button onclick="simulateError('503')" class="w-full text-left p-4 hover:bg-gray-50 transition-colors">
+                                <div class="font-medium text-gray-900">503 - Unavailable</div>
+                                <div class="text-sm text-gray-500">Service overloaded</div>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Manual Fix -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="bg-red-500 text-white px-4 py-3 font-semibold flex items-center gap-2">
+                            <i data-lucide="wrench" class="w-4 h-4"></i>
+                            Manual Fix Required
+                        </div>
+                        <div class="divide-y divide-gray-100">
+                            <button onclick="simulateError('401')" class="w-full text-left p-4 hover:bg-gray-50 transition-colors">
+                                <div class="font-medium text-gray-900">401 - Unauthorized</div>
+                                <div class="text-sm text-gray-500">Invalid API key</div>
+                            </button>
+                            <button onclick="simulateError('403')" class="w-full text-left p-4 hover:bg-gray-50 transition-colors">
+                                <div class="font-medium text-gray-900">403 - Forbidden</div>
+                                <div class="text-sm text-gray-500">Permission denied</div>
+                            </button>
+                            <button onclick="simulateError('404')" class="w-full text-left p-4 hover:bg-gray-50 transition-colors">
+                                <div class="font-medium text-gray-900">404 - Not Found</div>
+                                <div class="text-sm text-gray-500">Model not found</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Error Panel Display -->
+                <div class="col-span-2">
+                    <div id="errorPanelContainer">
+                        <!-- Placeholder -->
+                        <div id="errorPlaceholder" class="bg-white rounded-xl shadow-sm border-2 border-dashed border-gray-300 p-16 text-center">
+                            <div class="text-6xl mb-4">🎯</div>
+                            <h3 class="text-xl font-semibold text-gray-700 mb-2">Click an error to simulate</h3>
+                            <p class="text-gray-500">See how ErrorRecoveryPanel handles different error types</p>
+                        </div>
+                        
+                        <!-- Error Panel (hidden by default) -->
+                        <div id="errorPanel" class="hidden bg-white rounded-xl shadow-lg border-2 border-orange-400 overflow-hidden animate-slide-up">
+                            <!-- Will be populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-900">Settings</h2>
+                <button onclick="closeSettings()" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-gray-600"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[60vh]">
+                <div id="settingsContent" class="space-y-4">
+                    <!-- Settings will be populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // ==================== DATA ====================
+        const engines = [
+            { id: 'claude', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', icon: '🟣', enabled: true, status: 'idle' },
+            { id: 'gpt4', name: 'GPT-4o', provider: 'OpenAI', icon: '🟢', enabled: true, status: 'idle' },
+            { id: 'gemini', name: 'Gemini 1.5 Pro', provider: 'Google', icon: '🔵', enabled: true, status: 'idle' },
+            { id: 'mistral', name: 'Mistral Large', provider: 'Mistral', icon: '🟠', enabled: false, status: 'idle' },
+            { id: 'perplexity', name: 'Perplexity', provider: 'Perplexity', icon: '🔷', enabled: false, status: 'idle' },
+            { id: 'deepseek', name: 'DeepSeek V3', provider: 'DeepSeek', icon: '🌊', enabled: true, status: 'idle' },
+            { id: 'grok', name: 'Grok', provider: 'xAI', icon: '⚡', enabled: false, status: 'idle' },
+            { id: 'groq', name: 'Groq Llama', provider: 'Groq', icon: '🚀', enabled: true, status: 'idle' },
+        ];
+
+        const processSteps = [
+            {
+                id: 1,
+                title: 'User Input Received',
+                description: 'User types message and clicks Send',
+                code: `// Step 1: Capture user input
+const userMessage = document.getElementById('promptInput').value;
+const enabledEngines = engines.filter(e => e.enabled);
+console.log('Sending to', enabledEngines.length, 'engines');`,
+                log: '[INPUT] User message: "Explain quantum computing"'
+            },
+            {
+                id: 2,
+                title: 'Validate & Prepare Request',
+                description: 'Check API keys and build request payload',
+                code: `// Step 2: Validate configuration
+function validateConfig(engine) {
+    const apiKey = localStorage.getItem(engine.provider + '_API_KEY');
+    if (!apiKey) throw new Error('Missing API key for ' + engine.provider);
+    return { apiKey, model: engine.model };
+}`,
+                log: '[VALIDATE] Claude: ✓ API key found\n[VALIDATE] GPT-4: ✓ API key found\n[VALIDATE] Gemini: ✓ API key found'
+            },
+            {
+                id: 3,
+                title: 'Initialize Parallel Streams',
+                description: 'Start streaming requests to all enabled providers',
+                code: `// Step 3: Start parallel requests
+async function streamFromProvider(engine, prompt) {
+    const response = await fetch(engine.endpoint, {
+        method: 'POST',
+        headers: { 'Authorization': \`Bearer \${apiKey}\` },
+        body: JSON.stringify({ 
+            messages: [{ role: 'user', content: prompt }],
+            stream: true 
+        })
+    });
+    return response.body.getReader();
+}`,
+                log: '[STREAM] Starting Claude stream...\n[STREAM] Starting GPT-4 stream...\n[STREAM] Starting Gemini stream...'
+            },
+            {
+                id: 4,
+                title: 'Process Streaming Chunks',
+                description: 'Receive and display response chunks in real-time',
+                code: `// Step 4: Process streaming response
+async function processStream(reader, onChunk) {
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = new TextDecoder().decode(value);
+        const parsed = parseSSE(chunk);
+        onChunk(parsed.content);
+    }
+}`,
+                log: '[CHUNK] Claude: "Quantum computing is..."\n[CHUNK] GPT-4: "At its core, quantum..."\n[CHUNK] Gemini: "Unlike classical..."'
+            },
+            {
+                id: 5,
+                title: 'Handle Errors (if any)',
+                description: 'Detect error type and apply recovery strategy',
+                code: `// Step 5: Error handling
+catch (error) {
+    const statusCode = error.status || error.statusCode;
+    const isRetryable = [429, 500, 503].includes(statusCode);
+    
+    if (isRetryable) {
+        await autoRetryWithBackoff(engine, prompt);
+    } else {
+        showErrorRecoveryPanel(error);
+    }
+}`,
+                log: '[ERROR] Groq: 429 Rate Limit\n[RETRY] Waiting 1s before retry...\n[RETRY] Attempt 2/4...'
+            },
+            {
+                id: 6,
+                title: 'Update UI State',
+                description: 'Mark engines as complete and show final responses',
+                code: `// Step 6: Update UI
+function updateEngineStatus(engineId, status) {
+    const engine = engines.find(e => e.id === engineId);
+    engine.status = status; // 'success' | 'error'
+    engine.responseTime = Date.now() - startTime;
+    renderEngineCard(engine);
+}`,
+                log: '[COMPLETE] Claude: 1.2s, 847 tokens\n[COMPLETE] GPT-4: 1.8s, 923 tokens\n[COMPLETE] Gemini: 0.9s, 756 tokens'
+            },
+            {
+                id: 7,
+                title: 'Save to History',
+                description: 'Store conversation in local storage',
+                code: `// Step 7: Save conversation
+function saveToHistory(messages) {
+    const history = JSON.parse(localStorage.getItem('chat_history') || '[]');
+    history.unshift({
+        id: Date.now(),
+        messages,
+        timestamp: new Date().toISOString()
+    });
+    localStorage.setItem('chat_history', JSON.stringify(history));
+}`,
+                log: '[SAVE] Conversation saved to history\n[DONE] Request completed successfully'
+            }
+        ];
+
+        const errorData = {
+            '429': {
+                icon: '🔶',
+                title: 'ERROR 429 - RATE LIMIT EXCEEDED',
+                severity: 'Medium',
+                severityColor: 'orange',
+                isRetryable: true,
+                rawError: 'Error 429: Rate limit exceeded. You have sent too many requests. Please slow down.',
+                explanation: 'You\'ve exceeded the API rate limit. The system is automatically retrying with exponential backoff (1s → 2s → 4s → 8s).',
+                actions: ['System is automatically retrying...', 'Wait for auto-retry to complete', 'Consider upgrading your plan'],
+                json: { statusCode: 429, type: 'rate_limit_error', message: 'Rate limit exceeded', retryAfter: 60 }
+            },
+            '500': {
+                icon: '🔴',
+                title: 'ERROR 500 - INTERNAL SERVER ERROR',
+                severity: 'High',
+                severityColor: 'red',
+                isRetryable: true,
+                rawError: 'Error 500: Internal server error. An unexpected error occurred on the server.',
+                explanation: 'The API provider is experiencing internal issues. Auto-retry is in progress.',
+                actions: ['System is automatically retrying...', 'Wait for auto-retry to complete', 'Check provider status page'],
+                json: { statusCode: 500, type: 'internal_error', message: 'Internal server error' }
+            },
+            '503': {
+                icon: '🔴',
+                title: 'ERROR 503 - SERVICE UNAVAILABLE',
+                severity: 'High',
+                severityColor: 'red',
+                isRetryable: true,
+                rawError: 'Error 503: Service temporarily unavailable. The server is overloaded.',
+                explanation: 'The service is temporarily overloaded. Auto-retry with throttling is in progress.',
+                actions: ['System is automatically retrying with throttling...', 'Service may be under high load', 'Try again during off-peak hours'],
+                json: { statusCode: 503, type: 'service_unavailable', message: 'Service temporarily unavailable' }
+            },
+            '401': {
+                icon: '🚨',
+                title: 'ERROR 401 - UNAUTHORIZED',
+                severity: 'Critical',
+                severityColor: 'red',
+                isRetryable: false,
+                rawError: 'Type: authentication_error | Invalid API Key. The API key provided is invalid or has expired.',
+                explanation: 'Your API key is invalid, expired, or has been revoked. You need to update it in Settings.',
+                actions: ['Go to Settings and verify your API key', 'Get a new API key from the provider dashboard', 'Ensure the key has not expired'],
+                json: { statusCode: 401, type: 'authentication_error', message: 'Invalid API Key' }
+            },
+            '403': {
+                icon: '🚨',
+                title: 'ERROR 403 - FORBIDDEN',
+                severity: 'Critical',
+                severityColor: 'red',
+                isRetryable: false,
+                rawError: 'Error 403: Permission denied. Your API key does not have access to this resource.',
+                explanation: 'Your API key doesn\'t have the required permissions for this operation.',
+                actions: ['Check API key permissions in provider console', 'Ensure your plan includes access to this model', 'Contact provider support'],
+                json: { statusCode: 403, type: 'permission_denied', message: 'Permission denied' }
+            },
+            '404': {
+                icon: '🔶',
+                title: 'ERROR 404 - NOT FOUND',
+                severity: 'Medium',
+                severityColor: 'orange',
+                isRetryable: false,
+                rawError: 'Error 404: Model not found. The requested model "gpt-99-turbo" does not exist.',
+                explanation: 'The model or resource you requested doesn\'t exist. Check the model name.',
+                actions: ['Verify the model name is correct in Settings', 'Check provider documentation for available models', 'The model may have been deprecated'],
+                json: { statusCode: 404, type: 'not_found', message: 'Model not found', requestedModel: 'gpt-99-turbo' }
+            }
+        };
+
+        // ==================== VIEW SWITCHING ====================
+        function switchView(view) {
+            // Hide all views
+            document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
+            // Show selected view
+            document.getElementById('view-' + view).classList.remove('hidden');
+            
+            // Update button styles
+            ['demo', 'process', 'errors'].forEach(v => {
+                const btn = document.getElementById('btn-' + v);
+                if (v === view) {
+                    btn.classList.add('bg-white', 'shadow', 'text-gray-900');
+                    btn.classList.remove('text-gray-600');
+                } else {
+                    btn.classList.remove('bg-white', 'shadow', 'text-gray-900');
+                    btn.classList.add('text-gray-600');
+                }
+            });
+            
+            lucide.createIcons();
+        }
+
+        // ==================== ENGINE PANEL ====================
+        function renderEngineList() {
+            const container = document.getElementById('engineList');
+            container.innerHTML = engines.map(engine => `
+                <div class="p-3 rounded-xl border-2 transition-all ${getEngineStatusClasses(engine)}" id="engine-${engine.id}">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">${engine.icon}</span>
+                            <div>
+                                <div class="font-medium text-sm text-gray-900">${engine.name}</div>
+                                <div class="text-xs text-gray-500">${engine.provider}</div>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" ${engine.enabled ? 'checked' : ''} 
+                                onchange="toggleEngine('${engine.id}')"
+                                class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                    </div>
+                    ${engine.status !== 'idle' ? `
+                        <div class="flex items-center gap-2 text-xs ${getStatusTextColor(engine.status)}">
+                            ${getStatusIcon(engine.status)}
+                            <span>${getStatusText(engine.status)}</span>
+                            ${engine.responseTime ? `<span class="ml-auto">${engine.responseTime}ms</span>` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function getEngineStatusClasses(engine) {
+            if (!engine.enabled) return 'border-gray-200 opacity-50';
+            switch (engine.status) {
+                case 'streaming': return 'border-blue-400 animate-pulse-border';
+                case 'success': return 'border-green-400 bg-green-50';
+                case 'error': return 'border-red-400 bg-red-50';
+                default: return 'border-gray-200';
+            }
+        }
+
+        function getStatusTextColor(status) {
+            switch (status) {
+                case 'streaming': return 'text-blue-600';
+                case 'success': return 'text-green-600';
+                case 'error': return 'text-red-600';
+                default: return 'text-gray-500';
+            }
+        }
+
+        function getStatusIcon(status) {
+            switch (status) {
+                case 'streaming': return '<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i>';
+                case 'success': return '<i data-lucide="check-circle" class="w-3 h-3"></i>';
+                case 'error': return '<i data-lucide="alert-circle" class="w-3 h-3"></i>';
+                default: return '';
+            }
+        }
+
+        function getStatusText(status) {
+            switch (status) {
+                case 'streaming': return 'Streaming...';
+                case 'success': return 'Complete';
+                case 'error': return 'Error';
+                default: return 'Idle';
+            }
+        }
+
+        function toggleEngine(id) {
+            const engine = engines.find(e => e.id === id);
+            engine.enabled = !engine.enabled;
+            renderEngineList();
+        }
+
+        // ==================== CHAT FUNCTIONALITY ====================
+        function handleKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('promptInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addMessageToChat('user', message);
+            input.value = '';
+
+            // Get enabled engines
+            const enabledEngines = engines.filter(e => e.enabled);
+            
+            // Set all enabled engines to streaming
+            enabledEngines.forEach(e => {
+                e.status = 'streaming';
+                e.responseTime = null;
+            });
+            renderEngineList();
+
+            // Simulate streaming responses
+            for (const engine of enabledEngines) {
+                simulateStreamingResponse(engine, message);
+            }
+        }
+
+        function addMessageToChat(role, content, engine = null) {
+            const container = document.getElementById('chatMessages');
+            
+            // Remove welcome message if present
+            const welcome = container.querySelector('.text-center');
+            if (welcome) welcome.remove();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'} animate-slide-up`;
+            
+            if (role === 'user') {
+                messageDiv.innerHTML = `
+                    <div class="max-w-[70%] bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-4 py-3 rounded-2xl rounded-br-md">
+                        <p class="text-sm">${content}</p>
+                    </div>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="max-w-[70%] bg-gray-100 px-4 py-3 rounded-2xl rounded-bl-md">
+                        ${engine ? `<div class="flex items-center gap-2 mb-2">
+                            <span class="text-sm">${engine.icon}</span>
+                            <span class="text-xs font-medium text-gray-600">${engine.name}</span>
+                        </div>` : ''}
+                        <p class="text-sm text-gray-800" id="response-${engine?.id || 'default'}">${content}</p>
+                    </div>
+                `;
+            }
+            
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function simulateStreamingResponse(engine, prompt) {
+            const startTime = Date.now();
+            
+            // Sample responses
+            const responses = {
+                claude: "I'd be happy to help explain that concept. Let me break it down into clear, understandable parts...",
+                gpt4: "That's a great question! Here's a comprehensive explanation that covers the key aspects...",
+                gemini: "Based on my analysis, I can provide you with a detailed response that addresses your query...",
+                deepseek: "Let me analyze this from multiple perspectives to give you a thorough understanding...",
+                groq: "Here's a quick and efficient response to your question, optimized for clarity..."
+            };
+
+            const response = responses[engine.id] || "Here's my response to your query...";
+            
+            // Add empty message
+            addMessageToChat('assistant', '<span class="animate-typing">▊</span>', engine);
+            
+            // Simulate streaming
+            const responseEl = document.getElementById('response-' + engine.id);
+            let displayedText = '';
+            
+            for (let i = 0; i < response.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, 20 + Math.random() * 30));
+                displayedText += response[i];
+                if (responseEl) {
+                    responseEl.innerHTML = displayedText + '<span class="animate-typing">▊</span>';
+                }
+            }
+            
+            // Complete
+            if (responseEl) {
+                responseEl.innerHTML = displayedText;
+            }
+            
+            engine.status = 'success';
+            engine.responseTime = Date.now() - startTime;
+            renderEngineList();
+        }
+
+        // ==================== PROCESS FLOW ====================
+        function renderProcessSteps() {
+            const container = document.getElementById('processSteps');
+            container.innerHTML = processSteps.map(step => `
+                <div class="flex gap-4 relative" id="step-${step.id}">
+                    <div class="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold z-10 step-pending" id="step-circle-${step.id}">
+                        ${step.id}
+                    </div>
+                    <div class="flex-1 pb-6">
+                        <h3 class="font-semibold text-gray-900 text-lg">${step.title}</h3>
+                        <p class="text-gray-600 text-sm">${step.description}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        let currentStep = 0;
+        let processInterval = null;
+
+        async function runProcessDemo() {
+            resetProcessDemo();
+            currentStep = 0;
+            
+            for (let i = 0; i < processSteps.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                activateStep(i);
+            }
+        }
+
+        function activateStep(index) {
+            const step = processSteps[index];
+            
+            // Update circle
+            const circle = document.getElementById('step-circle-' + step.id);
+            circle.classList.remove('step-pending', 'step-completed');
+            circle.classList.add('step-active');
+            
+            // Mark previous as completed
+            if (index > 0) {
+                const prevCircle = document.getElementById('step-circle-' + processSteps[index - 1].id);
+                prevCircle.classList.remove('step-active');
+                prevCircle.classList.add('step-completed');
+            }
+            
+            // Update code display
+            document.getElementById('currentStepCode').textContent = step.code;
+            
+            // Add to log
+            const log = document.getElementById('executionLog');
+            log.innerHTML += `<p class="text-green-400">${step.log}</p>`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function resetProcessDemo() {
+            currentStep = 0;
+            renderProcessSteps();
+            document.getElementById('currentStepCode').textContent = '// Click "Run Demo" to see the code execution';
+            document.getElementById('executionLog').innerHTML = '<p class="text-gray-500">// Waiting for demo to start...</p>';
+        }
+
+        // ==================== ERROR SIMULATOR ====================
+        function simulateError(code) {
+            const data = errorData[code];
+            
+            document.getElementById('errorPlaceholder').classList.add('hidden');
+            const panel = document.getElementById('errorPanel');
+            panel.classList.remove('hidden');
+            
+            const severityColors = {
+                orange: { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-400' },
+                red: { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-400' }
+            };
+            const colors = severityColors[data.severityColor];
+            
+            panel.innerHTML = `
+                <!-- Header -->
+                <div class="${colors.bg} p-4 border-b ${colors.border}">
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center gap-3">
+                            <span class="text-3xl">${data.icon}</span>
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h3 class="font-bold text-gray-900">${data.title}</h3>
+                                    <span class="px-2 py-0.5 ${colors.bg} ${colors.text} text-xs rounded-full font-medium">${data.severity}</span>
+                                </div>
+                                <p class="text-sm text-gray-600">Provider: <span class="font-semibold text-indigo-600">Anthropic (Claude)</span></p>
+                            </div>
+                        </div>
+                        <button onclick="closeErrorPanel()" class="text-gray-400 hover:text-gray-600">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Raw Error -->
+                <div class="p-4 bg-gray-900">
+                    <p class="text-xs text-gray-500 mb-1">Raw API Error:</p>
+                    <pre class="text-red-400 font-mono text-sm">${data.rawError}</pre>
+                </div>
+                
+                <!-- Explanation -->
+                <div class="p-4 bg-blue-50 border-b border-blue-100">
+                    <h4 class="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                        <i data-lucide="info" class="w-4 h-4"></i> What's happening?
+                    </h4>
+                    <p class="text-sm text-blue-800">${data.explanation}</p>
+                </div>
+                
+                ${data.isRetryable ? `
+                <!-- Auto-Retry Timeline -->
+                <div class="p-4 bg-green-50 border-b border-green-100">
+                    <h4 class="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Auto-Retry in Progress
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-green-500 animate-progress"></div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-green-700">⏱️ Exponential backoff: 1s → 2s → 4s → 8s</p>
+                    </div>
+                </div>
+                ` : ''}
+                
+                <!-- Actions -->
+                <div class="p-4 bg-amber-50 border-b border-amber-100">
+                    <h4 class="font-semibold text-amber-900 mb-3 flex items-center gap-2">
+                        <i data-lucide="wrench" class="w-4 h-4"></i> ${data.isRetryable ? 'Auto-Recovery in Progress' : 'Action Required'}
+                    </h4>
+                    <ol class="list-decimal list-inside text-sm text-amber-800 space-y-1">
+                        ${data.actions.map(a => `<li>${a}</li>`).join('')}
+                    </ol>
+                </div>
+                
+                <!-- Raw JSON -->
+                <div class="p-4 bg-gray-900">
+                    <p class="text-xs text-gray-500 mb-1">Full Raw Error JSON:</p>
+                    <pre class="text-green-400 font-mono text-xs">${JSON.stringify(data.json, null, 2)}</pre>
+                </div>
+                
+                <!-- Buttons -->
+                <div class="p-4 bg-gray-100 flex gap-3">
+                    <button class="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2">
+                        <i data-lucide="copy" class="w-4 h-4"></i> Copy Error
+                    </button>
+                    <button onclick="openSettings()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                        <i data-lucide="settings" class="w-4 h-4"></i> Go to Settings
+                    </button>
+                    ${data.isRetryable ? `
+                    <button class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Retry Now
+                    </button>
+                    ` : ''}
+                </div>
+            `;
+            
+            lucide.createIcons();
+        }
+
+        function closeErrorPanel() {
+            document.getElementById('errorPanel').classList.add('hidden');
+            document.getElementById('errorPlaceholder').classList.remove('hidden');
+        }
+
+        // ==================== SETTINGS ====================
+        function openSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.remove('hidden');
+            
+            const content = document.getElementById('settingsContent');
+            content.innerHTML = engines.map(engine => `
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <div class="p-4 bg-gray-50 flex items-center justify-between cursor-pointer" onclick="toggleSettingsSection('${engine.id}')">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xl">${engine.icon}</span>
+                            <div>
+                                <div class="font-medium text-gray-900">${engine.name}</div>
+                                <div class="text-xs text-gray-500">${engine.provider}</div>
+                            </div>
+                        </div>
+                        <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400"></i>
+                    </div>
+                    <div id="settings-${engine.id}" class="hidden p-4 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                            <div class="relative">
+                                <input type="password" placeholder="Enter your API key" 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <button class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option>${engine.name}</option>
+                            </select>
+                        </div>
+                        <button class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+                            Test Connection
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        function toggleSettingsSection(id) {
+            const section = document.getElementById('settings-' + id);
+            section.classList.toggle('hidden');
+        }
+
+        // ==================== INITIALIZE ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            renderEngineList();
+            renderProcessSteps();
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

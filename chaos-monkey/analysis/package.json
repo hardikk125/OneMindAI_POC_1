@@ -1,0 +1,14 @@
+{
+  "name": "chaos-monkey-analysis",
+  "version": "1.0.0",
+  "description": "Interactive Chaos Monkey analysis dashboard with graph visualization and editable CSV data",
+  "main": "api-server.cjs",
+  "scripts": {
+    "start": "node api-server.cjs",
+    "dev": "node api-server.cjs"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "onemindai-chaos-monkey",
+  "version": "1.0.0",
+  "description": "Independent Chaos Monkey Testing Suite for OneMindAI",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test:api": "node cli.js --suite api",
+    "test:load": "node cli.js --suite load",
+    "test:security": "node cli.js --suite security",
+    "test:ui": "node cli.js --suite ui",
+    "test:all": "node cli.js --all",
+    "report": "node generate-report.js"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "chokidar": "^3.5.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "form-data": "^4.0.0",
+    "glob": "^10.3.10",
+    "node-fetch": "^3.3.2",
+    "ora": "^7.0.1",
+    "puppeteer": "^21.11.0",
+    "ws": "^8.14.2"
+  }
+}

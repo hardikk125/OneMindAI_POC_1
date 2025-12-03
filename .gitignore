@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cache
+.cache/
+.vite/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment variables (CRITICAL - never commit!)
+.env
+.env.local
+.env.*.local
+
+# API Keys backup files
+*-api-keys*
+*_api_keys*
+.vercel
+.env*.local
