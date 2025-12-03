@@ -147,11 +147,64 @@ export type AdminPage =
   | 'transactions' 
   | 'bugs' 
   | 'errors' 
-  | 'system';
+  | 'system'
+  | 'ui-config';
 
 export interface NavItem {
   id: AdminPage;
   label: string;
   icon: string;
   badge?: number;
+}
+
+// =============================================================================
+// UI Configuration Types
+// =============================================================================
+
+export interface ModeOption {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  is_visible: boolean;
+  is_enabled: boolean;
+  display_order: number;
+  style_variant: 'default' | 'highlighted' | 'gradient';
+  icon: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserRole {
+  id: string;
+  name: string;
+  title: string;
+  category: 'Executive' | 'Industry' | 'Custom';
+  description: string | null;
+  responsibilities: string | null;
+  is_visible: boolean;
+  is_enabled: boolean;
+  display_order: number;
+  icon_svg: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RolePrompt {
+  id: string;
+  role_id: string;
+  title: string;
+  prompt_template: string;
+  category: 'general' | 'analysis' | 'strategy' | 'operations';
+  is_visible: boolean;
+  is_enabled: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UIConfig {
+  modeOptions: ModeOption[];
+  userRoles: UserRole[];
+  rolePrompts: RolePrompt[];
 }

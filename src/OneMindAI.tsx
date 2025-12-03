@@ -26,6 +26,7 @@ import { deductFromBalance, loadBalances, BalanceRecord } from './lib/balance-tr
 import { useAuth } from './lib/supabase';
 import { deductCredits, calculateCredits, CREDIT_PRICING } from './lib/supabase/credit-service';
 import { AuthModal, UserMenu } from './components/auth';
+import { useUIConfig, getPromptsForRole } from './hooks/useUIConfig';
 
 /**
  * OneMindAI — v14 (Mobile-First Preview, patched again)
@@ -352,6 +353,9 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   // ===== Auth (must be first - before any conditional returns) =====
   const { isAuthenticated, isLoading, user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // ===== UI Configuration (from admin panel) =====
+  const { modeOptions, userRoles, rolePrompts, isLoading: configLoading } = useUIConfig();
 
   // ===== Prompt Limits =====
   const LIMITS = {
@@ -4553,32 +4557,82 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           <div className="opacity-80 text-[11px] sm:text-[12px]">Formula2GX Digital Advanced Incubation Labs Platform</div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Controls - hidden on mobile */}
+          {/* Controls - hidden on mobile - Dynamic from Admin Panel */}
           <div className="hidden sm:flex items-center gap-3">
-            <label className="text-xs flex items-center gap-2 px-2 py-1 rounded-lg bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-400/50 cursor-pointer hover:from-purple-600/30 hover:to-blue-600/30 transition">
-              <input type="checkbox" checked={storyMode} onChange={() => {
-                setStoryMode(v => !v);
-                if (!storyMode) setStoryStep(1);
-              }} />
-              <span className="font-semibold">Story Mode</span>
-            </label>
-            <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={showBusiness} onChange={() => setShowBusiness(v => !v)} /><span>Business</span></label>
-            <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={showTech} onChange={() => setShowTech(v => !v)} /><span>Technical</span></label>
-            <label className="text-xs flex items-center gap-2">
-              <input type="checkbox" checked={consoleVisible} onChange={toggleConsole} />
-              <span>Inspect</span>
-            </label>
-            <label className="text-xs flex items-center gap-2 px-2 py-1 rounded-lg bg-gradient-to-r from-purple-600/30 to-pink-600/30 border border-purple-400/50 cursor-pointer hover:from-purple-600/40 hover:to-pink-600/40 transition">
-              <input type="checkbox" checked={superDebugMode} onChange={() => setSuperDebugMode(v => !v)} />
-              <span className="font-semibold">🔧 Debug</span>
-            </label>
-            <button
-              onClick={simulateMultipleErrors}
-              className="text-xs px-3 py-1 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition font-medium"
-              title="Simulate multi-error display"
-            >
-              Simulate
-            </button>
+            {/* Render mode options dynamically from database config */}
+            {modeOptions.filter(m => m.is_visible && m.is_enabled).map(mode => {
+              // Map mode keys to state handlers
+              const getModeState = () => {
+                switch (mode.key) {
+                  case 'story_mode': return storyMode;
+                  case 'business': return showBusiness;
+                  case 'technical': return showTech;
+                  case 'inspect': return consoleVisible;
+                  case 'debug': return superDebugMode;
+                  default: return false;
+                }
+              };
+              
+              const handleModeChange = () => {
+                switch (mode.key) {
+                  case 'story_mode':
+                    setStoryMode((v: boolean) => !v);
+                    if (!storyMode) setStoryStep(1);
+                    break;
+                  case 'business':
+                    setShowBusiness((v: boolean) => !v);
+                    break;
+                  case 'technical':
+                    setShowTech((v: boolean) => !v);
+                    break;
+                  case 'inspect':
+                    toggleConsole();
+                    break;
+                  case 'debug':
+                    setSuperDebugMode((v: boolean) => !v);
+                    break;
+                }
+              };
+
+              // Style based on variant
+              const getStyleClass = () => {
+                switch (mode.style_variant) {
+                  case 'highlighted':
+                    return 'px-2 py-1 rounded-lg bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-400/50 cursor-pointer hover:from-purple-600/30 hover:to-blue-600/30 transition';
+                  case 'gradient':
+                    return 'px-2 py-1 rounded-lg bg-gradient-to-r from-purple-600/30 to-pink-600/30 border border-purple-400/50 cursor-pointer hover:from-purple-600/40 hover:to-pink-600/40 transition';
+                  default:
+                    return '';
+                }
+              };
+
+              // Skip simulate button - handle separately
+              if (mode.key === 'simulate') {
+                return (
+                  <button
+                    key={mode.id}
+                    onClick={simulateMultipleErrors}
+                    className="text-xs px-3 py-1 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition font-medium"
+                    title={mode.description || 'Simulate multi-error display'}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              }
+
+              return (
+                <label key={mode.id} className={`text-xs flex items-center gap-2 ${getStyleClass()}`}>
+                  <input 
+                    type="checkbox" 
+                    checked={getModeState()} 
+                    onChange={handleModeChange} 
+                  />
+                  <span className={mode.style_variant !== 'default' ? 'font-semibold' : ''}>
+                    {mode.key === 'debug' ? '🔧 ' : ''}{mode.label}
+                  </span>
+                </label>
+              );
+            })}
           </div>
           {/* User Menu - always visible */}
           <UserMenu onOpenAdmin={onOpenAdmin} />
@@ -4640,27 +4694,33 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               </button>
             </div>
 
-            {/* Executive Roles Dropdown */}
+            {/* Executive Roles Dropdown - Dynamic from Admin Panel */}
             {showExecutiveRoles && !selectedRoleDetails && (
               <div className="mt-2 p-2 bg-white border-2 border-purple-200 rounded-lg shadow-lg">
-                {['CEO', 'CDIO', 'Head of Sales'].map(role => (
+                {userRoles.filter(r => r.is_visible && r.is_enabled).map(role => (
                   <button
-                    key={role}
+                    key={role.id}
                     onClick={() => {
-                      setSelectedRole(role);
-                      setSelectedRoleDetails({name: role, category: 'Executive'});
+                      setSelectedRole(role.name);
+                      setSelectedRoleDetails({name: role.name, category: role.category});
                     }}
-                    className={`w-full text-left px-3 py-2 rounded hover:bg-purple-50 transition-colors ${selectedRole === role ? 'bg-purple-100 font-semibold text-purple-900' : 'text-gray-700'}`}
+                    className={`w-full text-left px-3 py-2 rounded hover:bg-purple-50 transition-colors ${selectedRole === role.name ? 'bg-purple-100 font-semibold text-purple-900' : 'text-gray-700'}`}
                   >
-                    {role}
+                    {role.name}
                   </button>
                 ))}
               </div>
             )}
 
-            {/* Role Details Card - CEO/CDIO/Head of Sales */}
-            {selectedRoleDetails && selectedRoleDetails.category === 'Executive' && (
+            {/* Role Details Card - Dynamic from Admin Panel */}
+            {selectedRoleDetails && (
               <div className="mt-4 p-4 bg-white border-2 border-purple-200 rounded-xl shadow-lg">
+                {(() => {
+                  // Find the full role data from config
+                  const roleData = userRoles.find(r => r.name === selectedRoleDetails.name);
+                  if (!roleData) return null;
+                  
+                  return (
                 <div className="flex gap-4">
                   {/* Left Side - Silhouette and Definition */}
                   <div className="flex-1">
@@ -4674,34 +4734,16 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     </div>
                     
                     {/* Role Name */}
-                    <h3 className="text-xl font-bold text-purple-900 text-center mb-2">{selectedRoleDetails.name}</h3>
+                    <h3 className="text-xl font-bold text-purple-900 text-center mb-2">{roleData.name}</h3>
                     
-                    {/* Role Definition - CEO */}
-                    {selectedRoleDetails.name === 'CEO' && (
-                      <div className="text-sm text-gray-700 space-y-2">
-                        <p className="font-semibold text-purple-800">Chief Executive Officer</p>
-                        <p>The CEO is the highest-ranking executive in a company, responsible for making major corporate decisions, managing overall operations and resources, and acting as the main point of communication between the board of directors and corporate operations.</p>
-                        <p className="text-xs text-gray-600 mt-2">Key responsibilities include strategic planning, stakeholder management, and organizational leadership.</p>
-                      </div>
-                    )}
-                    
-                    {/* Role Definition - CDIO */}
-                    {selectedRoleDetails.name === 'CDIO' && (
-                      <div className="text-sm text-gray-700 space-y-2">
-                        <p className="font-semibold text-purple-800">Chief Digital & Information Officer</p>
-                        <p>The CDIO oversees the organization's data strategy, information systems, and digital transformation initiatives. Responsible for data governance, analytics, cybersecurity, and leveraging data as a strategic asset to drive business value.</p>
-                        <p className="text-xs text-gray-600 mt-2">Key responsibilities include data architecture, AI/ML implementation, information security, and digital innovation.</p>
-                      </div>
-                    )}
-                    
-                    {/* Role Definition - Head of Sales */}
-                    {selectedRoleDetails.name === 'Head of Sales' && (
-                      <div className="text-sm text-gray-700 space-y-2">
-                        <p className="font-semibold text-purple-800">Head of Sales</p>
-                        <p>The Head of Sales leads the sales organization, responsible for revenue generation, team performance, and customer acquisition. Oversees sales strategy, pipeline management, team development, and achieving revenue targets.</p>
-                        <p className="text-xs text-gray-600 mt-2">Key responsibilities include sales strategy, team leadership, pipeline management, and revenue growth.</p>
-                      </div>
-                    )}
+                    {/* Role Definition - Dynamic */}
+                    <div className="text-sm text-gray-700 space-y-2">
+                      <p className="font-semibold text-purple-800">{roleData.title}</p>
+                      <p>{roleData.description}</p>
+                      {roleData.responsibilities && (
+                        <p className="text-xs text-gray-600 mt-2">Key responsibilities: {roleData.responsibilities}</p>
+                      )}
+                    </div>
                   </div>
                   
                   {/* Vertical Divider */}
@@ -4730,11 +4772,13 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                         ✨ Next Step
                       </p>
                       <p className="text-sm text-slate-700">
-                        You'll be able to browse {selectedRoleDetails.name === 'CEO' ? '8' : selectedRoleDetails.name === 'CDIO' ? '8' : '11'} focus areas and select from curated prompts in the next step.
+                        You'll be able to browse focus areas and select from curated prompts in the next step.
                       </p>
                     </div>
                   </div>
                 </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -6803,24 +6847,31 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             
             {showExecutiveRoles && !selectedRoleDetails && (
               <div className="mt-2 p-2 bg-white border-2 border-purple-200 rounded-lg shadow-lg">
-                {['CEO', 'CDIO', 'Head of Sales'].map(role => (
+                {/* Dynamic roles from Admin Panel */}
+                {userRoles.filter(r => r.is_visible && r.is_enabled).map(role => (
                   <button
-                    key={role}
+                    key={role.id}
                     onClick={() => {
-                      setSelectedRole(role);
-                      setSelectedRoleDetails({name: role, category: 'Executive'});
+                      setSelectedRole(role.name);
+                      setSelectedRoleDetails({name: role.name, category: role.category});
                     }}
-                    className={`w-full text-left px-3 py-2 rounded hover:bg-purple-50 transition-colors ${selectedRole === role ? 'bg-purple-100 font-semibold text-purple-900' : 'text-gray-700'}`}
+                    className={`w-full text-left px-3 py-2 rounded hover:bg-purple-50 transition-colors ${selectedRole === role.name ? 'bg-purple-100 font-semibold text-purple-900' : 'text-gray-700'}`}
                   >
-                    {role}
+                    {role.name}
                   </button>
                 ))}
               </div>
             )}
             
-            {/* Role Details Display - Under Executive Roles Button */}
-            {selectedRoleDetails && selectedRoleDetails.category === 'Executive' && (
+            {/* Role Details Display - Dynamic from Admin Panel */}
+            {selectedRoleDetails && (
           <div className="mt-4 p-4 bg-white border-2 border-purple-200 rounded-xl shadow-lg">
+            {(() => {
+              const roleData = userRoles.find(r => r.name === selectedRoleDetails.name);
+              if (!roleData) return null;
+              
+              return (
+            <>
             <div className="flex gap-4">
               {/* Left Side - Silhouette and Definition */}
               <div className="flex-1">
@@ -6834,25 +6885,16 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 </div>
                 
                 {/* Role Name */}
-                <h3 className="text-xl font-bold text-purple-900 text-center mb-2">{selectedRoleDetails.name}</h3>
+                <h3 className="text-xl font-bold text-purple-900 text-center mb-2">{roleData.name}</h3>
                 
-                {/* Role Definition - CEO */}
-                {selectedRoleDetails.name === 'CEO' && (
-                  <div className="text-sm text-gray-700 space-y-2">
-                    <p className="font-semibold text-purple-800">Chief Executive Officer</p>
-                    <p>The CEO is the highest-ranking executive in a company, responsible for making major corporate decisions, managing overall operations and resources, and acting as the main point of communication between the board of directors and corporate operations.</p>
-                    <p className="text-xs text-gray-600 mt-2">Key responsibilities include strategic planning, stakeholder management, and organizational leadership.</p>
-                  </div>
-                )}
-                
-                {/* Role Definition - CDIO */}
-                {selectedRoleDetails.name === 'CDIO' && (
-                  <div className="text-sm text-gray-700 space-y-2">
-                    <p className="font-semibold text-purple-800">Chief Digital & Information Officer</p>
-                    <p>The CDIO oversees the organization's data strategy, information systems, and digital transformation initiatives. Responsible for data governance, analytics, cybersecurity, and leveraging data as a strategic asset to drive business value.</p>
-                    <p className="text-xs text-gray-600 mt-2">Key responsibilities include data architecture, AI/ML implementation, information security, and digital innovation.</p>
-                  </div>
-                )}
+                {/* Role Definition - Dynamic */}
+                <div className="text-sm text-gray-700 space-y-2">
+                  <p className="font-semibold text-purple-800">{roleData.title}</p>
+                  <p>{roleData.description}</p>
+                  {roleData.responsibilities && (
+                    <p className="text-xs text-gray-600 mt-2">Key responsibilities: {roleData.responsibilities}</p>
+                  )}
+                </div>
               </div>
               
               {/* Vertical Divider */}
@@ -7010,6 +7052,9 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             >
               Close
             </button>
+            </>
+              );
+            })()}
           </div>
             )}
           </div>

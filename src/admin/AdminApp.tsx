@@ -14,6 +14,7 @@ import { BugReports } from './pages/BugReports';
 import { ErrorLogs } from './pages/ErrorLogs';
 import { Transactions } from './pages/Transactions';
 import { SystemHealth } from './pages/SystemHealth';
+import { UIConfig } from './pages/UIConfig';
 import type { AdminPage } from './types';
 import { Loader2, ShieldAlert, ArrowLeft } from 'lucide-react';
 
@@ -82,6 +83,8 @@ export function AdminApp({ onExit }: AdminAppProps) {
         return <Models />;
       case 'pricing':
         return <Models />; // Pricing is part of Models page
+      case 'ui-config':
+        return <UIConfig />;
       case 'transactions':
         return <Transactions />;
       case 'bugs':
