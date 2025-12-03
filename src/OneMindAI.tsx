@@ -165,7 +165,7 @@ function unicodeBtoa(str: string): string {
 
 // ===== Engines Registry =====
 const seededEngines: Engine[] = [
-  { id: "openai", name: "ChatGPT", provider: "openai", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["gpt-4.1", "gpt-4o", "gpt-4o-2024-11-20", "gpt-4o-2024-08-06", "gpt-4o-2024-05-13", "gpt-4.1-mini", "gpt-4o-mini"], selectedVersion: "gpt-4.1", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["chatgpt"] },
+  { id: "openai", name: "ChatGPT", provider: "openai", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["gpt-5-2025-08-07", "gpt-4.1", "gpt-4o", "gpt-4o-2024-11-20", "gpt-4o-2024-08-06", "gpt-4o-2024-05-13", "gpt-4.1-mini", "gpt-4o-mini"], selectedVersion: "gpt-5-2025-08-07", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["chatgpt"] },
   { id: "claude", name: "Claude", provider: "anthropic", tokenizer: "sentencepiece", contextLimit: 200_000, versions: ["claude-3.5-sonnet", "claude-3-5-sonnet-20241022", "claude-3-haiku", "claude-3-haiku-20240307"], selectedVersion: "claude-3-haiku-20240307", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["claude"] },
   { id: "gemini", name: "Gemini", provider: "gemini", tokenizer: "sentencepiece", contextLimit: 1_000_000, versions: ["gemini-2.0-flash-exp", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite"], selectedVersion: "gemini-2.5-flash-lite", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["gemini"] },
   { id: "deepseek", name: "DeepSeek", provider: "deepseek", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["deepseek-chat", "deepseek-coder"], selectedVersion: "deepseek-chat", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["deepseek"] },
@@ -183,6 +183,7 @@ const seededEngines: Engine[] = [
 // ===== Pricing (USD per 1M tokens) — real pricing from providers =====
 const BASE_PRICING: Record<string, Record<string, { in: number; out: number; note: string }>> = {
   openai: {
+    "gpt-5-2025-08-07": { in: 15.00, out: 60.00, note: "GPT-5 - Most advanced reasoning" },
     "gpt-4.1": { in: 10.00, out: 30.00, note: "GPT-4 Turbo - Strong reasoning" },
     "gpt-4o": { in: 2.50, out: 10.00, note: "GPT-4o - Balanced quality" },
     "gpt-4.1-mini": { in: 0.15, out: 0.60, note: "GPT-4o mini - Fast & economical" },
