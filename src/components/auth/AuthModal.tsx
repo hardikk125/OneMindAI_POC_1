@@ -231,7 +231,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
           {/* Header */}
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {mode === 'signin' && 'Welcome Back'}
+              {mode === 'signin' && 'OneMind AI'}
               {mode === 'signup' && 'Create Account'}
               {mode === 'reset' && 'Reset Password'}
             </h2>

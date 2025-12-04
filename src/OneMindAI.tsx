@@ -427,7 +427,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [priceOverrides, setPriceOverrides] = useState<Record<string, Record<string, { in: number; out: number }>>>({});
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [storyMode, setStoryMode] = useState(true);
-  const [storyStep, setStoryStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [storyStep, setStoryStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [compiledDoc, setCompiledDoc] = useState<string>("");
   const [showCombinedResponse, setShowCombinedResponse] = useState(false);
@@ -442,6 +442,60 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [selectedRoleDetails, setSelectedRoleDetails] = useState<{name: string, category: string} | null>(null);
   const [roleResponsibilities, setRoleResponsibilities] = useState<string>("");
   const [activeCategory, setActiveCategory] = useState<string>("");
+  const [selectedFocusArea, setSelectedFocusArea] = useState<{id: string, title: string} | null>(null);
+  const [selectedPromptPreview, setSelectedPromptPreview] = useState<{id: string, title: string, template: string} | null>(null);
+
+  // ===== Focus Areas Data (Role-specific) =====
+  const ROLE_FOCUS_AREAS: Record<string, Array<{id: string, title: string, prompts: Array<{id: string, title: string, template: string}>}>> = {
+    "CEO": [
+      { id: "strategy", title: "Strategic Planning", prompts: [
+        { id: "s1", title: "Growth strategy analysis", template: "As CEO, analyze growth opportunities for our organization" },
+        { id: "s2", title: "Market expansion plan", template: "As CEO, create a market expansion strategy" },
+        { id: "s3", title: "Competitive positioning", template: "As CEO, evaluate our competitive position" },
+      ]},
+      { id: "leadership", title: "Leadership & Culture", prompts: [
+        { id: "l1", title: "Leadership development", template: "As CEO, design a leadership development program" },
+        { id: "l2", title: "Culture transformation", template: "As CEO, plan a culture transformation initiative" },
+      ]},
+      { id: "stakeholder", title: "Stakeholder Management", prompts: [
+        { id: "st1", title: "Board presentation", template: "As CEO, prepare a board presentation" },
+        { id: "st2", title: "Investor relations", template: "As CEO, draft investor communication" },
+      ]},
+    ],
+    "CDIO": [
+      { id: "digital", title: "Digital Transformation", prompts: [
+        { id: "d1", title: "Digital roadmap", template: "As CDIO, create a digital transformation roadmap" },
+        { id: "d2", title: "Technology assessment", template: "As CDIO, assess current technology stack" },
+      ]},
+      { id: "data", title: "Data & Analytics", prompts: [
+        { id: "da1", title: "Data strategy", template: "As CDIO, design a comprehensive data strategy" },
+        { id: "da2", title: "AI/ML implementation", template: "As CDIO, plan AI/ML implementation" },
+      ]},
+      { id: "security", title: "Cybersecurity", prompts: [
+        { id: "sec1", title: "Security assessment", template: "As CDIO, conduct a security posture assessment" },
+        { id: "sec2", title: "Zero trust architecture", template: "As CDIO, design zero trust security architecture" },
+      ]},
+    ],
+    "Head of Sales": [
+      { id: "market", title: "Market & Opportunity", prompts: [
+        { id: "m1", title: "Market analysis", template: "As Head of Sales, analyze market opportunities" },
+        { id: "m2", title: "Competitive intelligence", template: "As Head of Sales, gather competitive intelligence" },
+      ]},
+      { id: "prebid", title: "Pre-Bid Phase", prompts: [
+        { id: "pb1", title: "Qualification criteria", template: "As Head of Sales, define deal qualification criteria" },
+        { id: "pb2", title: "Stakeholder mapping", template: "As Head of Sales, map stakeholders for opportunity" },
+      ]},
+      { id: "bid", title: "Bid Phase", prompts: [
+        { id: "b1", title: "Proposal strategy", template: "As Head of Sales, develop proposal strategy" },
+        { id: "b2", title: "Pricing strategy", template: "As Head of Sales, create pricing strategy" },
+      ]},
+      { id: "negotiation", title: "Negotiation & Closing", prompts: [
+        { id: "n1", title: "Provide negotiation tactics to close pending deals", template: "Provide negotiation tactics to close pending deals" },
+        { id: "n2", title: "Ensure legal compliance in contract negotiations", template: "Ensure legal compliance in contract negotiations" },
+        { id: "n3", title: "Give tips for successful deal closures", template: "Give tips for successful deal closures" },
+      ]},
+    ],
+  };
   const [selectedSubItem, setSelectedSubItem] = useState<string>("");
   const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
   const [consoleVisible, setConsoleVisible] = useState(false);
@@ -506,7 +560,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     if (!(cap <= Math.max(0, e.contextLimit - 1000))) console.warn("computeOutCap exceeds free space");
   }, []);
 
-  // Auto-select first engine tab when entering Step 4
+  // Auto-select first engine tab when entering Step 4 (Results)
   useEffect(() => {
     if (storyMode && storyStep === 4 && !activeEngineTab) {
       const firstSelectedEngine = engines.find(e => selected[e.id]);
@@ -4645,8 +4699,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           <div className="flex items-center gap-2 text-sm">
             <span className="font-semibold">Step {storyStep} of 4</span>
             <span className="opacity-90">
-              {storyStep === 1 && "· Choose your role"}
-              {storyStep === 2 && "· Define your intent"}
+              {storyStep === 1 && "· Choose role & prompt"}
+              {storyStep === 2 && "· Customize & import data"}
               {storyStep === 3 && "· Select engines"}
               {storyStep === 4 && "· Review & merge results"}
             </span>
@@ -4666,321 +4720,301 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         </div>
       )}
 
-      {/* Story Mode Step 1: Role Selection */}
+      {/* Story Mode Step 1: Role Selection with Silhouettes */}
       {storyMode && storyStep === 1 && (
         <div className={`${panel} p-4 sm:p-6 border-t-4 border-purple-600`}>
-          <div className="space-y-3">
+          {/* Header */}
+          <div className="space-y-3 mb-6">
             <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 1 · Identity</p>
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
               Who are you, and what do you want to do today?
             </h2>
             <p className="text-sm text-slate-600 max-w-2xl">
-              Start by choosing the role you are operating in right now. OneMind will shape recommendations, language and actions to match your context.
+              Select your role to get personalized recommendations and prompts.
             </p>
           </div>
 
-          {/* Role Selection - Using existing role cards */}
-          <div className="mt-6">
-            <div className="flex flex-wrap gap-2 mb-4">
-              <button
-                onClick={() => {
-                  setShowExecutiveRoles(!showExecutiveRoles);
-                  setShowOtherRoles(false);
-                }}
-                className="flex items-center justify-between px-4 py-2 bg-purple-100 hover:bg-purple-200 rounded-full transition-colors border border-purple-300"
-              >
-                <span className="font-medium text-purple-900 text-sm">Your role</span>
-                <span className="text-purple-700 ml-3">{showExecutiveRoles ? '▲' : '▼'}</span>
-              </button>
-            </div>
-
-            {/* Executive Roles Dropdown - Dynamic from Admin Panel */}
-            {showExecutiveRoles && !selectedRoleDetails && (
-              <div className="mt-2 p-2 bg-white border-2 border-purple-200 rounded-lg shadow-lg">
-                {userRoles.filter(r => r.is_visible && r.is_enabled).map(role => (
+          {/* Role Silhouettes - Modern Horizontal Scroll */}
+          <div className="mb-6 relative">
+            {/* Scroll Left Button - Always visible */}
+            <button
+              onClick={() => {
+                const container = document.getElementById('role-scroll-container');
+                if (container) container.scrollBy({ left: -300, behavior: 'smooth' });
+              }}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white border-2 border-purple-200 rounded-full shadow-md flex items-center justify-center text-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-400 hover:shadow-lg transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            {/* Scroll Right Button - Always visible */}
+            <button
+              onClick={() => {
+                const container = document.getElementById('role-scroll-container');
+                if (container) container.scrollBy({ left: 300, behavior: 'smooth' });
+              }}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white border-2 border-purple-200 rounded-full shadow-md flex items-center justify-center text-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-400 hover:shadow-lg transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            
+            {/* Gradient Fade Edges - subtle */}
+            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white/80 to-transparent pointer-events-none z-[5]"></div>
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white/80 to-transparent pointer-events-none z-[5]"></div>
+            
+            {/* Scrollable Container */}
+            <div 
+              id="role-scroll-container"
+              className="flex items-center gap-3 overflow-x-auto scroll-smooth px-14 py-3 scrollbar-hide"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {userRoles.filter(r => r.is_visible && r.is_enabled).map((role) => {
+                const isSelected = selectedRole === role.name;
+                return (
                   <button
                     key={role.id}
                     onClick={() => {
-                      setSelectedRole(role.name);
-                      setSelectedRoleDetails({name: role.name, category: role.category});
+                      if (isSelected) {
+                        setSelectedRole("");
+                        setSelectedRoleDetails(null);
+                        setSelectedFocusArea(null);
+                        setSelectedPromptPreview(null);
+                      } else {
+                        setSelectedRole(role.name);
+                        setSelectedRoleDetails({name: role.name, category: role.category});
+                        setSelectedFocusArea(null);
+                        setSelectedPromptPreview(null);
+                      }
                     }}
-                    className={`w-full text-left px-3 py-2 rounded hover:bg-purple-50 transition-colors ${selectedRole === role.name ? 'bg-purple-100 font-semibold text-purple-900' : 'text-gray-700'}`}
+                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all duration-300 min-w-[90px] flex-shrink-0 ${
+                      isSelected 
+                        ? 'bg-gradient-to-br from-purple-100 to-blue-100 border-2 border-purple-500 shadow-xl scale-110 -translate-y-1' 
+                        : 'bg-white border-2 border-gray-200 hover:border-purple-300 hover:bg-purple-50 hover:shadow-md hover:-translate-y-0.5'
+                    }`}
                   >
-                    {role.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Role Details Card - Dynamic from Admin Panel */}
-            {selectedRoleDetails && (
-              <div className="mt-4 p-4 bg-white border-2 border-purple-200 rounded-xl shadow-lg">
-                {(() => {
-                  // Find the full role data from config
-                  const roleData = userRoles.find(r => r.name === selectedRoleDetails.name);
-                  if (!roleData) return null;
-                  
-                  return (
-                <div className="flex gap-4">
-                  {/* Left Side - Silhouette and Definition */}
-                  <div className="flex-1">
-                    {/* Silhouette Image */}
-                    <div className="mb-4 flex justify-center">
-                      <div className="w-32 h-32 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
-                        <svg className="w-20 h-20 text-white" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                        </svg>
-                      </div>
+                    {/* Silhouette Icon */}
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
+                      isSelected ? 'bg-gradient-to-br from-purple-600 to-blue-600 shadow-lg' : 'bg-gray-100'
+                    }`}>
+                      <svg className={`w-8 h-8 transition-colors duration-300 ${isSelected ? 'text-white' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                      </svg>
                     </div>
-                    
                     {/* Role Name */}
-                    <h3 className="text-xl font-bold text-purple-900 text-center mb-2">{roleData.name}</h3>
-                    
-                    {/* Role Definition - Dynamic */}
-                    <div className="text-sm text-gray-700 space-y-2">
-                      <p className="font-semibold text-purple-800">{roleData.title}</p>
-                      <p>{roleData.description}</p>
-                      {roleData.responsibilities && (
-                        <p className="text-xs text-gray-600 mt-2">Key responsibilities: {roleData.responsibilities}</p>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Vertical Divider */}
-                  <div className="w-px bg-purple-200"></div>
-                  
-                  {/* Right Side - Responsibilities and KPIs Input */}
-                  <div className="flex-1">
-                    <div className="mb-3">
-                      <label className="block text-sm font-semibold text-purple-900 mb-2">
-                        Your specific responsibilities and target KPIs
-                      </label>
-                      <textarea
-                        value={roleResponsibilities}
-                        onChange={(e) => setRoleResponsibilities(e.target.value)}
-                        placeholder="e.g., Increase revenue by 25%, Expand into 3 new markets, Build a team of 50+ sales reps..."
-                        className="w-full h-64 px-3 py-2 border-2 border-purple-200 rounded-lg text-sm focus:outline-none focus:border-purple-400 resize-none"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Optional: Add your specific goals and KPIs to get more personalized recommendations
-                      </p>
-                    </div>
-                    
-                    {/* Removed focus areas preview - now in Step 2 */}
-                    <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                      <p className="text-xs font-semibold text-blue-800 mb-1">
-                        ✨ Next Step
-                      </p>
-                      <p className="text-sm text-slate-700">
-                        You'll be able to browse focus areas and select from curated prompts in the next step.
-                      </p>
-                    </div>
-                  </div>
+                    <span className={`text-xs font-bold tracking-wide transition-colors duration-300 ${isSelected ? 'text-purple-900' : 'text-gray-600'}`}>
+                      {role.name}
+                    </span>
+                    {/* Selection Indicator */}
+                    {isSelected && (
+                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-purple-600 rounded-full"></div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            
+            {/* Scroll Indicator Dots */}
+            <div className="flex justify-center gap-1.5 mt-3">
+              {Array.from({ length: Math.ceil(userRoles.filter(r => r.is_visible && r.is_enabled).length / 4) }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    const container = document.getElementById('role-scroll-container');
+                    if (container) container.scrollTo({ left: i * 400, behavior: 'smooth' });
+                  }}
+                  className="w-2 h-2 rounded-full bg-gray-300 hover:bg-purple-400 transition-colors"
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Selected Role Details */}
+          {selectedRole && (
+            <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200 p-4 animate-fade-in">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  </svg>
                 </div>
-                  );
-                })()}
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-purple-900">{selectedRole}</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {userRoles.find(r => r.name === selectedRole)?.title || selectedRole}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {userRoles.find(r => r.name === selectedRole)?.description || 'Select focus areas below to get started.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedRole("");
+                    setSelectedRoleDetails(null);
+                    setSelectedFocusArea(null);
+                    setSelectedPromptPreview(null);
+                  }}
+                  className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                >
+                  Change Role
+                </button>
               </div>
-            )}
+            </div>
+          )}
 
-            {selectedRole && !selectedRoleDetails && (
-              <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-xl">
-                <p className="text-sm text-purple-900">
-                  <span className="font-semibold">Selected role:</span> {selectedRole}
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={() => setStoryStep(2)}
-              disabled={!selectedRole}
-              className={`px-8 py-2.5 rounded-full text-sm font-semibold shadow-sm transition ${
-                selectedRole
-                  ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
-                  : "bg-slate-200 text-slate-400 cursor-not-allowed"
-              }`}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Story Mode Step 2: Focus Areas & Prompt Preview */}
-      {storyMode && storyStep === 2 && (
-        <div className={`${panel} p-4 sm:p-6 border-t-4 border-purple-600`}>
-          <div className="space-y-3 mb-6">
-            <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 2 · Focus Area</p>
-            <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-              Select your focus area and preview prompts
-            </h2>
-            <p className="text-sm text-slate-600">
-              Browse {selectedRole} focus areas on the left, then click a prompt to continue.
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-5">
-            {/* Left Sidebar - Focus Areas with Categories */}
-            <div className="md:col-span-2 bg-slate-50 rounded-lg border-2 border-slate-200 p-4 max-h-[600px] overflow-y-auto">
-              <p className="text-xs font-semibold text-slate-700 mb-3 uppercase">Focus Areas</p>
-              
-              {selectedRole === 'Head of Sales' && (
-                <div className="space-y-2">
-                  {[
-                    { category: 'A. Market & Opportunity', items: ['A1. Market Intelligence', 'A2. Target Account Selection', 'A3. Trigger Events'] },
-                    { category: 'B. Pre-Bid Phase', items: ['B1. Stakeholder Mapping', 'B2. Access & Relationships', 'B3. Requirements Shaping', 'B4. Qualification', 'B5. Pre-Sales Alignment'] },
-                    { category: 'C. Bid Phase', items: ['C1. Bid Strategy', 'C2. Pricing Strategy', 'C3. Solution Design', 'C4. Cross-Practice', 'C5. Marketing Support', 'C6. Delivery Engagement', 'C7. Risk Assessment', 'C8. Proposal Production', 'C9. Orals & Presentations'] },
-                    { category: 'D. Negotiation & Closing', items: ['D1. Commercial Negotiations', 'D2. Legal & Contracting', 'D3. Procurement', 'D4. Internal Approvals', 'D5. Competitive Displacement'] },
-                    { category: 'E. Post-Win Transition', items: ['E1. Sales-to-Delivery', 'E2. Expectation Alignment', 'E3. Delivery Risk', 'E4. Account Team Structure'] },
-                    { category: 'F. Account Growth', items: ['F1. Whitespace', 'F2. Upsell & Cross-Sell', 'F3. Multi-BU Expansion', 'F4. Strategic Planning', 'F5. Client Success'] },
-                    { category: 'G. Sales Team Coordination', items: ['G1. Team Coordination', 'G2. Sales & Pre-Sales', 'G3. Sales & Delivery', 'G4. Sales & Marketing', 'G5. Practice Partnerships', 'G6. Partner Engagement'] },
-                    { category: 'H. Sales Operations & Enablement', items: ['H1. CRM & Pipeline', 'H2. Sales Process', 'H3. Training & Skills', 'H4. Compensation', 'H5. Sales Tools'] },
-                    { category: 'I. Competitive & Market Positioning', items: ['I1. Competitive Intelligence', 'I2. Differentiation', 'I3. Analyst Relations'] },
-                    { category: 'J. Leadership & Organizational Challenges', items: ['J1. Territory Design', 'J2. Performance Management', 'J3. Talent Acquisition', 'J4. Sales Culture', 'J5. Sales Strategy'] },
-                    { category: 'K. Financial & Business Metrics', items: ['K1. Revenue & Forecasting', 'K2. Deal Profitability', 'K3. Sales Efficiency', 'K4. Customer Lifetime Value'] }
-                  ].map((section, idx) => (
-                    <div key={idx} className="border-b border-slate-300 pb-2">
+          {/* Focus Areas & Prompts Section */}
+          {selectedRole && (
+            <div className="grid md:grid-cols-2 gap-4 animate-fade-in">
+              {/* Focus Areas Column */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                <h3 className="font-semibold text-gray-900 text-sm mb-3 uppercase tracking-wide">Focus Areas</h3>
+                
+                <div className="space-y-1 max-h-[350px] overflow-y-auto">
+                  {(ROLE_FOCUS_AREAS[selectedRole] || []).map((area, areaIndex) => (
+                    <div key={area.id}>
+                      {/* Focus Area Header - Expandable */}
                       <button
-                        onClick={() => setActiveCategory(activeCategory === section.category ? '' : section.category)}
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-purple-100 transition-colors flex items-center justify-between"
+                        onClick={() => {
+                          if (selectedFocusArea?.id === area.id) {
+                            setSelectedFocusArea(null);
+                          } else {
+                            setSelectedFocusArea({id: area.id, title: area.title});
+                            setSelectedPromptPreview(null);
+                          }
+                        }}
+                        className={`flex items-center justify-between w-full px-3 py-2.5 text-left text-sm rounded-lg transition-colors ${
+                          selectedFocusArea?.id === area.id 
+                            ? 'bg-purple-100 text-purple-900 border border-purple-300' 
+                            : 'hover:bg-gray-50 text-gray-700'
+                        }`}
                       >
-                        <span className="text-xs font-semibold text-purple-900">{section.category}</span>
-                        <span className="text-purple-600">{activeCategory === section.category ? '▼' : '▶'}</span>
+                        <span className="font-medium text-xs">
+                          {String.fromCharCode(65 + areaIndex)}. {area.title}
+                        </span>
+                        <span className={`text-purple-500 text-xs transition-transform duration-200 ${
+                          selectedFocusArea?.id === area.id ? 'rotate-180' : ''
+                        }`}>▼</span>
                       </button>
-                      {activeCategory === section.category && (
-                        <div className="mt-1 ml-2 space-y-1">
-                          {section.items.map((item, itemIdx) => (
+                      
+                      {/* Sub-items (Prompts) - Expandable */}
+                      <div className={`overflow-hidden transition-all duration-300 ${
+                        selectedFocusArea?.id === area.id ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                      }`}>
+                        <div className="pl-4 py-1 space-y-1 border-l-2 border-purple-200 ml-3 mt-1">
+                          {area.prompts.map((prompt, promptIndex) => (
                             <button
-                              key={itemIdx}
+                              key={prompt.id}
                               onClick={() => {
-                                // Set the selected focus area to show prompts on the right
-                                setActiveCategory(section.category);
+                                setSelectedPromptPreview({
+                                  id: prompt.id,
+                                  title: `${String.fromCharCode(65 + areaIndex)}${promptIndex + 1}. ${prompt.title}`,
+                                  template: prompt.template
+                                });
                               }}
-                              className="w-full text-left px-2 py-1 text-xs text-slate-700 hover:bg-purple-50 rounded transition-colors"
+                              className={`block w-full text-left px-3 py-2 text-xs rounded-lg transition-colors ${
+                                selectedPromptPreview?.id === prompt.id
+                                  ? 'bg-purple-600 text-white font-medium'
+                                  : 'text-gray-600 hover:bg-purple-50 hover:text-purple-700'
+                              }`}
                             >
-                              {item}
+                              {String.fromCharCode(65 + areaIndex)}{promptIndex + 1}. {prompt.title}
                             </button>
                           ))}
                         </div>
-                      )}
+                      </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Right Side - Prompt Options */}
-            <div className="md:col-span-3 space-y-4">
-              <div className="bg-white rounded-lg border-2 border-purple-200 p-4">
-                <p className="text-base font-semibold text-purple-700 mb-3">Available Prompts</p>
-                <p className="text-base text-slate-600 mb-4">
-                  {activeCategory ? `Showing prompts for: ${activeCategory}` : 'Select a focus area from the left to see available prompts'}
-                </p>
+              {/* Prompt Preview Column */}
+              <div className={`bg-white rounded-xl border-2 shadow-sm p-4 transition-all duration-300 ${
+                selectedPromptPreview ? 'border-purple-300' : 'border-gray-200'
+              }`}>
+                <h3 className="font-semibold text-gray-900 text-sm mb-3 uppercase tracking-wide">Prompt Preview</h3>
                 
-                {/* Collapsible prompt preview cards */}
-                <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                  {activeCategory && salesLeaderPrompts[activeCategory]?.map((item, idx) => {
-                    const promptId = `${activeCategory}-${idx}`;
-                    const isExpanded = expandedPromptId === promptId;
-                    
-                    return (
-                      <div
-                        key={idx}
-                        className="bg-purple-50 border-2 border-purple-200 rounded-lg transition-all"
-                      >
-                        {/* Prompt Header - Click to expand/collapse */}
-                        <button
-                          onClick={() => setExpandedPromptId(isExpanded ? null : promptId)}
-                          className="w-full p-4 text-left hover:bg-purple-100 rounded-lg transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1">
-                              <p className="text-sm font-semibold text-purple-900 mb-1">{item.title}</p>
-                              {!isExpanded && (
-                                <p className="text-xs text-slate-600 line-clamp-2">{item.prompt.substring(0, 150)}...</p>
-                              )}
-                            </div>
-                            <span className="text-purple-600 text-sm flex-shrink-0">
-                              {isExpanded ? '▼' : '▶'}
-                            </span>
-                          </div>
-                        </button>
-                        
-                        {/* Expanded Prompt Content */}
-                        {isExpanded && (
-                          <div className="px-4 pb-4 space-y-3">
-                            <div className="bg-white rounded-lg p-3 border border-purple-200">
-                              <p 
-                                className="text-xs text-slate-700 whitespace-pre-wrap"
-                                style={activeCategory.startsWith('A.') ? { 
-                                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"',
-                                  lineHeight: '1.6',
-                                  letterSpacing: '-0.01em'
-                                } : undefined}
-                              >
-                                {highlightPlaceholders(item.prompt)}
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => {
-                                setPrompt(item.prompt);
-                                setStoryStep(3);
-                              }}
-                              className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-sm hover:shadow-md text-sm font-medium"
-                            >
-                              Use This Prompt →
-                            </button>
-                          </div>
-                        )}
+                {selectedPromptPreview ? (
+                  <div className="animate-fade-in">
+                    {/* Prompt Card */}
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                      <p className="text-sm font-semibold text-purple-900 mb-3">
+                        {selectedPromptPreview.title}
+                      </p>
+                      
+                      {/* Prompt Template */}
+                      <div className="bg-white rounded-lg p-3 border border-purple-200 max-h-[180px] overflow-y-auto">
+                        <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          {selectedPromptPreview.template}
+                        </p>
                       </div>
-                    );
-                  })}
-                  {!activeCategory && (
-                    <div className="text-center py-12 text-slate-400">
-                      <p className="text-sm">👈 Select a focus area from the left to see available prompts</p>
                     </div>
-                  )}
-                </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setPrompt(selectedPromptPreview.template);
+                          setStoryStep(2);
+                        }}
+                        className="flex-1 px-4 py-2.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        Use This Prompt
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPrompt(selectedPromptPreview.template);
+                          setStoryStep(2);
+                        }}
+                        className="px-4 py-2.5 bg-white border border-purple-300 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-50 transition-colors"
+                      >
+                        Edit First
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[250px] text-gray-400">
+                    <svg className="w-12 h-12 mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-sm">Select a prompt from Focus Areas</p>
+                    <p className="text-xs mt-1">Click on any A1, A2, B1... item</p>
+                  </div>
+                )}
               </div>
+            </div>
+          )}
 
-              {/* Navigation Buttons */}
-              <div className="flex justify-between gap-2 mt-4">
-                <button
-                  onClick={() => setStoryStep(1)}
-                  className="px-4 py-2 rounded-full border-2 border-slate-300 text-sm text-slate-700 bg-white hover:border-slate-400"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => setStoryStep(3)}
-                  className="px-6 py-2 rounded-full text-sm font-semibold shadow-sm transition bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
-                >
-                  Proceed
-                </button>
-              </div>
+          {/* Footer - Selected role and Next button */}
+          <div className="mt-6 flex justify-between items-center">
+            <div className="text-sm text-gray-500">
+              {selectedRole && (
+                <span>Selected: <span className="font-medium text-purple-700">{selectedRole}</span></span>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Story Mode Step 3: Prompt Editing */}
-      {storyMode && storyStep === 3 && (
+      {/* Story Mode Step 2: Prompt Editing with FileUploadZone (Legacy) */}
+      {storyMode && storyStep === 2 && (
         <div className={`${panel} p-4 sm:p-6 border-t-4 border-purple-600`}>
           <div className="space-y-3">
-            <p className="text-base font-semibold tracking-wide text-purple-600 uppercase">Step 3 · Customize Prompt</p>
+            <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 2 · Customize Prompt</p>
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
               Review and customize your prompt
             </h2>
             <p className="text-sm text-slate-600">
-              Edit the prompt below or write your own from scratch.
+              Edit the prompt below, fill in placeholders, and attach any relevant files.
             </p>
           </div>
 
           <div className="mt-6">
             <label className="text-xs font-medium text-slate-500 mb-2 block">Your prompt</label>
             <textarea
-              rows={12}
+              rows={10}
               value={prompt}
               onChange={(e) => handlePromptChange(e.target.value)}
               placeholder="e.g., 'Summarise the top three strategic options I should put in my board pack next week.'"
@@ -4988,8 +5022,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             />
             {/* Placeholder hint */}
             {prompt.includes('[') && prompt.includes(']') && (
-              <div className="mt-2 p-2 bg-purple-50/50 rounded-lg border border-purple-100">
-                <p className="text-[11px] text-purple-600 mb-1 font-medium">📝 Updated Prompt:</p>
+              <div className="mt-2 p-3 bg-purple-50/50 rounded-lg border border-purple-100">
+                <p className="text-[11px] text-purple-600 mb-1 font-medium">📝 Tip: Replace the [bracketed placeholders] with your specific details</p>
                 <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
                   {highlightPlaceholders(prompt, 'light')}
                 </p>
@@ -5008,8 +5042,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </div>
           </div>
 
-          {/* File Upload */}
-          <div className="mt-4">
+          {/* File Upload with CRM/Collaboration Integrations */}
+          <div className="mt-6">
             <FileUploadZone
               files={uploadedFiles}
               onFilesChange={setUploadedFiles}
@@ -5019,13 +5053,13 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           {/* Navigation Buttons */}
           <div className="mt-6 flex justify-between gap-2">
             <button
-              onClick={() => setStoryStep(2)}
+              onClick={() => setStoryStep(1)}
               className="px-4 py-2 rounded-full border-2 border-slate-300 text-sm text-slate-700 bg-white hover:border-slate-400"
             >
               Back
             </button>
             <button
-              onClick={() => setStoryStep(4)}
+              onClick={() => setStoryStep(3)}
               disabled={!prompt.trim()}
               className={`px-6 py-2 rounded-full text-sm font-medium shadow-sm transition ${
                 prompt.trim()
@@ -5039,16 +5073,16 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         </div>
       )}
 
-      {/* Story Mode Step 4: Engine Selection */}
-      {storyMode && storyStep === 4 && (
+      {/* Story Mode Step 3: Engine Selection */}
+      {storyMode && storyStep === 3 && (
         <div className="space-y-4">
           <div className={`${panel} p-4 sm:p-6 border-t-4 border-purple-600`}>
             <div className="space-y-3">
-              <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 4 · Engines</p>
+              <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 3 · Engines</p>
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1">
                   <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-                    Choose which AI engines to run
+                    Choose your AI engines to run or Run the recommended engines
                   </h2>
                   <p className="text-sm text-slate-600 mt-1">
                     Select multiple engines to get diverse perspectives. OneMind will run them in parallel.
@@ -5457,16 +5491,16 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-2 ml-auto">
+              <div className="flex gap-2 w-full justify-between">
                 <button
-                  onClick={() => setStoryStep(3)}
+                  onClick={() => setStoryStep(2)}
                   className="px-4 py-2 rounded-full border-2 border-slate-300 text-sm text-slate-700 bg-white hover:border-slate-400"
                 >
                   Back
                 </button>
                 <button
                   onClick={() => {
-                    setStoryStep(5);
+                    setStoryStep(4);
                     runAll();
                   }}
                   disabled={Object.keys(selected).filter(k => selected[k]).length === 0}
@@ -5523,12 +5557,12 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         </div>
       )}
 
-      {/* Story Mode Step 5: Results & Merging - Modern Horizontal Tabs */}
-      {storyMode && storyStep === 5 && (
+      {/* Story Mode Step 4: Results & Merging - Modern Horizontal Tabs */}
+      {storyMode && storyStep === 4 && (
         <div className={`${panel} p-4 sm:p-6 border-t-4 border-purple-600`}>
           {/* Header */}
           <div className="space-y-3 mb-6">
-            <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 5 · Results</p>
+            <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 4 · Results</p>
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
                 Compare engines and select the best pieces
@@ -6773,7 +6807,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           {/* Action Buttons */}
           <div className="mt-6 flex justify-between gap-2">
             <button
-              onClick={() => setStoryStep(4)}
+              onClick={() => setStoryStep(3)}
               className="px-4 py-2 rounded-full border-2 border-slate-300 text-sm text-slate-700 bg-white hover:border-slate-400 transition"
             >
               ← Back

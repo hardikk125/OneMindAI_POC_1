@@ -31,9 +31,29 @@
   animation: progress 2s ease-in-out infinite;
 }
 
+/* Fade-in animation for popups */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
 /* Optional: hide horizontal tab scrollbar on supported browsers */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Hide scrollbar for role scroll container */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Custom scrollbar for streaming content */
 .custom-scrollbar::-webkit-scrollbar {
