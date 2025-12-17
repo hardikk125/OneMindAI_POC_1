@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase/client';
+import { trackChange } from '../lib/change-tracker';
 
 // =============================================================================
 // TYPES
@@ -70,17 +71,17 @@ const DEFAULT_MODE_OPTIONS: ModeOption[] = [
 
 const DEFAULT_USER_ROLES: UserRole[] = [
   { id: '1', name: 'CEO', title: 'Chief Executive Officer', category: 'Executive', description: 'The CEO is the highest-ranking executive in a company, responsible for making major corporate decisions.', responsibilities: 'Strategic planning, stakeholder management, and organizational leadership.', is_visible: true, is_enabled: true, display_order: 1, icon_svg: null },
-  { id: '2', name: 'CFO', title: 'Chief Financial Officer', category: 'Executive', description: 'The CFO manages the financial actions of a company, including financial planning, risk management, and financial reporting.', responsibilities: 'Financial strategy, budgeting, investor relations, and compliance.', is_visible: true, is_enabled: true, display_order: 2, icon_svg: null },
-  { id: '3', name: 'COO', title: 'Chief Operating Officer', category: 'Executive', description: 'The COO oversees the day-to-day administrative and operational functions of a business.', responsibilities: 'Operations management, process optimization, and organizational efficiency.', is_visible: true, is_enabled: true, display_order: 3, icon_svg: null },
-  { id: '4', name: 'CTO', title: 'Chief Technology Officer', category: 'Executive', description: 'The CTO is responsible for overseeing the development and dissemination of technology for external customers and internal operations.', responsibilities: 'Technology strategy, R&D, product development, and technical architecture.', is_visible: true, is_enabled: true, display_order: 4, icon_svg: null },
-  { id: '5', name: 'CMO', title: 'Chief Marketing Officer', category: 'Executive', description: 'The CMO is responsible for developing and implementing marketing strategies to drive brand awareness and revenue growth.', responsibilities: 'Brand strategy, marketing campaigns, customer acquisition, and market research.', is_visible: true, is_enabled: true, display_order: 5, icon_svg: null },
-  { id: '6', name: 'CHRO', title: 'Chief Human Resources Officer', category: 'Executive', description: 'The CHRO oversees all human resource management and labor relations policies, practices, and operations.', responsibilities: 'Talent acquisition, employee development, culture, and HR strategy.', is_visible: true, is_enabled: true, display_order: 6, icon_svg: null },
-  { id: '7', name: 'CDIO', title: 'Chief Digital & Information Officer', category: 'Executive', description: 'The CDIO oversees the organization\'s data strategy, information systems, and digital transformation initiatives.', responsibilities: 'Data architecture, AI/ML implementation, information security, and digital innovation.', is_visible: true, is_enabled: true, display_order: 7, icon_svg: null },
-  { id: '8', name: 'CSO', title: 'Chief Strategy Officer', category: 'Executive', description: 'The CSO is responsible for developing and implementing strategic initiatives to drive business growth.', responsibilities: 'Corporate strategy, M&A, business development, and competitive analysis.', is_visible: true, is_enabled: true, display_order: 8, icon_svg: null },
-  { id: '9', name: 'CLO', title: 'Chief Legal Officer', category: 'Executive', description: 'The CLO oversees all legal matters and ensures the company operates within the law.', responsibilities: 'Legal strategy, compliance, contracts, and risk management.', is_visible: true, is_enabled: true, display_order: 9, icon_svg: null },
-  { id: '10', name: 'CRO', title: 'Chief Revenue Officer', category: 'Executive', description: 'The CRO is responsible for all revenue generation processes across sales, marketing, and customer success.', responsibilities: 'Revenue strategy, sales operations, customer retention, and growth.', is_visible: true, is_enabled: true, display_order: 10, icon_svg: null },
-  { id: '11', name: 'CPO', title: 'Chief Product Officer', category: 'Executive', description: 'The CPO leads all product-related activities, from ideation to launch and lifecycle management.', responsibilities: 'Product strategy, roadmap, user experience, and product-market fit.', is_visible: true, is_enabled: true, display_order: 11, icon_svg: null },
-  { id: '12', name: 'Head of Sales', title: 'Head of Sales', category: 'Executive', description: 'The Head of Sales leads the sales organization, responsible for revenue generation and sales strategy.', responsibilities: 'Revenue targets, sales team leadership, pipeline management, and customer acquisition.', is_visible: true, is_enabled: true, display_order: 12, icon_svg: null },
+  { id: '7', name: 'CDIO', title: 'Chief Digital & Information Officer', category: 'Executive', description: 'The CDIO oversees the organization\'s data strategy, information systems, and digital transformation initiatives.', responsibilities: 'Data architecture, AI/ML implementation, information security, and digital innovation.', is_visible: true, is_enabled: true, display_order: 2, icon_svg: null },
+  { id: '12', name: 'Sales', title: 'Head of Sales', category: 'Executive', description: 'The Head of Sales leads the sales organization, responsible for revenue generation and sales strategy.', responsibilities: 'Revenue targets, sales team leadership, pipeline management, and customer acquisition.', is_visible: true, is_enabled: true, display_order: 3, icon_svg: null },
+  { id: '2', name: 'CFO', title: 'Chief Financial Officer', category: 'Executive', description: 'The CFO manages the financial actions of a company, including financial planning, risk management, and financial reporting.', responsibilities: 'Financial strategy, budgeting, investor relations, and compliance.', is_visible: true, is_enabled: true, display_order: 4, icon_svg: null },
+  { id: '3', name: 'COO', title: 'Chief Operating Officer', category: 'Executive', description: 'The COO oversees the day-to-day administrative and operational functions of a business.', responsibilities: 'Operations management, process optimization, and organizational efficiency.', is_visible: true, is_enabled: true, display_order: 5, icon_svg: null },
+  { id: '4', name: 'CTO', title: 'Chief Technology Officer', category: 'Executive', description: 'The CTO is responsible for overseeing the development and dissemination of technology for external customers and internal operations.', responsibilities: 'Technology strategy, R&D, product development, and technical architecture.', is_visible: true, is_enabled: true, display_order: 6, icon_svg: null },
+  { id: '5', name: 'CMO', title: 'Chief Marketing Officer', category: 'Executive', description: 'The CMO is responsible for developing and implementing marketing strategies to drive brand awareness and revenue growth.', responsibilities: 'Brand strategy, marketing campaigns, customer acquisition, and market research.', is_visible: true, is_enabled: true, display_order: 7, icon_svg: null },
+  { id: '6', name: 'CHRO', title: 'Chief Human Resources Officer', category: 'Executive', description: 'The CHRO oversees all human resource management and labor relations policies, practices, and operations.', responsibilities: 'Talent acquisition, employee development, culture, and HR strategy.', is_visible: true, is_enabled: true, display_order: 8, icon_svg: null },
+  { id: '8', name: 'CSO', title: 'Chief Strategy Officer', category: 'Executive', description: 'The CSO is responsible for developing and implementing strategic initiatives to drive business growth.', responsibilities: 'Corporate strategy, M&A, business development, and competitive analysis.', is_visible: true, is_enabled: true, display_order: 9, icon_svg: null },
+  { id: '9', name: 'CLO', title: 'Chief Legal Officer', category: 'Executive', description: 'The CLO oversees all legal matters and ensures the company operates within the law.', responsibilities: 'Legal strategy, compliance, contracts, and risk management.', is_visible: true, is_enabled: true, display_order: 10, icon_svg: null },
+  { id: '10', name: 'CRO', title: 'Chief Revenue Officer', category: 'Executive', description: 'The CRO is responsible for all revenue generation processes across sales, marketing, and customer success.', responsibilities: 'Revenue strategy, sales operations, customer retention, and growth.', is_visible: true, is_enabled: true, display_order: 11, icon_svg: null },
+  { id: '11', name: 'CPO', title: 'Chief Product Officer', category: 'Executive', description: 'The CPO leads all product-related activities, from ideation to launch and lifecycle management.', responsibilities: 'Product strategy, roadmap, user experience, and product-market fit.', is_visible: true, is_enabled: true, display_order: 12, icon_svg: null },
 ];
 
 const DEFAULT_ROLE_PROMPTS: RolePrompt[] = [
@@ -141,7 +142,14 @@ export function useUIConfig(): UIConfig {
         console.warn('[UIConfig] Error fetching mode_options:', modesResult.error.message);
         // Table might not exist yet, use defaults
       } else if (modesResult.data && modesResult.data.length > 0) {
+        const prevCount = modeOptions.length;
         setModeOptions(modesResult.data as ModeOption[]);
+        trackChange('useUIConfig.ts', `mode_options updated: ${prevCount} → ${modesResult.data.length} items`, {
+          function: 'fetchConfig',
+          changeType: 'database',
+          previousValue: prevCount,
+          newValue: modesResult.data.length,
+        });
       }
 
       if (rolesResult.error) {
@@ -152,13 +160,27 @@ export function useUIConfig(): UIConfig {
         const dbRoleNames = new Set(dbRoles.map(r => r.name));
         const missingDefaults = DEFAULT_USER_ROLES.filter(r => !dbRoleNames.has(r.name));
         const mergedRoles = [...dbRoles, ...missingDefaults].sort((a, b) => a.display_order - b.display_order);
+        const prevRoleCount = userRoles.length;
         setUserRoles(mergedRoles);
+        trackChange('useUIConfig.ts', `user_roles updated: ${prevRoleCount} → ${mergedRoles.length} items`, {
+          function: 'fetchConfig',
+          changeType: 'database',
+          previousValue: prevRoleCount,
+          newValue: mergedRoles.length,
+        });
       }
 
       if (promptsResult.error) {
         console.warn('[UIConfig] Error fetching role_prompts:', promptsResult.error.message);
       } else if (promptsResult.data && promptsResult.data.length > 0) {
+        const prevPromptCount = rolePrompts.length;
         setRolePrompts(promptsResult.data as RolePrompt[]);
+        trackChange('useUIConfig.ts', `role_prompts updated: ${prevPromptCount} → ${promptsResult.data.length} items`, {
+          function: 'fetchConfig',
+          changeType: 'database',
+          previousValue: prevPromptCount,
+          newValue: promptsResult.data.length,
+        });
       }
 
     } catch (err) {
@@ -170,8 +192,43 @@ export function useUIConfig(): UIConfig {
     }
   }, []);
 
+  // Initial fetch on mount
   useEffect(() => {
     fetchConfig();
+  }, [fetchConfig]);
+
+  // Set up real-time listeners for database changes
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+
+    const supabase = getSupabase();
+    
+    // Subscribe to changes on role_prompts table
+    const subscription = supabase
+      .channel('role_prompts_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',  // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'role_prompts'
+        },
+        (payload) => {
+          trackChange('useUIConfig.ts', `Real-time update: ${payload.eventType} on role_prompts`, {
+            function: 'realtime-listener',
+            previousValue: payload.old,
+            newValue: payload.new,
+          });
+          // Refetch when changes are detected
+          fetchConfig();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [fetchConfig]);
 
   return {

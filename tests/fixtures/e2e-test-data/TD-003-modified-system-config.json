@@ -1,0 +1,33 @@
+{
+  "testId": "TD-003",
+  "purpose": "Test system config changes propagate to frontend",
+  "changes": [
+    {
+      "key": "prompt_soft_limit",
+      "oldValue": 5000,
+      "newValue": 3000,
+      "expectedImpact": "Warning shows at 3000 chars instead of 5000",
+      "testCase": "TC-E2E-015"
+    },
+    {
+      "key": "prompt_hard_limit",
+      "oldValue": 10000,
+      "newValue": 8000,
+      "expectedImpact": "Hard limit enforced at 8000 chars",
+      "testCase": "TC-E2E-016"
+    },
+    {
+      "key": "max_engines_per_run",
+      "oldValue": 5,
+      "newValue": 3,
+      "expectedImpact": "User can select max 3 engines",
+      "testCase": "TC-E2E-017"
+    }
+  ],
+  "verificationSteps": [
+    "Admin changes values in admin panel",
+    "Cache is cleared automatically",
+    "Main app loads new values",
+    "User sees new limits in action"
+  ]
+}

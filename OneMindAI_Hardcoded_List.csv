@@ -1,0 +1,107 @@
+Serial number,Category,File,Location,Hardcoded Value,Why Added,Needed?,Recommendation,Impact if NOT Fixed,Type
+1,🔴 CATEGORY 1: Token Limits (CRITICAL),OneMindAI.tsx,Line 175-188,"contextLimit: 128_000, 200_000, 1_000_000, 64_000, 32_000",Define max input context per engine,YES for UI,Move to config file/API,UI progress bars break,Token Limit
+2,🔴 CATEGORY 1: Token Limits (CRITICAL),OneMindAI.tsx,Lines 192-246,"MODEL_TOKEN_LIMITS dictionary (e.g., ""gpt-4o"": 16384)",Cap output tokens per model,PARTIAL,Move to config,Stale limits cause truncation,Token Limit
+3,🔴 CATEGORY 1: Token Limits (CRITICAL),OneMindAI.tsx,Line 249,DEFAULT_TOKEN_LIMIT = 8192,Fallback for unknown models,YES,"Keep as fallback, make configurable via env",None - safe fallback,Token Limit
+4,🔴 CATEGORY 1: Token Limits (CRITICAL),OneMindAI.tsx,Lines 381-395,"PROVIDER_MAX_OUTPUT (e.g., deepseek: 8192)",Cap output per provider,REMOVE,Conflicts with backend caps,TRUNCATION - main cause,Token Limit
+5,🔴 CATEGORY 1: Token Limits (CRITICAL),OneMindAI.tsx,Line 401,4096 (fallback in computeOutCap),Default if provider not found,YES,Keep as safe fallback,None - safe fallback,Token Limit
+6,🔴 CATEGORY 1: Token Limits (CRITICAL),OneMindAI.tsx,Line 407,0.9 (90% of available context),Reserve 10% buffer,YES,Good practice,Edge case failures,Token Limit
+35,🔴 CATEGORY 1: Token Limits (CRITICAL),ai-proxy.cjs,Line 793,128000 (GPT-5 max),Cap GPT-5 output,REMOVE,Let provider handle,Unnecessary cap,Token Limit
+36,🔴 CATEGORY 1: Token Limits (CRITICAL),ai-proxy.cjs,Line 794,16384 (GPT-4 max),Cap GPT-4 output,REMOVE,Let provider handle,Limits GPT-4 output,Token Limit
+37,🔴 CATEGORY 1: Token Limits (CRITICAL),ai-proxy.cjs,Line 881,8192 (Claude max),Cap Claude output,REMOVE,Let provider handle,Limits Claude output,Token Limit
+38,🔴 CATEGORY 1: Token Limits (CRITICAL),ai-proxy.cjs,Line 988,8192 (Gemini max),Cap Gemini output,REMOVE,Let provider handle,Limits Gemini output,Token Limit
+39,🔴 CATEGORY 1: Token Limits (CRITICAL),ai-proxy.cjs,Line 1116,32768 (Mistral max),Cap Mistral output,REMOVE,Let provider handle,Limits Mistral output,Token Limit
+40,🔴 CATEGORY 1: Token Limits (CRITICAL),ai-proxy.cjs,Line 1195,4096 (Perplexity max),Cap Perplexity output,REMOVE,Let provider handle,SEVERE TRUNCATION,Token Limit
+41,🔴 CATEGORY 1: Token Limits (CRITICAL),ai-proxy.cjs,Line 1271,8192 (DeepSeek max),Cap DeepSeek output,REMOVE,Let provider handle,MAIN TRUNCATION CAUSE,Token Limit
+76,🔴 CATEGORY 1: Token Limits (CRITICAL),OneMindAI.tsx,Line 2738,8000 (max_new_tokens for Falcon),Minimum output tokens,REVIEW,Should match backend limits,Inconsistent limits,Token Limit
+7,🟡 CATEGORY 2: Pricing (Business Data),OneMindAI.tsx,Lines 252-315,BASE_PRICING dictionary,Show cost estimates to users,YES for UI,Move to database/config,Stale pricing shown,Pricing
+8,🟡 CATEGORY 2: Pricing (Business Data),OneMindAI.tsx,Line 332,expectedOutputTokens: number = 1000,Default for cost calculation,YES,"Reasonable default, could be configurable",None - reasonable default,Pricing
+9,🟡 CATEGORY 2: Pricing (Business Data),OneMindAI.tsx,Line 347,1_000_000 (divisor for pricing),Convert to per-token cost,YES,Industry standard. Keep,None - industry standard,Pricing
+84,🟡 CATEGORY 2: Pricing (Business Data),OneMindAI.tsx,Line 3301,1_000_000 (divisor for pricing),Convert to per-token cost,YES,Industry standard. Keep,None - industry standard,Pricing
+88,🟡 CATEGORY 2: Pricing (Business Data),OneMindAI.tsx,Line 3642,100 (divisor for cents to dollars),Convert cents to USD,YES,Standard. Keep,None - standard conversion,Pricing
+10,🟡 CATEGORY 3: Prompt Limits (UX Guardrails),OneMindAI.tsx,Line 430,PROMPT_SOFT_LIMIT: 5000,Warning threshold,YES,Make admin-configurable,No warning for long prompts,Prompt Limit
+11,🟡 CATEGORY 3: Prompt Limits (UX Guardrails),OneMindAI.tsx,Line 431,PROMPT_HARD_LIMIT: 10000,Block threshold,YES,Make admin-configurable,Browser lag on huge prompts,Prompt Limit
+12,🟡 CATEGORY 3: Prompt Limits (UX Guardrails),OneMindAI.tsx,Line 432,PROMPT_CHUNK_SIZE: 4000,For chunking long prompts,YES,"Keep, could be configurable",None - reasonable default,Prompt Limit
+13,🟡 CATEGORY 3: Prompt Limits (UX Guardrails),OneMindAI.tsx,Line ~1439,MAX_PROMPT_LENGTH = 7000,Truncate before API call,YES,Make configurable,400 errors from API,Prompt Limit
+14,🟢 CATEGORY 4: Token Estimation Multipliers,OneMindAI.tsx,Line 322,0.75 (tiktoken),Estimate tokens from words,YES,Keep - industry approximation,None,Token Estimation
+15,🟢 CATEGORY 4: Token Estimation Multipliers,OneMindAI.tsx,Line 322,0.002 (tiktoken chars),Char-based adjustment,YES,Keep - fine-tuning,None,Token Estimation
+16,🟢 CATEGORY 4: Token Estimation Multipliers,OneMindAI.tsx,Line 323,0.95 (sentencepiece),Different tokenizer ratio,YES,Keep,None,Token Estimation
+17,🟢 CATEGORY 4: Token Estimation Multipliers,OneMindAI.tsx,Line 323,0.003 (sentencepiece chars),Char-based adjustment,YES,Keep,None,Token Estimation
+18,🟢 CATEGORY 4: Token Estimation Multipliers,OneMindAI.tsx,Line 324,0.6 (bytebpe fallback),Fallback tokenizer,YES,Keep,None,Token Estimation
+19,🟢 CATEGORY 4: Token Estimation Multipliers,OneMindAI.tsx,Line 324,0.004 (bytebpe chars),Char-based adjustment,YES,Keep,None,Token Estimation
+20,🟢 CATEGORY 5: Time/Label Thresholds (UI Display),OneMindAI.tsx,Line 367,3 (min seconds),Minimum time estimate,YES,Keep - UX,None,UI Display
+21,🟢 CATEGORY 5: Time/Label Thresholds (UI Display),OneMindAI.tsx,Line 367,2 (base seconds),Base time offset,YES,Keep - UX,None,UI Display
+22,🟢 CATEGORY 5: Time/Label Thresholds (UI Display),OneMindAI.tsx,Line 368,20 (seconds threshold),"""a few seconds"" label",YES,Keep - UX,None,UI Display
+23,🟢 CATEGORY 5: Time/Label Thresholds (UI Display),OneMindAI.tsx,Line 369,90 (seconds threshold),Switch to minutes,YES,Keep - UX,None,UI Display
+24,🟢 CATEGORY 5: Time/Label Thresholds (UI Display),OneMindAI.tsx,Line 375,"800, 2000, 4000",Output label thresholds,YES,Keep - UX,None,UI Display
+82,🟢 CATEGORY 5: Time/Label Thresholds (UI Display),OneMindAI.tsx,Line 3243,16 (UPDATE_INTERVAL in ms),60fps refresh rate,YES,Keep - smooth streaming,None,UI Display
+83,🟢 CATEGORY 5: Time/Label Thresholds (UI Display),OneMindAI.tsx,Line 3244,30000 (STREAM_TIMEOUT in ms),30 seconds without chunks,YES,Make configurable,Timeout too short/long,UI Display
+25,🟢 CATEGORY 6: Engine Metadata (Display Text),OneMindAI.tsx,Lines 482-600+,"engineInfoText (taglines, descriptions, badges)",UI display,YES,Move to database for admin editing,Stale descriptions,Engine Metadata
+26,🟢 CATEGORY 6: Engine Metadata (Display Text),OneMindAI.tsx,Lines 174-188,"seededEngines (names, versions, default versions)",Engine registry,YES,Move to config/database,Hard to add new engines,Engine Metadata
+27,🟢 CATEGORY 6: Engine Metadata (Display Text),OneMindAI.tsx,Line 451,"{ openai: true, deepseek: true, mistral: true }",Default selected engines,YES,Make admin-configurable,Wrong defaults for users,Engine Metadata
+90,🟢 CATEGORY 6: Engine Metadata (Display Text),OneMindAI.tsx,Lines 500-580,"engineInfoText object (taglines, descriptions, badges)",UI display for engine cards,YES,Move to database,Stale UI text,Engine Metadata
+91,🟢 CATEGORY 6: Engine Metadata (Display Text),OneMindAI.tsx,Lines 583-646,modelInfo dictionary,Model descriptions for tooltips,YES,Move to database,Stale model info,Engine Metadata
+92,🟢 CATEGORY 6: Engine Metadata (Display Text),OneMindAI.tsx,Line 652,"['openai', 'deepseek', 'mistral']",Default selected engines,YES,Make admin-configurable,Wrong defaults,Engine Metadata
+28,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line ~1545,'http://localhost:3002',Proxy URL fallback,YES,Already uses env vars. Keep fallback,None,API Config
+29,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line ~1740,temperature: 0.7,Default creativity,YES,Make configurable,None - standard default,API Config
+30,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line ~1865,TEST_ERROR: null,Debug flag,YES,Keep for testing,None,API Config
+31,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line ~2470,GEMINI_TEST_ERROR: null,Debug flag,YES,Keep for testing,None,API Config
+32,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 442,MOCK_FAIL_AFTER_RETRIES = 2,Testing retry logic,YES,Keep for testing,None,API Config
+67,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 1970,GEMINI_TEST_ERROR: null,Debug flag for Gemini testing,YES,Keep for testing,None,API Config
+68,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 2143,0.7 (temperature for Gemini),Default creativity level,YES,Keep - standard,None,API Config
+69,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 2218,0.7 (temperature for Mistral),Default creativity level,YES,Keep - standard,None,API Config
+70,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 2338,0.7 (temperature for Perplexity),Default creativity level,YES,Keep - standard,None,API Config
+71,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 2465,0.7 (temperature for Kimi),Default creativity level,YES,Keep - standard,None,API Config
+72,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 2584,0.7 (temperature for DeepSeek),Default creativity level,YES,Keep - standard,None,API Config
+73,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 2676,'https://api.x.ai/v1',xAI API base URL,YES,Keep - standard endpoint,None,API Config
+74,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 2703,'https://api.groq.com/openai/v1',Groq API base URL,YES,Keep - standard endpoint,None,API Config
+75,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 2729,'https://api-inference.huggingface.co/models/tiiuae/',HuggingFace API base,YES,Keep - standard endpoint,None,API Config
+77,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 2803,'https://api.sarvam.ai/v1/chat/completions',Sarvam API endpoint,YES,Keep - standard endpoint,None,API Config
+85,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 3620,'https://api.deepseek.com/user/balance',DeepSeek balance endpoint,YES,Keep - standard endpoint,None,API Config
+86,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 3634,Date format 'T' split,Get today's date for OpenAI usage,YES,Keep - standard,None,API Config
+87,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 3635,'https://api.openai.com/v1/usage?date=',OpenAI usage endpoint,YES,Keep - standard endpoint,None,API Config
+89,🟢 CATEGORY 7: API/Streaming Configuration,OneMindAI.tsx,Line 3648,'https://api.openai.com/v1/models',OpenAI models endpoint,YES,Keep - standard endpoint,None,API Config
+33,🟢 CATEGORY 8: UI Configuration Defaults,OneMindAI.tsx,Lines 470-479,engineUiConfig defaults,UI feature flags,YES,Already designed for admin control,None,UI Config
+34,🟢 CATEGORY 8: UI Configuration Defaults,OneMindAI.tsx,Line 50,debugModeEnabled = false,Debug toggle,YES,"Keep, could be env-based",None,UI Config
+42,🟡 CATEGORY 9: Default Models (Backend),ai-proxy.cjs,Line 789,'gpt-4o',Fallback model,YES,Keep as safe default,None,Default Model
+43,🟡 CATEGORY 9: Default Models (Backend),ai-proxy.cjs,Line 878,'claude-3-5-sonnet-20241022',Fallback model,PARTIAL,Use generic alias,Breaks when model deprecated,Default Model
+44,🟡 CATEGORY 9: Default Models (Backend),ai-proxy.cjs,Line 979,'gemini-1.5-pro',Fallback model,YES,Keep,None,Default Model
+45,🟡 CATEGORY 9: Default Models (Backend),ai-proxy.cjs,Line 1113,'mistral-large-latest',Fallback model,YES,Keep,None,Default Model
+46,🟡 CATEGORY 9: Default Models (Backend),ai-proxy.cjs,Line 1192,'sonar-pro',Fallback model,YES,Keep,None,Default Model
+47,🟡 CATEGORY 9: Default Models (Backend),ai-proxy.cjs,Line 1268,'deepseek-chat',Fallback model,YES,Keep,None,Default Model
+48,🟡 CATEGORY 10: Temperature Defaults (Backend),ai-proxy.cjs,Line 798,0.7 (OpenAI),Default creativity,YES,Keep - standard,None,Temperature
+49,🟡 CATEGORY 10: Temperature Defaults (Backend),ai-proxy.cjs,Line 882,0.7 (Claude),Default creativity,YES,Keep - standard,None,Temperature
+50,🟡 CATEGORY 10: Temperature Defaults (Backend),ai-proxy.cjs,Line 986,0.7 (Gemini),Default creativity,YES,Keep - standard,None,Temperature
+51,🟡 CATEGORY 10: Temperature Defaults (Backend),ai-proxy.cjs,Line 1117,0.7 (Mistral),Default creativity,YES,Keep - standard,None,Temperature
+52,🟡 CATEGORY 10: Temperature Defaults (Backend),ai-proxy.cjs,Line 1196,0.7 (Perplexity),Default creativity,YES,Keep - standard,None,Temperature
+53,🟡 CATEGORY 10: Temperature Defaults (Backend),ai-proxy.cjs,Line 1272,0.7 (DeepSeek),Default creativity,YES,Keep - standard,None,Temperature
+54,🟢 CATEGORY 11: Server Configuration (Backend),ai-proxy.cjs,Line 15,3002 (PORT fallback),Default port,YES,Already uses env. Keep fallback,None,Server Config
+55,🟢 CATEGORY 11: Server Configuration (Backend),ai-proxy.cjs,Line 58,'10mb' (body limit),Prevent memory overflow,YES,Security. Keep,None,Server Config
+56,🟢 CATEGORY 11: Server Configuration (Backend),ai-proxy.cjs,Line 62,60 * 1000 (rate limit window),1 minute window,YES,Already uses env. Keep fallback,None,Server Config
+57,🟢 CATEGORY 11: Server Configuration (Backend),ai-proxy.cjs,Line 63,60 (max requests),Rate limit,YES,Already uses env. Keep fallback,None,Server Config
+58,🟢 CATEGORY 11: Server Configuration (Backend),ai-proxy.cjs,Line 66,retryAfter: 60,Rate limit message,YES,Keep,None,Server Config
+59,🟢 CATEGORY 11: Server Configuration (Backend),ai-proxy.cjs,Line 895,'2023-06-01' (Anthropic version),API version header,YES,Required by Anthropic. Keep,API breaks,Server Config
+60,🟢 CATEGORY 12: HubSpot Integration,ai-proxy.cjs,Line 108,'https://api.hubapi.com',HubSpot API base,YES,Standard endpoint. Keep,None,HubSpot
+61,🟢 CATEGORY 12: HubSpot Integration,ai-proxy.cjs,Line 122,60 (token expiry buffer),Refresh before expiry,YES,Good practice. Keep,None,HubSpot
+62,🟢 CATEGORY 12: HubSpot Integration,ai-proxy.cjs,"Line 117, 240",'default-user',Fallback user ID,YES,Keep for dev,None,HubSpot
+63,🟢 CATEGORY 12: HubSpot Integration,ai-proxy.cjs,Line 219,Default OAuth scopes,HubSpot permissions,YES,Keep,None,HubSpot
+78,🟢 CATEGORY 13: Test/Debug Configuration,OneMindAI.tsx,Line 3114,429 (error code for rate limit),Test error simulation,YES,Keep for testing,None,Test Config
+79,🟢 CATEGORY 13: Test/Debug Configuration,OneMindAI.tsx,Line 3119,500 (error code for server error),Test error simulation,YES,Keep for testing,None,Test Config
+80,🟢 CATEGORY 13: Test/Debug Configuration,OneMindAI.tsx,Line 3124,401 (error code for auth error),Test error simulation,YES,Keep for testing,None,Test Config
+81,🟢 CATEGORY 13: Test/Debug Configuration,OneMindAI.tsx,Line 3152,500 (ms delay between test errors),Stagger errors for testing,YES,Keep for testing,None,Test Config
+93,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Lines 1002-1042,"xAI error messages (403, 404, 405, etc.)",Error handling for xAI,YES,Keep - provider-specific,None,Error Messages
+94,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Lines 1048-1120,"Groq error messages (400, 401, 403, etc.)",Error handling for Groq,YES,Keep - provider-specific,None,Error Messages
+95,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Lines 1123-1178,"Falcon error messages (400, 401, 403, etc.)",Error handling for Falcon,YES,Keep - provider-specific,None,Error Messages
+96,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Lines 1181-1238,"Mistral error messages (401, 400, 403, etc.)",Error handling for Mistral,YES,Keep - provider-specific,None,Error Messages
+97,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Lines 1241-1288,"Claude error messages (401, 403, 404, etc.)",Error handling for Claude,YES,Keep - provider-specific,None,Error Messages
+98,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Lines 1291-1355,"OpenAI error messages (401, 403, 404, etc.)",Error handling for OpenAI,YES,Keep - provider-specific,None,Error Messages
+99,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Lines 1357-1395,"Common error patterns (401, 403, 429, etc.)",Fallback error handling,YES,Keep - generic patterns,None,Error Messages
+100,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Line 1439,Truncation warning message,User-friendly truncation notice,YES,Keep - good UX,None,Error Messages
+101,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Lines 3162-3168,Prompt warning messages,Soft/hard limit warnings,YES,Make configurable,None,Error Messages
+102,🟢 CATEGORY 14: Error Messages,OneMindAI.tsx,Lines 3200-3204,"Logging messages (""RUN LIVE"", etc.)",Debug/logging output,YES,Keep - for debugging,None,Error Messages
+103,🟢 CATEGORY 15: Already Correct (No Action),OneMindAI.tsx,Line 1528,supportedProviders array,List of supported providers,✅ Correct,No change needed,None,Config
+104,🟢 CATEGORY 15: Already Correct (No Action),OneMindAI.tsx,Line 1531,liveMode check,Feature flag for streaming,✅ Correct,No change needed,None,Config
+105,🟢 CATEGORY 15: Already Correct (No Action),OneMindAI.tsx,Lines 2455-2467,Kimi API endpoint and headers,Standard API call structure,✅ Correct,No change needed,None,API Config
+106,🟢 CATEGORY 15: Already Correct (No Action),OneMindAI.tsx,Lines 2571-2587,DeepSeek API endpoint and headers,Standard API call structure,✅ Correct,No change needed,None,API Config
+107,🟢 CATEGORY 15: Already Correct (No Action),OneMindAI.tsx,Lines 2681-2687,xAI API call structure,Standard API call structure,✅ Correct,No change needed,None,API Config
+108,🟢 CATEGORY 15: Already Correct (No Action),OneMindAI.tsx,Lines 2708-2714,Groq API call structure,Standard API call structure,✅ Correct,No change needed,None,API Config
+109,🟢 CATEGORY 15: Already Correct (No Action),OneMindAI.tsx,Lines 3603-3604,Custom engine defaults,Fallback for new custom engines,✅ Correct,No change needed,None,Config

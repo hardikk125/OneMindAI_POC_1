@@ -1,0 +1,742 @@
+{
+  "config": {
+    "configFile": "C:\\Projects\\OneMindAI\\playwright.config.ts",
+    "rootDir": "C:/Projects/OneMindAI/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "playwright-report"
+        }
+      ],
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "C:/Projects/OneMindAI/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "C:/Projects/OneMindAI/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.57.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://localhost:5173",
+      "reuseExistingServer": true,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "comprehensive-e2e.spec.ts",
+      "file": "comprehensive-e2e.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Comprehensive E2E Test Suite - E2E-FULL-001",
+          "file": "comprehensive-e2e.spec.ts",
+          "line": 103,
+          "column": 6,
+          "specs": [
+            {
+              "title": "PHASE 1: Authentication & Initial Load",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 1200000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 16255,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n================================================================================\n"
+                        },
+                        {
+                          "text": "PHASE 1: AUTHENTICATION & INITIAL LOAD\n"
+                        },
+                        {
+                          "text": "================================================================================\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-001] Navigate to main app\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-001] Authentication bypassed or completed\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-002] Verify main app loaded\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-002] Main app UI rendered\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-003] Check initial config state\n"
+                        },
+                        {
+                          "text": "   Cache loaded: No\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-003] Initial state verified\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-15T13:52:33.920Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ceae8d42728a3fcdf4bb-b899d6acc603aebf1d57",
+              "file": "comprehensive-e2e.spec.ts",
+              "line": 110,
+              "column": 3
+            },
+            {
+              "title": "PHASE 2: Admin Panel - System Config Changes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 1200000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6606,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n================================================================================\n"
+                        },
+                        {
+                          "text": "PHASE 2: ADMIN PANEL - SYSTEM CONFIG CHANGES\n"
+                        },
+                        {
+                          "text": "================================================================================\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-004] Navigate to admin panel\n"
+                        },
+                        {
+                          "text": "   Navigating to: http://localhost:5173/admin/config\n"
+                        },
+                        {
+                          "text": "   ✅ Admin panel loaded successfully\n"
+                        },
+                        {
+                          "text": "   ⚠️ Admin panel not visible. Skipping admin tests.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-15T13:52:50.425Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ceae8d42728a3fcdf4bb-3d5f833ba799b939d65e",
+              "file": "comprehensive-e2e.spec.ts",
+              "line": 165,
+              "column": 3
+            },
+            {
+              "title": "PHASE 3: Admin Panel - Provider Config Changes",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 1200000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 242734,
+                      "error": {
+                        "message": "Error: page.waitForTimeout: Target page, context or browser has been closed",
+                        "stack": "Error: page.waitForTimeout: Target page, context or browser has been closed\n    at C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts:254:16",
+                        "location": {
+                          "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                          "column": 16,
+                          "line": 254
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 252 |\u001b[39m     \n \u001b[90m 253 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=Provider Config'\u001b[39m)\u001b[33m.\u001b[39m\u001b[36mcatch\u001b[39m(() \u001b[33m=>\u001b[39m {})\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 254 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m1000\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 255 |\u001b[39m\n \u001b[90m 256 |\u001b[39m     \u001b[90m// TC-E2E-009: Modify OpenAI max_output_cap\u001b[39m\n \u001b[90m 257 |\u001b[39m     \u001b[36mawait\u001b[39m logStep(page\u001b[33m,\u001b[39m \u001b[32m'TC-E2E-009'\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'Modify OpenAI max_output_cap (16384 → 10000)'\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'START'\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                            "column": 16,
+                            "line": 254
+                          },
+                          "message": "Error: page.waitForTimeout: Target page, context or browser has been closed\n\n\u001b[0m \u001b[90m 252 |\u001b[39m     \n \u001b[90m 253 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=Provider Config'\u001b[39m)\u001b[33m.\u001b[39m\u001b[36mcatch\u001b[39m(() \u001b[33m=>\u001b[39m {})\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 254 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m1000\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 255 |\u001b[39m\n \u001b[90m 256 |\u001b[39m     \u001b[90m// TC-E2E-009: Modify OpenAI max_output_cap\u001b[39m\n \u001b[90m 257 |\u001b[39m     \u001b[36mawait\u001b[39m logStep(page\u001b[33m,\u001b[39m \u001b[32m'TC-E2E-009'\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'Modify OpenAI max_output_cap (16384 → 10000)'\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'START'\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts:254:16\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "\n================================================================================\n"
+                        },
+                        {
+                          "text": "PHASE 3: ADMIN PANEL - PROVIDER CONFIG CHANGES\n"
+                        },
+                        {
+                          "text": "================================================================================\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-004] Navigate to admin panel\n"
+                        },
+                        {
+                          "text": "   Navigating to: http://localhost:5173/admin/config\n"
+                        },
+                        {
+                          "text": "   ✅ Admin panel loaded successfully\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-15T13:52:57.042Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Projects\\OneMindAI\\test-results\\comprehensive-e2e-Comprehe-8874c-l---Provider-Config-Changes-chromium\\video.webm"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                        "column": 16,
+                        "line": 254
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "ceae8d42728a3fcdf4bb-976cc2c0fe928e4029d7",
+              "file": "comprehensive-e2e.spec.ts",
+              "line": 239,
+              "column": 3
+            },
+            {
+              "title": "PHASE 4: Main App - Verify Config Applied",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 1200000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 17519,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n================================================================================\n"
+                        },
+                        {
+                          "text": "PHASE 4: MAIN APP - VERIFY CONFIG APPLIED\n"
+                        },
+                        {
+                          "text": "================================================================================\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-013] Navigate to main app\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-013] Main app loaded\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-014] Verify KIMI hidden from engine list\n"
+                        },
+                        {
+                          "text": "   KIMI visible: No (PASS)\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-014] KIMI successfully hidden\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-015] Test prompt soft limit (3000 chars)\n"
+                        },
+                        {
+                          "text": "   Warning at 3000 chars: No\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-015] Soft limit warning working\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-016] Test prompt hard limit (8000 chars)\n"
+                        },
+                        {
+                          "text": "   Error at 8000 chars: No\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-016] Hard limit enforcement working\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-15T13:57:00.837Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ceae8d42728a3fcdf4bb-fc787342377a334f3eba",
+              "file": "comprehensive-e2e.spec.ts",
+              "line": 297,
+              "column": 3
+            },
+            {
+              "title": "PHASE 5: Core Functionality - AI Engine Execution",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 1200000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 24344,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n================================================================================\n"
+                        },
+                        {
+                          "text": "PHASE 5: CORE FUNCTIONALITY - AI ENGINE EXECUTION\n"
+                        },
+                        {
+                          "text": "================================================================================\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-018] Select OpenAI and Anthropic engines\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-018] Engines selected\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-019] Submit test prompt\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-019] Prompt submitted (responses may vary)\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-15T13:57:18.625Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ceae8d42728a3fcdf4bb-71341ba9b8506c45d198",
+              "file": "comprehensive-e2e.spec.ts",
+              "line": 342,
+              "column": 3
+            },
+            {
+              "title": "PHASE 6: Fallback Testing",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 1200000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 6219,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m\n\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m\n\nReceived: \u001b[31mfalse\u001b[39m\n    at C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts:408:23",
+                        "location": {
+                          "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                          "column": 23,
+                          "line": 408
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 406 |\u001b[39m     \u001b[36mconst\u001b[39m appLoaded \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'textarea'\u001b[39m)\u001b[33m.\u001b[39misVisible()\u001b[33m.\u001b[39m\u001b[36mcatch\u001b[39m(() \u001b[33m=>\u001b[39m \u001b[36mfalse\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 407 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m`   App loaded with fallback: ${appLoaded ? 'Yes' : 'No'}`\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 408 |\u001b[39m     expect(appLoaded)\u001b[33m.\u001b[39mtoBeTruthy()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 409 |\u001b[39m     \u001b[36mawait\u001b[39m logStep(page\u001b[33m,\u001b[39m \u001b[32m'TC-E2E-023'\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'Fallback to defaults working'\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'PASS'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 410 |\u001b[39m\n \u001b[90m 411 |\u001b[39m     \u001b[90m// TC-E2E-024: Verify Fallback to Defaults\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                            "column": 23,
+                            "line": 408
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m\n\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 406 |\u001b[39m     \u001b[36mconst\u001b[39m appLoaded \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'textarea'\u001b[39m)\u001b[33m.\u001b[39misVisible()\u001b[33m.\u001b[39m\u001b[36mcatch\u001b[39m(() \u001b[33m=>\u001b[39m \u001b[36mfalse\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 407 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m`   App loaded with fallback: ${appLoaded ? 'Yes' : 'No'}`\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 408 |\u001b[39m     expect(appLoaded)\u001b[33m.\u001b[39mtoBeTruthy()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 409 |\u001b[39m     \u001b[36mawait\u001b[39m logStep(page\u001b[33m,\u001b[39m \u001b[32m'TC-E2E-023'\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'Fallback to defaults working'\u001b[39m\u001b[33m,\u001b[39m \u001b[32m'PASS'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 410 |\u001b[39m\n \u001b[90m 411 |\u001b[39m     \u001b[90m// TC-E2E-024: Verify Fallback to Defaults\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts:408:23\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "\n================================================================================\n"
+                        },
+                        {
+                          "text": "PHASE 6: FALLBACK TESTING\n"
+                        },
+                        {
+                          "text": "================================================================================\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-023] Simulate DB connection failure\n"
+                        },
+                        {
+                          "text": "   App loaded with fallback: No\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-15T13:57:42.980Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Projects\\OneMindAI\\test-results\\comprehensive-e2e-Comprehe-79c68-01-PHASE-6-Fallback-Testing-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Projects\\OneMindAI\\test-results\\comprehensive-e2e-Comprehe-79c68-01-PHASE-6-Fallback-Testing-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Projects\\OneMindAI\\test-results\\comprehensive-e2e-Comprehe-79c68-01-PHASE-6-Fallback-Testing-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                        "column": 23,
+                        "line": 408
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "ceae8d42728a3fcdf4bb-78971ec182c1826d4e0f",
+              "file": "comprehensive-e2e.spec.ts",
+              "line": 389,
+              "column": 3
+            },
+            {
+              "title": "PHASE 7: Cache Testing",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 1200000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11556,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n================================================================================\n"
+                        },
+                        {
+                          "text": "PHASE 7: CACHE TESTING\n"
+                        },
+                        {
+                          "text": "================================================================================\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-027] Load app and verify cache created\n"
+                        },
+                        {
+                          "text": "   Cache exists: No\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-027] Cache created successfully\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-028] Verify cache used on reload\n"
+                        },
+                        {
+                          "text": "   DB query made: No (cache hit)\n"
+                        },
+                        {
+                          "text": "✅ [TC-E2E-028] Cache usage verified\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-15T13:57:50.286Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ceae8d42728a3fcdf4bb-209caf5c2f1821fc91f7",
+              "file": "comprehensive-e2e.spec.ts",
+              "line": 435,
+              "column": 3
+            },
+            {
+              "title": "PHASE 8: Real-World Complexity - Multi-Admin Sync",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 1200000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 23980,
+                      "error": {
+                        "message": "Error: page.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('text=System Config')\u001b[22m\n",
+                        "stack": "Error: page.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('text=System Config')\u001b[22m\n\n    at C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts:488:16",
+                        "location": {
+                          "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                          "column": 16,
+                          "line": 488
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 486 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(\u001b[33mADMIN_URL\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 487 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForLoadState(\u001b[32m'networkidle'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 488 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=System Config'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 489 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m1000\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 490 |\u001b[39m     \n \u001b[90m 491 |\u001b[39m     \u001b[90m// Open second admin tab\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                            "column": 16,
+                            "line": 488
+                          },
+                          "message": "Error: page.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('text=System Config')\u001b[22m\n\n\n\u001b[0m \u001b[90m 486 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(\u001b[33mADMIN_URL\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 487 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForLoadState(\u001b[32m'networkidle'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 488 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=System Config'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 489 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m1000\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 490 |\u001b[39m     \n \u001b[90m 491 |\u001b[39m     \u001b[90m// Open second admin tab\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts:488:16\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "\n================================================================================\n"
+                        },
+                        {
+                          "text": "PHASE 8: REAL-WORLD COMPLEXITY\n"
+                        },
+                        {
+                          "text": "================================================================================\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-031] Test multi-admin real-time sync\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-15T13:58:02.157Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Projects\\OneMindAI\\test-results\\comprehensive-e2e-Comprehe-d920e-mplexity---Multi-Admin-Sync-chromium\\video.webm"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                        "column": 16,
+                        "line": 488
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "ceae8d42728a3fcdf4bb-5ca891d2fe89cdd8ea7c",
+              "file": "comprehensive-e2e.spec.ts",
+              "line": 478,
+              "column": 3
+            },
+            {
+              "title": "PHASE 9: Cleanup & Restore Original Values",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 1200000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 13103,
+                      "error": {
+                        "message": "Error: page.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('text=System Config')\u001b[22m\n",
+                        "stack": "Error: page.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('text=System Config')\u001b[22m\n\n    at C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts:530:16",
+                        "location": {
+                          "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                          "column": 16,
+                          "line": 530
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 528 |\u001b[39m     \n \u001b[90m 529 |\u001b[39m     \u001b[90m// Restore system config\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 530 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=System Config'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 531 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m1000\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 532 |\u001b[39m     \n \u001b[90m 533 |\u001b[39m     \u001b[90m// Restore prompt_soft_limit to 5000\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                            "column": 16,
+                            "line": 530
+                          },
+                          "message": "Error: page.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('text=System Config')\u001b[22m\n\n\n\u001b[0m \u001b[90m 528 |\u001b[39m     \n \u001b[90m 529 |\u001b[39m     \u001b[90m// Restore system config\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 530 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mclick(\u001b[32m'text=System Config'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 531 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m1000\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 532 |\u001b[39m     \n \u001b[90m 533 |\u001b[39m     \u001b[90m// Restore prompt_soft_limit to 5000\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts:530:16\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "\n================================================================================\n"
+                        },
+                        {
+                          "text": "PHASE 9: CLEANUP & VERIFICATION\n"
+                        },
+                        {
+                          "text": "================================================================================\n"
+                        },
+                        {
+                          "text": "🔵 [TC-E2E-035] Restore original config values\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-15T13:58:27.278Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Projects\\OneMindAI\\test-results\\comprehensive-e2e-Comprehe-9797a-nup-Restore-Original-Values-chromium\\video.webm"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Projects\\OneMindAI\\tests\\e2e\\comprehensive-e2e.spec.ts",
+                        "column": 16,
+                        "line": 530
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "ceae8d42728a3fcdf4bb-365c40562bd61121144c",
+              "file": "comprehensive-e2e.spec.ts",
+              "line": 518,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-12-15T13:52:32.938Z",
+    "duration": 367933.179,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 4,
+    "flaky": 0
+  }
+}

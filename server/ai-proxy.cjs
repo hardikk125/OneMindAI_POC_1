@@ -9,10 +9,43 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
+
+// =============================================================================
+// PROVIDER CONFIG FROM DATABASE (Phase 6)
+// =============================================================================
+
+const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
+  : null;
+
+let providerCache = null;
+let cacheTime = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getProviderLimit(provider, field, fallback) {
+  if (!supabase) return fallback;
+  if (providerCache && Date.now() - cacheTime < CACHE_TTL) {
+    return providerCache[provider]?.[field] ?? fallback;
+  }
+  try {
+    const { data, error } = await supabase.from('provider_config').select('*');
+    if (error) throw error;
+    providerCache = Object.fromEntries(data.map(r => [r.provider, r]));
+    cacheTime = Date.now();
+    console.log('[Config] Provider config loaded from database');
+    return providerCache[provider]?.[field] ?? fallback;
+  } catch (err) {
+    console.warn('[Config] Failed to fetch provider config:', err.message);
+    return fallback;
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || process.env.AI_PROXY_PORT || 3002;
+
+console.log('🔥 [PROXY] Starting with GEMINI STREAMING FIX v2 - Dec 4, 2025 9:30pm');
 
 // =============================================================================
 // MIDDLEWARE
@@ -37,9 +70,16 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
+    
+    // Allow any localhost or 127.0.0.1 origin (for development)
+    if (origin && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) {
+      return callback(null, true);
+    }
+    
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
+    
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true
@@ -86,9 +126,669 @@ app.get('/health', (req, res) => {
       perplexity: !!process.env.PERPLEXITY_API_KEY,
       deepseek: !!process.env.DEEPSEEK_API_KEY,
       groq: !!process.env.GROQ_API_KEY,
-      xai: !!process.env.XAI_API_KEY
+      xai: !!process.env.XAI_API_KEY,
+      hubspot: !!process.env.HUBSPOT_CLIENT_ID
     }
   });
+});
+
+// =============================================================================
+// HUBSPOT CRM INTEGRATION (OAuth Flow)
+// =============================================================================
+
+const HUBSPOT_BASE_URL = 'https://api.hubapi.com';
+
+// In-memory token storage (per user) - In production, use database (Supabase)
+// Key: oderId, Value: { access_token, refresh_token, expires_at, portal_id }
+const hubspotTokenStore = new Map();
+
+// Helper: Get user ID from request (simplified - use real auth in production)
+function getHubSpotUserId(req) {
+  // For now, use a query param or header. In production, use session/JWT
+  return req.query.userId || req.headers['x-user-id'] || 'default-user';
+}
+
+// Helper: Save tokens for a user
+function saveHubSpotTokens(userId, tokenData) {
+  const expiresAt = new Date(Date.now() + (tokenData.expires_in - 60) * 1000); // 60s buffer
+  hubspotTokenStore.set(userId, {
+    access_token: tokenData.access_token,
+    refresh_token: tokenData.refresh_token,
+    expires_at: expiresAt,
+    portal_id: tokenData.hub_id || tokenData.portal_id
+  });
+  console.log(`[HubSpot] Tokens saved for user: ${userId}`);
+}
+
+// Helper: Get tokens for a user
+function getHubSpotTokens(userId) {
+  return hubspotTokenStore.get(userId);
+}
+
+// Helper: Delete tokens for a user
+function deleteHubSpotTokens(userId) {
+  hubspotTokenStore.delete(userId);
+  console.log(`[HubSpot] Tokens deleted for user: ${userId}`);
+}
+
+// Helper: Refresh token if expired
+async function refreshHubSpotTokenIfNeeded(userId) {
+  const tokens = getHubSpotTokens(userId);
+  if (!tokens) return null;
+
+  // Check if token is still valid (with 60s buffer)
+  if (new Date() < new Date(tokens.expires_at)) {
+    return tokens;
+  }
+
+  console.log(`[HubSpot] Token expired for user ${userId}, refreshing...`);
+
+  try {
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: process.env.HUBSPOT_CLIENT_ID,
+      client_secret: process.env.HUBSPOT_CLIENT_SECRET,
+      refresh_token: tokens.refresh_token
+    });
+
+    const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+
+    if (!response.ok) {
+      console.error('[HubSpot] Token refresh failed');
+      deleteHubSpotTokens(userId);
+      return null;
+    }
+
+    const data = await response.json();
+    saveHubSpotTokens(userId, {
+      ...data,
+      portal_id: tokens.portal_id
+    });
+
+    return getHubSpotTokens(userId);
+  } catch (error) {
+    console.error('[HubSpot] Token refresh error:', error.message);
+    return null;
+  }
+}
+
+// Helper: Get valid access token for API calls (OAuth only - no fallback)
+async function getValidHubSpotToken(userId) {
+  // Only use OAuth tokens - each user must connect their own account
+  const tokens = await refreshHubSpotTokenIfNeeded(userId);
+  if (tokens) return tokens.access_token;
+
+  // No fallback - user must connect via OAuth
+  return null;
+}
+
+// =============================================================================
+// HUBSPOT OAUTH ROUTES
+// =============================================================================
+
+// Start OAuth flow - redirects user to HubSpot login
+app.get('/api/hubspot/auth/start', (req, res) => {
+  const userId = getHubSpotUserId(req);
+  
+  if (!process.env.HUBSPOT_CLIENT_ID) {
+    return res.status(500).send('HubSpot OAuth not configured');
+  }
+
+  // Create state parameter (includes userId for callback)
+  const state = Buffer.from(JSON.stringify({ 
+    userId, 
+    timestamp: Date.now() 
+  })).toString('base64');
+
+  const authUrl = new URL('https://app.hubspot.com/oauth/authorize');
+  authUrl.searchParams.set('client_id', process.env.HUBSPOT_CLIENT_ID);
+  authUrl.searchParams.set('redirect_uri', process.env.HUBSPOT_REDIRECT_URI || 'http://localhost:3002/api/hubspot/callback');
+  authUrl.searchParams.set('scope', process.env.HUBSPOT_SCOPES || 'crm.objects.contacts.read crm.objects.companies.read crm.objects.deals.read');
+  authUrl.searchParams.set('state', state);
+
+  console.log(`[HubSpot] Starting OAuth for user: ${userId}`);
+  res.redirect(authUrl.toString());
+});
+
+// OAuth callback - exchanges code for tokens
+app.get('/api/hubspot/callback', async (req, res) => {
+  try {
+    const { code, state } = req.query;
+
+    if (!code) {
+      return res.status(400).send('Missing authorization code');
+    }
+
+    // Decode state to get userId
+    let userId = 'default-user';
+    if (state) {
+      try {
+        const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+        userId = stateData.userId;
+      } catch (e) {
+        console.warn('[HubSpot] Could not decode state:', e.message);
+      }
+    }
+
+    // Exchange code for tokens
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: process.env.HUBSPOT_CLIENT_ID,
+      client_secret: process.env.HUBSPOT_CLIENT_SECRET,
+      redirect_uri: process.env.HUBSPOT_REDIRECT_URI || 'http://localhost:3002/api/hubspot/callback',
+      code
+    });
+
+    const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('[HubSpot] Token exchange failed:', error);
+      return res.status(400).send(`
+        <html>
+          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2>❌ Connection Failed</h2>
+            <p>${error.message || 'Failed to connect to HubSpot'}</p>
+            <p><a href="javascript:window.close()">Close this window</a></p>
+          </body>
+        </html>
+      `);
+    }
+
+    const tokenData = await response.json();
+    saveHubSpotTokens(userId, tokenData);
+    
+    console.log('[HubSpot] OAuth successful! Token saved for user:', userId);
+
+    // Send success page that closes the popup
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>HubSpot Connected</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #ff7a59 0%, #ff957a 100%);
+              min-height: 100vh;
+              margin: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .card {
+              background: white;
+              padding: 48px;
+              border-radius: 16px;
+              text-align: center;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+              max-width: 400px;
+            }
+            .emoji { font-size: 64px; margin-bottom: 16px; }
+            h2 { color: #ff7a59; margin: 0 0 8px 0; }
+            p { color: #666; margin: 0 0 24px 0; }
+            .closing { color: #999; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="emoji">🎉</div>
+            <h2>Connected to HubSpot!</h2>
+            <p>Your HubSpot CRM is now connected.</p>
+            <p class="closing">This window will close automatically...</p>
+          </div>
+          <script>
+            // Close popup after short delay
+            setTimeout(function() {
+              window.close();
+            }, 1500);
+          </script>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('[HubSpot] Callback error:', error);
+    res.status(500).send(`
+      <html>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+          <h2>❌ Error</h2>
+          <p>${error.message}</p>
+          <p><a href="javascript:window.close()">Close this window</a></p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// Disconnect HubSpot
+app.post('/api/hubspot/disconnect', (req, res) => {
+  const userId = getHubSpotUserId(req);
+  deleteHubSpotTokens(userId);
+  res.json({ success: true, message: 'Disconnected from HubSpot' });
+});
+
+// Create a company in HubSpot CRM
+app.post('/api/hubspot/companies/create', async (req, res) => {
+  try {
+    const userId = getHubSpotUserId(req);
+    const token = await getValidHubSpotToken(userId);
+    
+    if (!token) {
+      return res.status(401).json({ 
+        error: 'Not connected to HubSpot',
+        authUrl: '/api/hubspot/auth/start'
+      });
+    }
+
+    const { name, domain, industry, description } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Company name is required' });
+    }
+
+    // First, check if company already exists by domain
+    if (domain) {
+      const searchResponse = await fetch(`${HUBSPOT_BASE_URL}/crm/v3/objects/companies/search`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          filterGroups: [{
+            filters: [{
+              propertyName: 'domain',
+              operator: 'EQ',
+              value: domain
+            }]
+          }],
+          limit: 1
+        })
+      });
+
+      const searchData = await searchResponse.json();
+      
+      if (searchData.results && searchData.results.length > 0) {
+        // Company already exists
+        return res.json({
+          success: true,
+          exists: true,
+          message: 'Company already exists in HubSpot',
+          company: searchData.results[0]
+        });
+      }
+    }
+
+    // Create new company - only use valid HubSpot company properties
+    const companyProperties = {
+      name: name
+    };
+    
+    // Only add optional properties if they have values
+    if (domain) companyProperties.domain = domain;
+    if (description) companyProperties.description = description.substring(0, 65535); // HubSpot limit
+    
+    console.log('[HubSpot] Creating company with properties:', companyProperties);
+    
+    const createResponse = await fetch(`${HUBSPOT_BASE_URL}/crm/v3/objects/companies`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        properties: companyProperties
+      })
+    });
+
+    const createData = await createResponse.json();
+
+    if (!createResponse.ok) {
+      console.error('[HubSpot] Create company error:', createData);
+      return res.status(createResponse.status).json({
+        error: createData.message || 'Failed to create company',
+        category: createData.category
+      });
+    }
+
+    console.log('[HubSpot] Company created:', createData.id, name);
+    
+    res.json({
+      success: true,
+      exists: false,
+      message: 'Company created successfully',
+      company: createData
+    });
+
+  } catch (error) {
+    console.error('[HubSpot] Create company error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Check HubSpot connection status
+app.get('/api/hubspot/status', async (req, res) => {
+  try {
+    const userId = getHubSpotUserId(req);
+    const token = await getValidHubSpotToken(userId);
+    
+    if (!token) {
+      return res.json({ 
+        connected: false, 
+        error: 'Not connected',
+        authUrl: '/api/hubspot/auth/start'
+      });
+    }
+
+    const response = await fetch(`${HUBSPOT_BASE_URL}/account-info/v3/details`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return res.json({ 
+        connected: true, 
+        portalId: data.portalId,
+        accountType: data.accountType,
+        timeZone: data.timeZone,
+        usingOAuth: hubspotTokenStore.has(userId)
+      });
+    } else {
+      // Token might be invalid, clear it
+      deleteHubSpotTokens(userId);
+      return res.json({ connected: false, error: 'Invalid token', authUrl: '/api/hubspot/auth/start' });
+    }
+  } catch (error) {
+    return res.json({ connected: false, error: error.message });
+  }
+});
+
+// Get HubSpot contacts (OAuth-enabled)
+app.get('/api/hubspot/contacts', async (req, res) => {
+  try {
+    const userId = getHubSpotUserId(req);
+    const token = await getValidHubSpotToken(userId);
+    if (!token) {
+      return res.status(401).json({ error: 'Not connected to HubSpot', authUrl: '/api/hubspot/auth/start' });
+    }
+
+    const limit = req.query.limit || 20;
+    const response = await fetch(
+      `${HUBSPOT_BASE_URL}/crm/v3/objects/contacts?limit=${limit}&properties=firstname,lastname,email,phone,company,jobtitle,lifecyclestage`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      return res.status(response.status).json({ error: error.message });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get HubSpot companies (OAuth-enabled)
+app.get('/api/hubspot/companies', async (req, res) => {
+  try {
+    const userId = getHubSpotUserId(req);
+    const token = await getValidHubSpotToken(userId);
+    if (!token) {
+      return res.status(401).json({ error: 'Not connected to HubSpot', authUrl: '/api/hubspot/auth/start' });
+    }
+
+    const limit = req.query.limit || 20;
+    const response = await fetch(
+      `${HUBSPOT_BASE_URL}/crm/v3/objects/companies?limit=${limit}&properties=name,domain,industry,numberofemployees,annualrevenue,city,state,country`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      return res.status(response.status).json({ error: error.message });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get HubSpot deals (OAuth-enabled)
+app.get('/api/hubspot/deals', async (req, res) => {
+  try {
+    const userId = getHubSpotUserId(req);
+    const token = await getValidHubSpotToken(userId);
+    if (!token) {
+      return res.status(401).json({ error: 'Not connected to HubSpot', authUrl: '/api/hubspot/auth/start' });
+    }
+
+    const limit = req.query.limit || 20;
+    const response = await fetch(
+      `${HUBSPOT_BASE_URL}/crm/v3/objects/deals?limit=${limit}&properties=dealname,amount,dealstage,closedate,pipeline,hubspot_owner_id,createdate`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      return res.status(response.status).json({ error: error.message });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HubSpot object configurations - easily add more!
+const HUBSPOT_OBJECTS = {
+  contacts: {
+    endpoint: '/crm/v3/objects/contacts',
+    properties: 'firstname,lastname,email,phone,company,jobtitle,lifecyclestage',
+    label: 'Contacts',
+    icon: 'user'
+  },
+  companies: {
+    endpoint: '/crm/v3/objects/companies',
+    properties: 'name,domain,industry,numberofemployees,annualrevenue,city,state',
+    label: 'Companies',
+    icon: 'building'
+  },
+  deals: {
+    endpoint: '/crm/v3/objects/deals',
+    properties: 'dealname,amount,dealstage,closedate,pipeline,hs_priority',
+    label: 'Deals',
+    icon: 'currency',
+    valueField: 'amount'
+  },
+  tickets: {
+    endpoint: '/crm/v3/objects/tickets',
+    properties: 'subject,content,hs_pipeline_stage,hs_ticket_priority,createdate,hs_ticket_category',
+    label: 'Tickets',
+    icon: 'ticket'
+  },
+  products: {
+    endpoint: '/crm/v3/objects/products',
+    properties: 'name,description,price,hs_sku,hs_cost_of_goods_sold',
+    label: 'Products',
+    icon: 'package',
+    valueField: 'price'
+  },
+  tasks: {
+    endpoint: '/crm/v3/objects/tasks',
+    properties: 'hs_task_subject,hs_task_body,hs_task_status,hs_task_priority,hs_timestamp',
+    label: 'Tasks',
+    icon: 'checklist'
+  },
+  meetings: {
+    endpoint: '/crm/v3/objects/meetings',
+    properties: 'hs_meeting_title,hs_meeting_body,hs_meeting_start_time,hs_meeting_end_time',
+    label: 'Meetings',
+    icon: 'calendar'
+  },
+  calls: {
+    endpoint: '/crm/v3/objects/calls',
+    properties: 'hs_call_title,hs_call_body,hs_call_duration,hs_call_status,hs_timestamp',
+    label: 'Calls',
+    icon: 'phone'
+  },
+  emails: {
+    endpoint: '/crm/v3/objects/emails',
+    properties: 'hs_email_subject,hs_email_text,hs_email_status,hs_timestamp',
+    label: 'Emails',
+    icon: 'mail'
+  },
+  notes: {
+    endpoint: '/crm/v3/objects/notes',
+    properties: 'hs_note_body,hs_timestamp',
+    label: 'Notes',
+    icon: 'note'
+  }
+};
+
+// Dynamic endpoint to get any HubSpot object type
+app.get('/api/hubspot/objects/:objectType', async (req, res) => {
+  try {
+    const userId = getHubSpotUserId(req);
+    const token = await getValidHubSpotToken(userId);
+    const { objectType } = req.params;
+    
+    if (!token) {
+      return res.status(401).json({ 
+        error: 'Not connected',
+        authUrl: '/api/hubspot/auth/start'
+      });
+    }
+
+    const config = HUBSPOT_OBJECTS[objectType];
+    if (!config) {
+      return res.status(400).json({ 
+        error: `Unknown object type: ${objectType}`,
+        availableTypes: Object.keys(HUBSPOT_OBJECTS)
+      });
+    }
+
+    const limit = req.query.limit || 20;
+    const response = await fetch(
+      `${HUBSPOT_BASE_URL}${config.endpoint}?limit=${limit}&properties=${config.properties}`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return res.status(response.status).json({ 
+        error: data.message || `Failed to fetch ${objectType}`,
+        category: data.category
+      });
+    }
+
+    res.json({
+      objectType,
+      label: config.label,
+      results: data.results || [],
+      total: data.total || data.results?.length || 0
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all HubSpot data (combined) - dynamically fetches configured objects
+app.get('/api/hubspot/all', async (req, res) => {
+  try {
+    const userId = getHubSpotUserId(req);
+    const token = await getValidHubSpotToken(userId);
+    
+    if (!token) {
+      return res.status(401).json({ 
+        error: 'Not connected',
+        authUrl: '/api/hubspot/auth/start'
+      });
+    }
+
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const limit = req.query.limit || 10;
+    
+    // Fetch objects specified in query, or default to contacts, companies, deals
+    const requestedObjects = req.query.objects 
+      ? req.query.objects.split(',') 
+      : ['contacts', 'companies', 'deals'];
+
+    // Filter to only valid object types
+    const validObjects = requestedObjects.filter(obj => HUBSPOT_OBJECTS[obj]);
+
+    // Fetch all requested objects in parallel
+    const promises = validObjects.map(async (objectType) => {
+      const config = HUBSPOT_OBJECTS[objectType];
+      try {
+        const response = await fetch(
+          `${HUBSPOT_BASE_URL}${config.endpoint}?limit=${limit}&properties=${config.properties}`,
+          { headers }
+        );
+        const data = await response.json();
+        return {
+          type: objectType,
+          data: data.results || [],
+          total: data.total || data.results?.length || 0,
+          label: config.label,
+          icon: config.icon,
+          valueField: config.valueField
+        };
+      } catch (error) {
+        console.error(`[HubSpot] Error fetching ${objectType}:`, error.message);
+        return {
+          type: objectType,
+          data: [],
+          total: 0,
+          error: error.message
+        };
+      }
+    });
+
+    const results = await Promise.all(promises);
+
+    // Build response dynamically
+    const response = {
+      objects: {},
+      summary: {},
+      metadata: {
+        availableObjects: Object.keys(HUBSPOT_OBJECTS),
+        requestedObjects: validObjects,
+        fetchedAt: new Date().toISOString()
+      }
+    };
+
+    results.forEach(result => {
+      response.objects[result.type] = result.data;
+      response.summary[`total${result.label}`] = result.total;
+      
+      // Calculate total value if valueField exists
+      if (result.valueField && result.data.length > 0) {
+        const totalValue = result.data.reduce((sum, item) => {
+          return sum + (parseFloat(item.properties?.[result.valueField]) || 0);
+        }, 0);
+        response.summary[`total${result.label}Value`] = totalValue;
+      }
+    });
+
+    res.json(response);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // =============================================================================
@@ -121,12 +821,12 @@ app.post('/api/openai', async (req, res) => {
         messages,
         // GPT-5+ uses max_completion_tokens, older models use max_tokens
         ...(max_tokens && (model?.startsWith('gpt-5') || model?.startsWith('o1') || model?.startsWith('o3')
-          ? { max_completion_tokens: Math.min(max_tokens, 128000) }
-          : { max_tokens: Math.min(max_tokens, 16384) }
+          ? { max_completion_tokens: Math.min(max_tokens, await getProviderLimit('openai', 'max_output_cap', 128000)) }
+          : { max_tokens: Math.min(max_tokens, await getProviderLimit('openai', 'max_output_cap', 16384)) }
         )),
         // GPT-5, o1, o3 models don't support custom temperature - only default (1)
         ...(!(model?.startsWith('gpt-5') || model?.startsWith('o1') || model?.startsWith('o3')) && {
-          temperature: temperature ?? 0.7
+          temperature: temperature ?? null
         }),
         stream: stream ?? true
       })
@@ -159,8 +859,16 @@ app.post('/api/openai', async (req, res) => {
           // Flush if available (works with compression middleware)
           if (res.flush) res.flush();
         }
+      } catch (streamError) {
+        console.error('[OpenAI Stream Error]', streamError.message);
+        // Can't send JSON after streaming started, just end the connection
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Stream interrupted' });
+        }
       } finally {
-        res.end();
+        if (!res.writableEnded) {
+          res.end();
+        }
       }
     } else {
       const data = await response.json();
@@ -168,7 +876,15 @@ app.post('/api/openai', async (req, res) => {
     }
   } catch (error) {
     console.error('[OpenAI Error]', error.message);
-    res.status(500).json({ error: 'Failed to process OpenAI request' });
+    // Only send error response if headers haven't been sent yet
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process OpenAI request' });
+    } else {
+      // Headers already sent (streaming), just end the connection
+      if (!res.writableEnded) {
+        res.end();
+      }
+    }
   }
 });
 
@@ -189,12 +905,13 @@ app.post('/api/anthropic', async (req, res) => {
       return res.status(400).json({ error: 'Messages array required' });
     }
 
+    const anthropicLimit = await getProviderLimit('anthropic', 'max_output_cap', 8192);
     const requestBody = {
       model: model || 'claude-3-5-sonnet-20241022',
       messages,
-      // Claude requires max_tokens - use provider's max if not specified
-      max_tokens: max_tokens || 200000,
-      temperature: temperature ?? 0.7,
+      // Claude requires max_tokens - cap at provider limit
+      max_tokens: Math.min(max_tokens || anthropicLimit, anthropicLimit),
+      temperature: temperature ?? null,
       stream: stream ?? true
     };
 
@@ -214,8 +931,9 @@ app.post('/api/anthropic', async (req, res) => {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
+      console.error('[Anthropic API Error]', response.status, error);
       return res.status(response.status).json({ 
-        error: error.error?.message || 'Anthropic request failed',
+        error: error.error?.message || `Anthropic request failed (${response.status})`,
         code: error.error?.type
       });
     }
@@ -238,8 +956,15 @@ app.post('/api/anthropic', async (req, res) => {
           res.write(chunk);
           if (res.flush) res.flush();
         }
+      } catch (streamError) {
+        console.error('[Anthropic Stream Error]', streamError.message);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Stream interrupted' });
+        }
       } finally {
-        res.end();
+        if (!res.writableEnded) {
+          res.end();
+        }
       }
     } else {
       const data = await response.json();
@@ -247,7 +972,13 @@ app.post('/api/anthropic', async (req, res) => {
     }
   } catch (error) {
     console.error('[Anthropic Error]', error.message);
-    res.status(500).json({ error: 'Failed to process Anthropic request' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process Anthropic request' });
+    } else {
+      if (!res.writableEnded) {
+        res.end();
+      }
+    }
   }
 });
 
@@ -283,10 +1014,11 @@ app.post('/api/gemini', async (req, res) => {
       : `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     // Build generationConfig with provider limit
+    const geminiLimit = await getProviderLimit('gemini', 'max_output_cap', 8192);
     const finalGenerationConfig = generationConfig || {
-      temperature: 0.7,
-      // Gemini supports up to 8192 output tokens
-      ...(max_tokens && { maxOutputTokens: Math.min(max_tokens, 8192) })
+      temperature: null,
+      // Gemini supports up to provider limit output tokens
+      ...(max_tokens && { maxOutputTokens: Math.min(max_tokens, geminiLimit) })
     };
 
     const response = await fetch(endpoint, {
@@ -309,6 +1041,7 @@ app.post('/api/gemini', async (req, res) => {
     }
 
     if (stream) {
+      console.log('[Gemini] Starting stream for model:', modelName);
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
@@ -317,17 +1050,58 @@ app.post('/api/gemini', async (req, res) => {
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = '';
+      let chunkCount = 0;
 
       try {
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          res.write(chunk);
-          if (res.flush) res.flush();
+          if (done) {
+            console.log(`[Gemini] Stream ended. Total chunks: ${chunkCount}`);
+            break;
+          }
+          
+          buffer += decoder.decode(value, { stream: true });
+        }
+        
+        // Gemini returns the entire response as a JSON array
+        // Parse the complete array and send each element as SSE
+        try {
+          // Remove whitespace and parse
+          const trimmed = buffer.trim();
+          if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            const jsonArray = JSON.parse(trimmed);
+            console.log(`[Gemini] Parsed ${jsonArray.length} response objects`);
+            
+            for (const item of jsonArray) {
+              const text = item.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) {
+                chunkCount++;
+                console.log(`[Gemini] Chunk ${chunkCount}: ${text.substring(0, 50)}...`);
+                // Send as SSE format for consistent client parsing
+                res.write(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] })}\n\n`);
+                if (res.flush) res.flush();
+              }
+            }
+          } else {
+            console.error('[Gemini] Response is not a JSON array:', trimmed.substring(0, 200));
+          }
+        } catch (parseErr) {
+          console.error('[Gemini] Failed to parse response:', parseErr.message);
+          console.error('[Gemini] Buffer:', buffer.substring(0, 500));
+        }
+        
+        res.write('data: [DONE]\n\n');
+        console.log('[Gemini] Sent [DONE] signal');
+      } catch (streamError) {
+        console.error('[Gemini Stream Error]', streamError.message);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Stream interrupted' });
         }
       } finally {
-        res.end();
+        if (!res.writableEnded) {
+          res.end();
+        }
       }
     } else {
       const data = await response.json();
@@ -335,7 +1109,13 @@ app.post('/api/gemini', async (req, res) => {
     }
   } catch (error) {
     console.error('[Gemini Error]', error.message);
-    res.status(500).json({ error: 'Failed to process Gemini request' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process Gemini request' });
+    } else {
+      if (!res.writableEnded) {
+        res.end();
+      }
+    }
   }
 });
 
@@ -365,9 +1145,9 @@ app.post('/api/mistral', async (req, res) => {
       body: JSON.stringify({
         model: model || 'mistral-large-latest',
         messages,
-        // Mistral supports up to 32768 output tokens
-        ...(max_tokens && { max_tokens: Math.min(max_tokens, 32768) }),
-        temperature: temperature ?? 0.7,
+        // Mistral supports up to provider limit output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, await getProviderLimit('mistral', 'max_output_cap', 32768)) }),
+        temperature: temperature ?? null,
         stream: stream ?? true
       })
     });
@@ -398,8 +1178,11 @@ app.post('/api/mistral', async (req, res) => {
           res.write(chunk);
           if (res.flush) res.flush();
         }
+      } catch (streamError) {
+        console.error('[Mistral Stream Error]', streamError.message);
+        if (!res.headersSent) res.status(500).json({ error: 'Stream interrupted' });
       } finally {
-        res.end();
+        if (!res.writableEnded) res.end();
       }
     } else {
       const data = await response.json();
@@ -407,7 +1190,11 @@ app.post('/api/mistral', async (req, res) => {
     }
   } catch (error) {
     console.error('[Mistral Error]', error.message);
-    res.status(500).json({ error: 'Failed to process Mistral request' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process Mistral request' });
+    } else if (!res.writableEnded) {
+      res.end();
+    }
   }
 });
 
@@ -437,9 +1224,9 @@ app.post('/api/perplexity', async (req, res) => {
       body: JSON.stringify({
         model: model || 'sonar-pro',
         messages,
-        // Perplexity supports up to 4096 output tokens
-        ...(max_tokens && { max_tokens: Math.min(max_tokens, 4096) }),
-        temperature: temperature ?? 0.7,
+        // Perplexity supports up to provider limit output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, await getProviderLimit('perplexity', 'max_output_cap', 4096)) }),
+        temperature: temperature ?? null,
         stream: stream ?? true
       })
     });
@@ -479,7 +1266,11 @@ app.post('/api/perplexity', async (req, res) => {
     }
   } catch (error) {
     console.error('[Perplexity Error]', error.message);
-    res.status(500).json({ error: 'Failed to process Perplexity request' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process Perplexity request' });
+    } else if (!res.writableEnded) {
+      res.end();
+    }
   }
 });
 
@@ -509,9 +1300,9 @@ app.post('/api/deepseek', async (req, res) => {
       body: JSON.stringify({
         model: model || 'deepseek-chat',
         messages,
-        // DeepSeek has strict limit of 8192 max_tokens
-        max_tokens: Math.min(max_tokens || 8192, 8192),
-        temperature: temperature ?? 0.7,
+        // DeepSeek has strict limit from provider config
+        max_tokens: Math.min(max_tokens || 8192, await getProviderLimit('deepseek', 'max_output_cap', 8192)),
+        temperature: temperature ?? null,
         stream: stream ?? true
       })
     });
@@ -551,7 +1342,11 @@ app.post('/api/deepseek', async (req, res) => {
     }
   } catch (error) {
     console.error('[DeepSeek Error]', error.message);
-    res.status(500).json({ error: 'Failed to process DeepSeek request' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process DeepSeek request' });
+    } else if (!res.writableEnded) {
+      res.end();
+    }
   }
 });
 
@@ -581,9 +1376,9 @@ app.post('/api/groq', async (req, res) => {
       body: JSON.stringify({
         model: model || 'llama-3.3-70b-versatile',
         messages,
-        // Groq supports up to 8192 output tokens
-        ...(max_tokens && { max_tokens: Math.min(max_tokens, 8192) }),
-        temperature: temperature ?? 0.7,
+        // Groq supports up to provider limit output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, await getProviderLimit('groq', 'max_output_cap', 8192)) }),
+        temperature: temperature ?? null,
         stream: stream ?? true
       })
     });
@@ -623,7 +1418,11 @@ app.post('/api/groq', async (req, res) => {
     }
   } catch (error) {
     console.error('[Groq Error]', error.message);
-    res.status(500).json({ error: 'Failed to process Groq request' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process Groq request' });
+    } else if (!res.writableEnded) {
+      res.end();
+    }
   }
 });
 
@@ -653,9 +1452,9 @@ app.post('/api/xai', async (req, res) => {
       body: JSON.stringify({
         model: model || 'grok-beta',
         messages,
-        // xAI Grok supports up to 16384 output tokens
-        ...(max_tokens && { max_tokens: Math.min(max_tokens, 16384) }),
-        temperature: temperature ?? 0.7,
+        // xAI Grok supports up to provider limit output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, await getProviderLimit('xai', 'max_output_cap', 16384)) }),
+        temperature: temperature ?? null,
         stream: stream ?? true
       })
     });
@@ -695,7 +1494,11 @@ app.post('/api/xai', async (req, res) => {
     }
   } catch (error) {
     console.error('[xAI Error]', error.message);
-    res.status(500).json({ error: 'Failed to process xAI request' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process xAI request' });
+    } else if (!res.writableEnded) {
+      res.end();
+    }
   }
 });
 
@@ -725,9 +1528,9 @@ app.post('/api/kimi', async (req, res) => {
       body: JSON.stringify({
         model: model || 'moonshot-v1-128k',
         messages,
-        // Moonshot/Kimi supports up to 8192 output tokens
-        ...(max_tokens && { max_tokens: Math.min(max_tokens, 8192) }),
-        temperature: temperature ?? 0.7,
+        // Moonshot/Kimi supports up to provider limit output tokens
+        ...(max_tokens && { max_tokens: Math.min(max_tokens, await getProviderLimit('kimi', 'max_output_cap', 8192)) }),
+        temperature: temperature ?? null,
         stream: stream ?? true
       })
     });
@@ -767,7 +1570,11 @@ app.post('/api/kimi', async (req, res) => {
     }
   } catch (error) {
     console.error('[Kimi Error]', error.message);
-    res.status(500).json({ error: 'Failed to process Kimi request' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process Kimi request' });
+    } else if (!res.writableEnded) {
+      res.end();
+    }
   }
 });
 
@@ -795,15 +1602,66 @@ app.use((req, res) => {
 });
 
 // =============================================================================
+// PROCESS ERROR HANDLERS - PREVENT CRASHES
+// =============================================================================
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('');
+  console.error('╔═══════════════════════════════════════════════════════════╗');
+  console.error('║   ⚠️  UNCAUGHT EXCEPTION - SERVER CONTINUING              ║');
+  console.error('╚═══════════════════════════════════════════════════════════╝');
+  console.error('[UNCAUGHT EXCEPTION]', error.message);
+  console.error('Stack:', error.stack);
+  console.error('Server will continue running...');
+  console.error('');
+  // Don't exit - keep server running
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('');
+  console.error('╔═══════════════════════════════════════════════════════════╗');
+  console.error('║   ⚠️  UNHANDLED REJECTION - SERVER CONTINUING             ║');
+  console.error('╚═══════════════════════════════════════════════════════════╝');
+  console.error('[UNHANDLED REJECTION]', reason);
+  console.error('Promise:', promise);
+  console.error('Server will continue running...');
+  console.error('');
+  // Don't exit - keep server running
+});
+
+// Handle SIGTERM gracefully
+process.on('SIGTERM', () => {
+  console.log('');
+  console.log('╔═══════════════════════════════════════════════════════════╗');
+  console.log('║   🛑 SIGTERM received - Shutting down gracefully          ║');
+  console.log('╚═══════════════════════════════════════════════════════════╝');
+  console.log('');
+  process.exit(0);
+});
+
+// Handle SIGINT (Ctrl+C) gracefully
+process.on('SIGINT', () => {
+  console.log('');
+  console.log('╔═══════════════════════════════════════════════════════════╗');
+  console.log('║   🛑 SIGINT received - Shutting down gracefully           ║');
+  console.log('╚═══════════════════════════════════════════════════════════╝');
+  console.log('');
+  process.exit(0);
+});
+
+// =============================================================================
 // START SERVER
 // =============================================================================
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('╔═══════════════════════════════════════════════════════════╗');
   console.log('║                                                           ║');
   console.log('║   🚀 OneMindAI Proxy Server                               ║');
   console.log(`║   📡 Running on port ${PORT}                               ║`);
+  console.log('║   🛡️  Crash Protection: ENABLED                           ║');
   console.log('║                                                           ║');
   console.log('╠═══════════════════════════════════════════════════════════╣');
   console.log('║   Endpoints:                                              ║');
@@ -817,9 +1675,27 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('║   • POST /api/groq      - Groq proxy                      ║');
   console.log('║   • POST /api/xai       - xAI/Grok proxy                  ║');
   console.log('║   • POST /api/kimi      - Kimi/Moonshot proxy             ║');
+  console.log('║   • GET  /api/hubspot/* - HubSpot CRM integration         ║');
   console.log('║                                                           ║');
   console.log('╚═══════════════════════════════════════════════════════════╝');
   console.log('');
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  console.error('');
+  console.error('╔═══════════════════════════════════════════════════════════╗');
+  console.error('║   ❌ SERVER ERROR                                         ║');
+  console.error('╚═══════════════════════════════════════════════════════════╝');
+  console.error('[SERVER ERROR]', error.message);
+  
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Please free the port or use a different one.`);
+    process.exit(1);
+  } else {
+    console.error('Server will attempt to continue...');
+  }
+  console.error('');
 });
 
 module.exports = app;

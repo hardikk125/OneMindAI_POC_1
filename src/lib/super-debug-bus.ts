@@ -28,8 +28,44 @@ export type DebugEventType =
   | 'STATE_UPDATE' | 'DOM_INJECT' | 'COMPONENT_RENDER'
   // Errors
   | 'ERROR_CAUGHT' | 'ERROR_FLOW_STEP' | 'AUTO_RETRY_START' | 'AUTO_RETRY_END'
+  // API Flow (Frontend → Backend → Provider)
+  | 'API_REQUEST_START' | 'API_REQUEST_SENT' | 'API_RESPONSE_RECEIVED'
+  | 'BACKEND_PROCESS' | 'PARAM_MISMATCH' | 'TOKEN_CAP_APPLIED'
+  // Real-time Flow Tracking
+  | 'FETCH_START' | 'FETCH_RESPONSE' | 'FETCH_ERROR'
+  | 'PROXY_RECEIVED' | 'PROXY_FORWARD' | 'PROXY_RESPONSE'
+  | 'PROVIDER_CALL' | 'PROVIDER_STREAM' | 'PROVIDER_COMPLETE'
+  // Supabase Operations
+  | 'SUPABASE_QUERY' | 'SUPABASE_INSERT' | 'SUPABASE_UPDATE' | 'SUPABASE_RPC'
+  | 'CREDIT_CHECK' | 'CREDIT_DEDUCT' | 'CREDIT_UPDATE'
+  // Complete Code Flow Tracking (Real-time message content)
+  | 'MESSAGE_PAYLOAD' | 'STREAM_CHUNK_CONTENT' | 'RESPONSE_COMPLETE'
+  | 'FUNCTION_CALL_TRACE' | 'API_PAYLOAD_SENT' | 'API_RESPONSE_CONTENT'
+  // Prompt Journey Tracking (Full prompt text through all stages)
+  | 'PROMPT_JOURNEY' | 'RESPONSE_TRANSFORMATION' | 'TRUNCATION_DETECTED'
+  // User Activity Tracking (Real-time click-to-response flow)
+  | 'USER_CLICK' | 'USER_INPUT' | 'USER_SUBMIT' | 'USER_INTERACTION'
+  | 'COMPONENT_TRIGGERED' | 'HANDLER_CALLED' | 'ROUTE_CHANGE'
+  | 'MIDDLEWARE_ENTER' | 'MIDDLEWARE_EXIT'
+  | 'RAILWAY_REQUEST' | 'RAILWAY_RESPONSE'
+  | 'FLOW_NODE' | 'FLOW_COMPLETE'
   // Custom/Dynamic
   | 'CUSTOM';
+
+// ===== User Activity Flow Node =====
+export interface FlowNode {
+  id: string;
+  type: 'user' | 'component' | 'function' | 'api' | 'middleware' | 'backend' | 'database' | 'provider' | 'response';
+  label: string;
+  file?: string;
+  function?: string;
+  line?: number;
+  timestamp: number;
+  duration?: number;
+  data?: any;
+  children: FlowNode[];
+  parent?: string;
+}
 
 // ===== Event Severity =====
 export type EventSeverity = 'info' | 'success' | 'warning' | 'error' | 'debug';
@@ -101,6 +137,175 @@ export interface DebugEvent {
     // Code context
     codeSnippet?: string;
     variables?: Record<string, any>;
+    
+    // API Flow tracking
+    apiEndpoint?: string;
+    requestParams?: {
+      model?: string;
+      max_tokens?: number;
+      stream?: boolean;
+      messages?: any[];
+      promptLength?: number;
+    };
+    backendParams?: {
+      model?: string;
+      max_tokens?: number;
+      stream?: boolean;
+      cappedAt?: number;
+    };
+    mismatch?: {
+      field: string;
+      frontendValue: any;
+      backendValue: any;
+      reason: string;
+    };
+    
+    // Real-time Flow Tracking
+    flowStep?: {
+      step: number;
+      total: number;
+      phase: 'frontend' | 'backend' | 'provider' | 'supabase' | 'middleware' | 'response';
+      action: string;
+      file: string;
+      function: string;
+      line?: number;
+      duration?: number;
+    };
+    
+    // Prompt Journey Tracking
+    promptJourney?: {
+      stage: 'user_input' | 'enhanced' | 'truncated' | 'sent_to_api' | 'received_response';
+      stageLabel: string;
+      fullPromptText: string;
+      promptLength: number;
+      originalLength?: number;
+      currentLength?: number;
+      truncatedAt?: number;
+      truncationReason?: string;
+      provider?: string;
+      engineName?: string;
+      transformations?: string[];
+      filesAdded?: string[];
+      maxTokens?: number;
+    };
+    
+    // Response Transformation Tracking
+    responseTransformation?: {
+      stage: 'chunk_received' | 'accumulating' | 'finish_reason' | 'complete' | 'truncated';
+      stageLabel: string;
+      responseText: string;
+      responseLength: number;
+      provider?: string;
+      engineName?: string;
+      chunkIndex?: number;
+      totalChunks?: number;
+      finishReason?: string;
+      tokensGenerated?: number;
+      maxTokens?: number;
+      isTruncated?: boolean;
+      truncationDetails?: string;
+      processingFunction?: string;
+    };
+    
+    // Truncation Detection
+    truncation?: {
+      finishReason?: string;
+      tokensGenerated?: number;
+      maxTokens?: number;
+      provider?: string;
+      engineName?: string;
+      responseLength?: number;
+      explanation?: string;
+    };
+    
+    // HTTP/Fetch tracking
+    httpMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+    httpStatus?: number;
+    httpHeaders?: Record<string, string>;
+    responseTime?: number;
+    
+    // Supabase tracking
+    supabaseTable?: string;
+    supabaseOperation?: 'select' | 'insert' | 'update' | 'delete' | 'rpc';
+    supabaseQuery?: string | Record<string, any>;
+    supabaseResult?: { count?: number; error?: string };
+    
+    // Credit tracking
+    creditAmount?: number;
+    creditBalance?: number;
+    creditOperation?: 'check' | 'deduct' | 'add';
+    
+    // Complete Code Flow - Message Content Tracking
+    messagePayload?: {
+      messages: Array<{ role: string; content: string }>;
+      model?: string;
+      max_tokens?: number;
+      stream?: boolean;
+      temperature?: number;
+    };
+    streamChunk?: {
+      content: string;
+      chunkIndex: number;
+      totalLength: number;
+      isComplete: boolean;
+    };
+    responseContent?: {
+      fullText: string;
+      tokenCount?: number;
+      finishReason?: string;
+    };
+    functionTrace?: {
+      name: string;
+      file: string;
+      line?: number;
+      args?: Record<string, any>;
+      phase: 'enter' | 'exit';
+      duration?: number;
+    };
+    
+    // User Activity Tracking
+    userActivity?: {
+      action: 'click' | 'input' | 'submit' | 'keypress' | 'scroll' | 'hover' | 'focus';
+      target: string;
+      targetId?: string;
+      targetClass?: string;
+      value?: string;
+      coordinates?: { x: number; y: number };
+    };
+    componentInfo?: {
+      name: string;
+      file: string;
+      props?: Record<string, any>;
+      state?: Record<string, any>;
+    };
+    handlerInfo?: {
+      name: string;
+      file: string;
+      line?: number;
+      args?: Record<string, any>;
+      returnValue?: any;
+    };
+    middlewareInfo?: {
+      name: string;
+      phase: 'enter' | 'exit';
+      request?: any;
+      response?: any;
+      duration?: number;
+    };
+    railwayInfo?: {
+      service: string;
+      endpoint: string;
+      method: string;
+      status?: number;
+      duration?: number;
+    };
+    flowTree?: {
+      sessionId: string;
+      rootNode: FlowNode;
+      currentPath: string[];
+      totalNodes: number;
+      totalDuration: number;
+    };
   };
   
   // Pipeline tracking
@@ -285,7 +490,7 @@ function generateErrorExplanation(error: any, provider?: string): ErrorExplanati
 }
 
 // ===== Main Debug Event Bus Class =====
-class SuperDebugBus {
+export class SuperDebugBus {
   private listeners: Set<(event: DebugEvent) => void> = new Set();
   private events: DebugEvent[] = [];
   private maxEvents = 5000; // Increased to capture more events
@@ -506,6 +711,926 @@ class SuperDebugBus {
     }, 'info');
   }
   
+  // Emit API request (Frontend → Backend flow tracking)
+  emitApiRequest(
+    provider: string,
+    endpoint: string,
+    params: {
+      model?: string;
+      max_tokens?: number;
+      stream?: boolean;
+      useProxy?: boolean;
+      promptLength?: number;
+    }
+  ): void {
+    if (!this.enabled) return;
+    
+    this.emit('API_REQUEST_START', `API Request to ${provider}`, {
+      provider,
+      apiEndpoint: endpoint,
+      requestParams: params,
+      httpMethod: 'POST',
+      flowStep: {
+        step: 1,
+        total: 5,
+        phase: 'frontend',
+        action: 'Initiating API request',
+        file: 'OneMindAI.tsx',
+        function: 'streamFromProvider'
+      },
+      codeSnippet: `// OneMindAI.tsx → streamFromProvider()
+fetch('${endpoint}', {
+  method: 'POST',
+  body: JSON.stringify({
+    model: '${params.model || 'unknown'}',
+    max_tokens: ${params.max_tokens || 'auto'},
+    stream: ${params.stream ?? true}
+  })
+})`
+    }, 'info');
+  }
+  
+  // Emit fetch start (real-time tracking)
+  emitFetchStart(url: string, method: string, provider: string): void {
+    if (!this.enabled) return;
+    
+    this.emit('FETCH_START', `Fetch started: ${method} ${url}`, {
+      apiEndpoint: url,
+      httpMethod: method as any,
+      provider,
+      flowStep: {
+        step: 2,
+        total: 5,
+        phase: 'frontend',
+        action: 'HTTP request initiated',
+        file: 'OneMindAI.tsx',
+        function: 'fetch'
+      }
+    }, 'info');
+  }
+  
+  // Emit fetch response (real-time tracking)
+  emitFetchResponse(url: string, status: number, responseTime: number, provider: string): void {
+    if (!this.enabled) return;
+    
+    this.emit('FETCH_RESPONSE', `Response received: ${status} (${responseTime}ms)`, {
+      apiEndpoint: url,
+      httpStatus: status,
+      responseTime,
+      provider,
+      flowStep: {
+        step: 4,
+        total: 5,
+        phase: 'backend',
+        action: 'Response received from backend',
+        file: 'OneMindAI.tsx',
+        function: 'streamFromProvider',
+        duration: responseTime
+      }
+    }, status >= 400 ? 'error' : 'success');
+  }
+  
+  // Emit Supabase operation
+  emitSupabaseOp(
+    operation: 'select' | 'insert' | 'update' | 'delete' | 'rpc',
+    table: string,
+    query?: string | Record<string, any>,
+    result?: { count?: number; error?: string }
+  ): void {
+    if (!this.enabled) return;
+    
+    const eventType = operation === 'select' ? 'SUPABASE_QUERY' :
+                      operation === 'insert' ? 'SUPABASE_INSERT' :
+                      operation === 'update' ? 'SUPABASE_UPDATE' : 'SUPABASE_RPC';
+    
+    this.emit(eventType, `Supabase ${operation}: ${table}`, {
+      supabaseTable: table,
+      supabaseOperation: operation,
+      supabaseQuery: query,
+      supabaseResult: result,
+      flowStep: {
+        step: 5,
+        total: 5,
+        phase: 'supabase',
+        action: `${operation.toUpperCase()} on ${table}`,
+        file: 'credit-service.ts',
+        function: operation === 'rpc' ? 'rpc' : `from('${table}').${operation}()`
+      }
+    }, result?.error ? 'error' : 'success');
+  }
+  
+  // Emit credit operation
+  emitCreditOp(
+    operation: 'check' | 'deduct' | 'add',
+    amount: number,
+    balance: number,
+    provider?: string,
+    model?: string
+  ): void {
+    if (!this.enabled) return;
+    
+    const eventType = operation === 'check' ? 'CREDIT_CHECK' :
+                      operation === 'deduct' ? 'CREDIT_DEDUCT' : 'CREDIT_UPDATE';
+    
+    this.emit(eventType, `Credit ${operation}: ${amount} credits`, {
+      creditAmount: amount,
+      creditBalance: balance,
+      creditOperation: operation,
+      provider,
+      flowStep: {
+        step: 5,
+        total: 5,
+        phase: 'supabase',
+        action: `${operation} ${amount} credits`,
+        file: 'credit-service.ts',
+        function: operation === 'check' ? 'getCreditBalance' : 
+                  operation === 'deduct' ? 'deductCredits' : 'addCredits'
+      },
+      codeSnippet: operation === 'deduct' ? 
+        `// credit-service.ts
+await deductCredits(userId, ${amount}, '${provider}', '${model}');
+// Balance: ${balance} → ${balance - amount}` : undefined
+    }, 'info');
+  }
+  
+  // Emit backend processing info
+  emitBackendProcess(
+    provider: string,
+    frontendParams: { max_tokens?: number; model?: string },
+    backendParams: { max_tokens?: number; model?: string; cappedAt?: number }
+  ): void {
+    if (!this.enabled) return;
+    
+    // Check for mismatches
+    const mismatches: Array<{ field: string; frontend: any; backend: any; reason: string }> = [];
+    
+    if (frontendParams.max_tokens && backendParams.cappedAt && frontendParams.max_tokens > backendParams.cappedAt) {
+      mismatches.push({
+        field: 'max_tokens',
+        frontend: frontendParams.max_tokens,
+        backend: backendParams.cappedAt,
+        reason: `Backend caps at ${backendParams.cappedAt} (provider limit)`
+      });
+    }
+    
+    this.emit('BACKEND_PROCESS', `Backend processing for ${provider}`, {
+      provider,
+      requestParams: frontendParams,
+      backendParams,
+      flowStep: {
+        step: 3,
+        total: 5,
+        phase: 'backend',
+        action: 'Processing request at proxy',
+        file: 'ai-proxy.cjs',
+        function: `app.post('/api/${provider}')`
+      },
+      codeSnippet: `// ai-proxy.cjs - ${provider} handler
+const { messages, model, max_tokens } = req.body;
+
+// Apply provider limits
+const cappedTokens = Math.min(max_tokens, ${backendParams.cappedAt || 'PROVIDER_LIMIT'});
+
+// Forward to ${provider} API
+fetch('https://api.${provider}.com/...', {
+  body: JSON.stringify({
+    model: '${backendParams.model || 'model'}',
+    max_tokens: cappedTokens  // ${backendParams.cappedAt ? `Capped from ${frontendParams.max_tokens} to ${backendParams.cappedAt}` : 'No cap'}
+  })
+})`
+    }, mismatches.length > 0 ? 'warning' : 'info');
+    
+    // Emit individual mismatch events
+    mismatches.forEach(m => {
+      this.emit('PARAM_MISMATCH', `⚠️ ${m.field} mismatch: ${m.frontend} → ${m.backend}`, {
+        mismatch: {
+          field: m.field,
+          frontendValue: m.frontend,
+          backendValue: m.backend,
+          reason: m.reason
+        },
+        provider
+      }, 'warning');
+    });
+  }
+  
+  // Emit token cap applied
+  emitTokenCap(provider: string, requested: number, capped: number, limit: number): void {
+    if (!this.enabled) return;
+    
+    this.emit('TOKEN_CAP_APPLIED', `Token limit applied: ${requested} → ${capped}`, {
+      provider,
+      requestParams: { max_tokens: requested },
+      backendParams: { max_tokens: capped, cappedAt: limit },
+      mismatch: requested > capped ? {
+        field: 'max_tokens',
+        frontendValue: requested,
+        backendValue: capped,
+        reason: `${provider} max output limit is ${limit}`
+      } : undefined
+    }, requested > capped ? 'warning' : 'info');
+  }
+  
+  // ===== COMPLETE CODE FLOW TRACKING =====
+  
+  // Emit full message payload being sent to API
+  emitMessagePayload(
+    provider: string,
+    messages: Array<{ role: string; content: string }>,
+    params: { model?: string; max_tokens?: number; stream?: boolean; temperature?: number }
+  ): void {
+    if (!this.enabled) return;
+    
+    // Truncate long messages for display (keep first 500 chars)
+    const truncatedMessages = messages.map(m => ({
+      role: m.role,
+      content: m.content.length > 500 ? m.content.substring(0, 500) + '...[truncated]' : m.content
+    }));
+    
+    this.emit('MESSAGE_PAYLOAD', `📤 Sending ${messages.length} message(s) to ${provider}`, {
+      provider,
+      messagePayload: {
+        messages: truncatedMessages,
+        model: params.model,
+        max_tokens: params.max_tokens,
+        stream: params.stream,
+        temperature: params.temperature
+      },
+      flowStep: {
+        step: 1,
+        total: 6,
+        phase: 'frontend',
+        action: 'Preparing API payload',
+        file: 'OneMindAI.tsx',
+        function: 'streamFromProvider'
+      },
+      codeSnippet: `// OneMindAI.tsx → API Payload
+const payload = {
+  messages: [
+${messages.map(m => `    { role: "${m.role}", content: "${m.content.substring(0, 100)}${m.content.length > 100 ? '...' : ''}" }`).join(',\n')}
+  ],
+  model: "${params.model || 'default'}",
+  max_tokens: ${params.max_tokens || 'auto'},
+  stream: ${params.stream ?? true}
+};`
+    }, 'info');
+  }
+  
+  // Emit stream chunk with actual content
+  private chunkBuffer: string = '';
+  private chunkCount: number = 0;
+  
+  emitStreamChunk(content: string, isComplete: boolean = false): void {
+    if (!this.enabled) return;
+    
+    this.chunkCount++;
+    this.chunkBuffer += content;
+    
+    // Only emit every 5 chunks or on complete to avoid flooding
+    if (this.chunkCount % 5 === 0 || isComplete) {
+      this.emit('STREAM_CHUNK_CONTENT', `📥 Chunk ${this.chunkCount}: +${content.length} chars`, {
+        streamChunk: {
+          content: content,
+          chunkIndex: this.chunkCount,
+          totalLength: this.chunkBuffer.length,
+          isComplete
+        },
+        flowStep: {
+          step: 5,
+          total: 6,
+          phase: 'frontend',
+          action: isComplete ? 'Stream complete' : 'Receiving chunks',
+          file: 'OneMindAI.tsx',
+          function: 'streamFromProvider'
+        }
+      }, isComplete ? 'success' : 'info');
+    }
+    
+    if (isComplete) {
+      this.chunkBuffer = '';
+      this.chunkCount = 0;
+    }
+  }
+  
+  // Emit complete response
+  emitResponseComplete(fullText: string, provider: string, tokenCount?: number, finishReason?: string): void {
+    if (!this.enabled) return;
+    
+    this.emit('RESPONSE_COMPLETE', `✅ Response complete: ${fullText.length} chars`, {
+      provider,
+      responseContent: {
+        fullText: fullText.length > 1000 ? fullText.substring(0, 1000) + '...[truncated]' : fullText,
+        tokenCount,
+        finishReason
+      },
+      flowStep: {
+        step: 6,
+        total: 6,
+        phase: 'frontend',
+        action: 'Response rendered to UI',
+        file: 'OneMindAI.tsx',
+        function: 'streamFromProvider'
+      }
+    }, 'success');
+  }
+  
+  // Emit function call trace
+  emitFunctionTrace(
+    name: string,
+    file: string,
+    phase: 'enter' | 'exit',
+    args?: Record<string, any>,
+    duration?: number
+  ): void {
+    if (!this.enabled) return;
+    
+    this.emit('FUNCTION_CALL_TRACE', `${phase === 'enter' ? '→' : '←'} ${name}()`, {
+      functionTrace: {
+        name,
+        file,
+        phase,
+        args: args ? Object.fromEntries(
+          Object.entries(args).map(([k, v]) => [k, typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v])
+        ) : undefined,
+        duration
+      },
+      flowStep: {
+        step: phase === 'enter' ? 1 : 6,
+        total: 6,
+        phase: 'frontend',
+        action: phase === 'enter' ? `Entering ${name}` : `Exiting ${name}`,
+        file,
+        function: name
+      }
+    }, 'debug');
+  }
+  
+  // Emit API payload sent (the actual fetch call)
+  emitApiPayloadSent(
+    url: string,
+    method: string,
+    body: any,
+    provider: string
+  ): void {
+    if (!this.enabled) return;
+    
+    this.emit('API_PAYLOAD_SENT', `🌐 ${method} ${url}`, {
+      apiEndpoint: url,
+      httpMethod: method as any,
+      provider,
+      messagePayload: body.messages ? {
+        messages: body.messages.map((m: any) => ({
+          role: m.role,
+          content: typeof m.content === 'string' && m.content.length > 200 
+            ? m.content.substring(0, 200) + '...' 
+            : m.content
+        })),
+        model: body.model,
+        max_tokens: body.max_tokens,
+        stream: body.stream
+      } : undefined,
+      flowStep: {
+        step: 2,
+        total: 6,
+        phase: 'frontend',
+        action: 'Sending HTTP request',
+        file: 'OneMindAI.tsx',
+        function: 'fetch'
+      },
+      codeSnippet: `// Actual fetch call
+fetch("${url}", {
+  method: "${method}",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    messages: [...],  // ${body.messages?.length || 0} message(s)
+    model: "${body.model || 'default'}",
+    max_tokens: ${body.max_tokens || 'auto'},
+    stream: ${body.stream ?? true}
+  })
+});`
+    }, 'info');
+  }
+  
+  // ===== PROMPT JOURNEY TRACKING =====
+  
+  // Track prompt through all stages: user_input → enhanced → truncated → sent_to_api → received_response
+  emitPromptJourney(
+    stage: 'user_input' | 'enhanced' | 'truncated' | 'sent_to_api' | 'received_response',
+    promptText: string,
+    metadata: {
+      originalLength?: number;
+      currentLength?: number;
+      truncatedAt?: number;
+      truncationReason?: string;
+      provider?: string;
+      engineName?: string;
+      transformations?: string[];
+      filesAdded?: string[];
+      maxTokens?: number;
+    }
+  ): void {
+    if (!this.enabled) return;
+    
+    const stageLabels: Record<string, string> = {
+      'user_input': '📝 User Input',
+      'enhanced': '📎 Enhanced with Files',
+      'truncated': '✂️ Truncated',
+      'sent_to_api': '📤 Sent to API',
+      'received_response': '📥 Response Received'
+    };
+    
+    const stageIcons: Record<string, string> = {
+      'user_input': '📝',
+      'enhanced': '📎',
+      'truncated': '✂️',
+      'sent_to_api': '📤',
+      'received_response': '📥'
+    };
+    
+    // Cap display text at 10000 chars but store full length info
+    const displayText = promptText.length > 10000 
+      ? promptText.substring(0, 10000) + `\n\n[... ${promptText.length - 10000} more characters truncated for display ...]`
+      : promptText;
+    
+    this.emit('PROMPT_JOURNEY', `${stageIcons[stage]} Prompt ${stage.replace('_', ' ')}: ${promptText.length} chars`, {
+      promptJourney: {
+        stage,
+        stageLabel: stageLabels[stage],
+        fullPromptText: displayText,
+        promptLength: promptText.length,
+        originalLength: metadata.originalLength,
+        currentLength: metadata.currentLength || promptText.length,
+        truncatedAt: metadata.truncatedAt,
+        truncationReason: metadata.truncationReason,
+        provider: metadata.provider,
+        engineName: metadata.engineName,
+        transformations: metadata.transformations,
+        filesAdded: metadata.filesAdded,
+        maxTokens: metadata.maxTokens
+      },
+      flowStep: {
+        step: stage === 'user_input' ? 1 : stage === 'enhanced' ? 2 : stage === 'truncated' ? 3 : stage === 'sent_to_api' ? 4 : 5,
+        total: 5,
+        phase: stage === 'sent_to_api' ? 'middleware' : stage === 'received_response' ? 'provider' : 'frontend',
+        action: stageLabels[stage],
+        file: 'OneMindAI.tsx',
+        function: stage === 'user_input' ? 'runAll' : 'streamFromProvider'
+      }
+    }, stage === 'truncated' ? 'warning' : 'info');
+  }
+  
+  // Track response transformations: chunking, finish_reason, truncation detection
+  emitResponseTransformation(
+    stage: 'chunk_received' | 'accumulating' | 'finish_reason' | 'complete' | 'truncated',
+    responseText: string,
+    metadata: {
+      provider?: string;
+      engineName?: string;
+      chunkIndex?: number;
+      totalChunks?: number;
+      finishReason?: string; // 'stop' | 'length' | 'content_filter' | etc
+      tokensGenerated?: number;
+      maxTokens?: number;
+      isTruncated?: boolean;
+      truncationDetails?: string;
+      processingFunction?: string;
+    }
+  ): void {
+    if (!this.enabled) return;
+    
+    const stageLabels: Record<string, string> = {
+      'chunk_received': '📦 Chunk Received',
+      'accumulating': '📊 Accumulating Response',
+      'finish_reason': '🏁 Finish Reason',
+      'complete': '✅ Response Complete',
+      'truncated': '⚠️ Response Truncated'
+    };
+    
+    // Cap display text
+    const displayText = responseText.length > 5000 
+      ? responseText.substring(0, 5000) + `\n\n[... ${responseText.length - 5000} more characters ...]`
+      : responseText;
+    
+    const severity: EventSeverity = stage === 'truncated' ? 'warning' : stage === 'complete' ? 'success' : 'info';
+    
+    this.emit('RESPONSE_TRANSFORMATION', `${stageLabels[stage]}: ${responseText.length} chars`, {
+      responseTransformation: {
+        stage,
+        stageLabel: stageLabels[stage],
+        responseText: displayText,
+        responseLength: responseText.length,
+        provider: metadata.provider,
+        engineName: metadata.engineName,
+        chunkIndex: metadata.chunkIndex,
+        totalChunks: metadata.totalChunks,
+        finishReason: metadata.finishReason,
+        tokensGenerated: metadata.tokensGenerated,
+        maxTokens: metadata.maxTokens,
+        isTruncated: metadata.isTruncated,
+        truncationDetails: metadata.truncationDetails,
+        processingFunction: metadata.processingFunction
+      },
+      flowStep: {
+        step: stage === 'chunk_received' ? 4 : stage === 'complete' ? 5 : 4,
+        total: 5,
+        phase: 'response',
+        action: stageLabels[stage],
+        file: 'OneMindAI.tsx',
+        function: metadata.processingFunction || 'streamFromProvider'
+      }
+    }, severity);
+    
+    // Emit truncation warning if detected
+    if (metadata.finishReason === 'length' || metadata.isTruncated) {
+      this.emit('TRUNCATION_DETECTED', `⚠️ Response was truncated! Finish reason: ${metadata.finishReason}`, {
+        truncation: {
+          finishReason: metadata.finishReason,
+          tokensGenerated: metadata.tokensGenerated,
+          maxTokens: metadata.maxTokens,
+          provider: metadata.provider,
+          engineName: metadata.engineName,
+          responseLength: responseText.length,
+          explanation: metadata.finishReason === 'length' 
+            ? `The AI response was cut off because it reached the maximum token limit (${metadata.tokensGenerated || '?'}/${metadata.maxTokens || '?'} tokens). The response may be incomplete.`
+            : metadata.truncationDetails || 'Response was truncated for unknown reason'
+        }
+      }, 'warning');
+    }
+  }
+  
+  // ===== USER ACTIVITY TRACKING =====
+  
+  private currentFlowSession: string | null = null;
+  private flowNodes: Map<string, FlowNode> = new Map();
+  private flowStartTime: number = 0;
+  
+  // Start a new user activity flow session
+  startFlowSession(trigger: string): string {
+    this.currentFlowSession = `flow-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    this.flowNodes.clear();
+    this.flowStartTime = Date.now();
+    
+    // Create root node
+    const rootNode: FlowNode = {
+      id: this.currentFlowSession,
+      type: 'user',
+      label: trigger,
+      timestamp: Date.now(),
+      children: []
+    };
+    this.flowNodes.set(this.currentFlowSession, rootNode);
+    
+    return this.currentFlowSession;
+  }
+  
+  // Add a node to the current flow
+  addFlowNode(
+    type: FlowNode['type'],
+    label: string,
+    details: { file?: string; function?: string; line?: number; data?: any; parentId?: string }
+  ): string {
+    if (!this.currentFlowSession) {
+      this.startFlowSession('Auto-started flow');
+    }
+    
+    const nodeId = `node-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const node: FlowNode = {
+      id: nodeId,
+      type,
+      label,
+      file: details.file,
+      function: details.function,
+      line: details.line,
+      timestamp: Date.now(),
+      data: details.data,
+      children: [],
+      parent: details.parentId || this.currentFlowSession!
+    };
+    
+    this.flowNodes.set(nodeId, node);
+    
+    // Add to parent's children
+    const parent = this.flowNodes.get(node.parent!);
+    if (parent) {
+      parent.children.push(node);
+    }
+    
+    return nodeId;
+  }
+  
+  // Get the current flow tree
+  getFlowTree(): FlowNode | null {
+    if (!this.currentFlowSession) return null;
+    return this.flowNodes.get(this.currentFlowSession) || null;
+  }
+  
+  // Emit user click event
+  emitUserClick(
+    target: string,
+    details: { id?: string; className?: string; x?: number; y?: number; file?: string; handler?: string }
+  ): void {
+    if (!this.enabled) return;
+    
+    // Start new flow session on user click
+    const sessionId = this.startFlowSession(`Click: ${target}`);
+    
+    this.emit('USER_CLICK', `👆 User clicked: ${target}`, {
+      userActivity: {
+        action: 'click',
+        target,
+        targetId: details.id,
+        targetClass: details.className,
+        coordinates: details.x !== undefined ? { x: details.x, y: details.y! } : undefined
+      },
+      flowStep: {
+        step: 1,
+        total: 10,
+        phase: 'frontend',
+        action: 'User interaction',
+        file: details.file || 'unknown',
+        function: details.handler || 'onClick'
+      }
+    }, 'info');
+    
+    // Add to flow tree
+    this.addFlowNode('user', `Click: ${target}`, {
+      file: details.file,
+      function: details.handler,
+      data: { target, id: details.id, className: details.className }
+    });
+  }
+  
+  // Emit user input event
+  emitUserInput(
+    target: string,
+    value: string,
+    details: { file?: string; handler?: string }
+  ): void {
+    if (!this.enabled) return;
+    
+    this.emit('USER_INPUT', `⌨️ User input: ${target}`, {
+      userActivity: {
+        action: 'input',
+        target,
+        value: value.length > 100 ? value.substring(0, 100) + '...' : value
+      },
+      flowStep: {
+        step: 1,
+        total: 10,
+        phase: 'frontend',
+        action: 'User input',
+        file: details.file || 'unknown',
+        function: details.handler || 'onChange'
+      }
+    }, 'info');
+  }
+  
+  // Emit user submit event (form submission, send button, etc.)
+  emitUserSubmit(
+    action: string,
+    data: any,
+    details: { file: string; handler: string }
+  ): void {
+    if (!this.enabled) return;
+    
+    // Start new flow session on submit
+    const sessionId = this.startFlowSession(`Submit: ${action}`);
+    
+    this.emit('USER_SUBMIT', `📤 User submitted: ${action}`, {
+      userActivity: {
+        action: 'submit',
+        target: action,
+        value: JSON.stringify(data).substring(0, 200)
+      },
+      flowStep: {
+        step: 1,
+        total: 10,
+        phase: 'frontend',
+        action: 'Form submission',
+        file: details.file,
+        function: details.handler
+      },
+      codeSnippet: `// ${details.file} → ${details.handler}()
+// User submitted: ${action}
+${details.handler}(${JSON.stringify(data, null, 2).substring(0, 300)})`
+    }, 'info');
+    
+    this.addFlowNode('user', `Submit: ${action}`, {
+      file: details.file,
+      function: details.handler,
+      data
+    });
+  }
+  
+  // Emit component triggered event
+  emitComponentTriggered(
+    componentName: string,
+    file: string,
+    props?: Record<string, any>,
+    state?: Record<string, any>
+  ): void {
+    if (!this.enabled) return;
+    
+    this.emit('COMPONENT_TRIGGERED', `🧩 Component: ${componentName}`, {
+      componentInfo: {
+        name: componentName,
+        file,
+        props: props ? Object.fromEntries(
+          Object.entries(props).map(([k, v]) => [k, typeof v === 'function' ? '[Function]' : v])
+        ) : undefined,
+        state
+      },
+      flowStep: {
+        step: 2,
+        total: 10,
+        phase: 'frontend',
+        action: 'Component triggered',
+        file,
+        function: componentName
+      }
+    }, 'info');
+    
+    this.addFlowNode('component', componentName, { file, data: { props, state } });
+  }
+  
+  // Emit handler called event
+  emitHandlerCalled(
+    handlerName: string,
+    file: string,
+    args?: Record<string, any>,
+    line?: number
+  ): void {
+    if (!this.enabled) return;
+    
+    this.emit('HANDLER_CALLED', `⚡ Handler: ${handlerName}()`, {
+      handlerInfo: {
+        name: handlerName,
+        file,
+        line,
+        args: args ? Object.fromEntries(
+          Object.entries(args).map(([k, v]) => {
+            if (typeof v === 'function') return [k, '[Function]'];
+            if (typeof v === 'string' && v.length > 100) return [k, v.substring(0, 100) + '...'];
+            return [k, v];
+          })
+        ) : undefined
+      },
+      flowStep: {
+        step: 3,
+        total: 10,
+        phase: 'frontend',
+        action: 'Handler executed',
+        file,
+        function: handlerName,
+        line
+      },
+      codeSnippet: `// ${file}:${line || '?'}
+async function ${handlerName}(${args ? Object.keys(args).join(', ') : ''}) {
+  // Handler logic...
+}`
+    }, 'info');
+    
+    this.addFlowNode('function', `${handlerName}()`, { file, function: handlerName, line, data: args });
+  }
+
+  // Wrap a handler so it automatically emits a high-fidelity handler call event.
+  // This is the recommended way to capture exact TSX file + function name.
+  wrapHandler<TArgs extends unknown[], TResult>(
+    meta: { name: string; file: string; line?: number; component?: string },
+    fn: (...args: TArgs) => TResult,
+    argsToLog?: (...args: TArgs) => Record<string, any>
+  ): (...args: TArgs) => TResult {
+    return (...args: TArgs) => {
+      try {
+        if (meta.component) {
+          this.emitComponentTriggered(meta.component, meta.file);
+        }
+        this.emitHandlerCalled(meta.name, meta.file, argsToLog ? argsToLog(...args) : undefined, meta.line);
+      } catch {
+        // never block UI
+      }
+      return fn(...args);
+    };
+  }
+  
+  // Emit middleware event
+  emitMiddleware(
+    name: string,
+    phase: 'enter' | 'exit',
+    request?: any,
+    response?: any,
+    duration?: number
+  ): void {
+    if (!this.enabled) return;
+    
+    this.emit(phase === 'enter' ? 'MIDDLEWARE_ENTER' : 'MIDDLEWARE_EXIT', 
+      `${phase === 'enter' ? '→' : '←'} Middleware: ${name}`, {
+      middlewareInfo: {
+        name,
+        phase,
+        request: request ? JSON.stringify(request).substring(0, 200) : undefined,
+        response: response ? JSON.stringify(response).substring(0, 200) : undefined,
+        duration
+      },
+      flowStep: {
+        step: phase === 'enter' ? 4 : 7,
+        total: 10,
+        phase: 'backend',
+        action: `Middleware ${phase}`,
+        file: 'middleware',
+        function: name,
+        duration
+      }
+    }, 'info');
+    
+    this.addFlowNode('middleware', `${name} (${phase})`, { 
+      function: name, 
+      data: { phase, request, response, duration } 
+    });
+  }
+  
+  // Emit Railway request/response
+  emitRailway(
+    service: string,
+    endpoint: string,
+    method: string,
+    phase: 'request' | 'response',
+    status?: number,
+    duration?: number,
+    data?: any
+  ): void {
+    if (!this.enabled) return;
+    
+    this.emit(phase === 'request' ? 'RAILWAY_REQUEST' : 'RAILWAY_RESPONSE',
+      `🚂 Railway ${phase}: ${service}`, {
+      railwayInfo: {
+        service,
+        endpoint,
+        method,
+        status,
+        duration
+      },
+      flowStep: {
+        step: phase === 'request' ? 5 : 6,
+        total: 10,
+        phase: 'backend',
+        action: `Railway ${phase}`,
+        file: 'railway-service',
+        function: endpoint,
+        duration
+      },
+      codeSnippet: phase === 'request' ? 
+        `// Railway Request
+fetch("${endpoint}", {
+  method: "${method}",
+  headers: { "Authorization": "Bearer ***" },
+  body: ${data ? JSON.stringify(data, null, 2).substring(0, 200) : 'null'}
+})` : 
+        `// Railway Response
+Status: ${status}
+Duration: ${duration}ms
+${data ? JSON.stringify(data, null, 2).substring(0, 200) : ''}`
+    }, status && status >= 400 ? 'error' : 'success');
+    
+    this.addFlowNode('backend', `Railway: ${service}`, {
+      function: endpoint,
+      data: { method, status, duration }
+    });
+  }
+  
+  // Emit complete flow with tree
+  emitFlowComplete(summary: string): void {
+    if (!this.enabled || !this.currentFlowSession) return;
+    
+    const rootNode = this.flowNodes.get(this.currentFlowSession);
+    if (!rootNode) return;
+    
+    const totalDuration = Date.now() - this.flowStartTime;
+    
+    this.emit('FLOW_COMPLETE', `✅ Flow complete: ${summary}`, {
+      flowTree: {
+        sessionId: this.currentFlowSession,
+        rootNode,
+        currentPath: this.buildFlowPath(rootNode),
+        totalNodes: this.flowNodes.size,
+        totalDuration
+      }
+    }, 'success');
+    
+    // Reset flow session
+    this.currentFlowSession = null;
+  }
+  
+  // Build flow path from root to leaves
+  private buildFlowPath(node: FlowNode, path: string[] = []): string[] {
+    path.push(`${node.type}:${node.label}`);
+    if (node.children.length > 0) {
+      // Follow first child for main path
+      this.buildFlowPath(node.children[0], path);
+    }
+    return path;
+  }
+  
   // Subscribe to events
   subscribe(fn: (event: DebugEvent) => void): () => void {
     this.listeners.add(fn);
@@ -616,6 +1741,26 @@ export function useSuperDebug() {
     emitLibrary: superDebugBus.emitLibrary.bind(superDebugBus),
     emitStateUpdate: superDebugBus.emitStateUpdate.bind(superDebugBus),
     emitFileHandoff: superDebugBus.emitFileHandoff.bind(superDebugBus),
+    emitApiRequest: superDebugBus.emitApiRequest.bind(superDebugBus),
+    emitBackendProcess: superDebugBus.emitBackendProcess.bind(superDebugBus),
+    emitTokenCap: superDebugBus.emitTokenCap.bind(superDebugBus),
+    // User Activity Tracking
+    emitUserClick: superDebugBus.emitUserClick.bind(superDebugBus),
+    emitUserInput: superDebugBus.emitUserInput.bind(superDebugBus),
+    emitUserSubmit: superDebugBus.emitUserSubmit.bind(superDebugBus),
+    emitComponentTriggered: superDebugBus.emitComponentTriggered.bind(superDebugBus),
+    emitHandlerCalled: superDebugBus.emitHandlerCalled.bind(superDebugBus),
+    wrapHandler: superDebugBus.wrapHandler.bind(superDebugBus),
+    emitMiddleware: superDebugBus.emitMiddleware.bind(superDebugBus),
+    emitRailway: superDebugBus.emitRailway.bind(superDebugBus),
+    emitFlowComplete: superDebugBus.emitFlowComplete.bind(superDebugBus),
+    // Prompt Journey Tracking
+    emitPromptJourney: superDebugBus.emitPromptJourney.bind(superDebugBus),
+    emitResponseTransformation: superDebugBus.emitResponseTransformation.bind(superDebugBus),
+    getFlowTree: superDebugBus.getFlowTree.bind(superDebugBus),
+    startFlowSession: superDebugBus.startFlowSession.bind(superDebugBus),
+    addFlowNode: superDebugBus.addFlowNode.bind(superDebugBus),
+    // Core methods
     subscribe: superDebugBus.subscribe.bind(superDebugBus),
     getEvents: superDebugBus.getEvents.bind(superDebugBus),
     getStats: superDebugBus.getStats.bind(superDebugBus),

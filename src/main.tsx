@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App"; // Main router
 import { AuthProvider } from "./lib/supabase"; // Auth provider
+import './lib/change-tracker'; // Initialize global change tracker
 // import { LandingPage } from "./landing/LandingPage"; // Landing page (commented out)
 
 // Immediate startup logging

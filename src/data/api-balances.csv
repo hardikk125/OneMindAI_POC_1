@@ -1,13 +1,17 @@
 provider,engine,initial_balance,current_balance,total_spent,tokens_in,tokens_out,last_updated,currency,notes
-openai,gpt-4.1,3.96,3.76,0.2338,368,7670,2025-12-03T09:57:43.355Z,USD,Enter your balance
+openai,gpt-4.1,3.96,2.55,1.4999,43754,35411,2025-12-17T06:20:55.848Z,USD,Enter your balance
 anthropic,claude-3.5-sonnet,1.54,1.54,0.0000,0,0,2025-11-27T12:18:34.331Z,USD,Enter your balance
 gemini,gemini-2.0-flash-exp,0.00,0.00,0.0000,0,0,2025-11-27T12:15:00.000Z,USD,Free tier
-deepseek,deepseek-chat,1.69,1.69,0.0045,295,15500,2025-12-03T09:57:43.360Z,USD,Enter your balance
-mistral,mistral-large-latest,0.00,0.00,0.3242,185,13444,2025-12-03T10:17:19.379Z,USD,Enter your balance
+deepseek,deepseek-chat,1.69,1.69,0.0247,43812,67984,2025-12-17T14:19:17.554Z,USD,Enter your balance
+mistral,mistral-large-latest,0.00,0.00,2.9189,36010,109613,2025-12-17T14:19:17.561Z,USD,Enter your balance
 groq,llama-3.3-70b-versatile,0.00,0.00,0.0000,0,0,2025-11-27T12:15:00.000Z,USD,Free tier
-perplexity,sonar-pro,0.00,0.00,0.0000,0,0,2025-11-27T12:15:00.000Z,USD,Enter your balance
+perplexity,sonar-pro,0.00,0.00,0.4538,2076,21653,2025-12-11T09:18:21.876Z,USD,Enter your balance
 kimi,moonshot-v1-128k,0.00,0.00,0.0000,0,0,2025-11-27T12:15:00.000Z,USD,Enter your balance
 xai,grok-beta,0.00,0.00,0.0000,0,0,2025-11-27T12:15:00.000Z,USD,Enter your balance
-anthropic,claude-3-haiku-20240307,0.00,0.00,0.0045,429,3513,2025-12-03T07:09:32.683Z,USD,Auto-created from usage
-gemini,gemini-2.5-flash-lite,0.00,0.00,0.0000,114,42,2025-12-03T07:09:32.685Z,USD,Auto-created from usage
-openai,gpt-5-2025-08-07,0.00,0.00,0.0140,2,233,2025-12-03T10:48:52.598Z,USD,Auto-created from usage
+anthropic,claude-3-haiku-20240307,0.00,0.00,0.0341,18592,23584,2025-12-17T11:44:16.445Z,USD,Auto-created from usage
+gemini,gemini-2.5-flash-lite,0.00,0.00,0.0091,29096,51041,2025-12-17T05:34:58.934Z,USD,Auto-created from usage
+openai,gpt-5-2025-08-07,0.00,0.00,0.3820,828,6159,2025-12-11T12:53:14.151Z,USD,Auto-created from usage
+huggingface,hf-model,0.00,0.00,0.0022,627,70,2025-12-05T08:18:49.134Z,USD,Auto-created from usage
+openai,gpt-4o,0.00,0.00,0.0045,129,417,2025-12-04T12:51:40.048Z,USD,Auto-created from usage
+generic,v1,0.00,0.00,0.0011,250,32,2025-12-05T08:18:49.136Z,USD,Auto-created from usage
+openai,gpt-5.1,0.00,0.00,0.0087,2,87,2025-12-11T09:25:20.748Z,USD,Auto-created from usage

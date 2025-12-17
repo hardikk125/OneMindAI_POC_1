@@ -1,0 +1,133 @@
+Layer,Category,Constant Name,Value,Type,File Name,Function/Location,Line #,Status,Admin Config Key,Recommendation
+Frontend,Token Limits,DEFAULT_TOKEN_LIMIT,8192,number,src/OneMindAI.tsx,Line 254,254,HARDCODED,N/A,Use from ai_models table
+Frontend,Token Limits,MODEL_TOKEN_LIMITS (OpenAI),16384,number,src/OneMindAI.tsx,Lines 199-207,199-207,HARDCODED,ai_models.max_output_tokens,Migrate to database
+Frontend,Token Limits,MODEL_TOKEN_LIMITS (Anthropic),8192/4096,number,src/OneMindAI.tsx,Lines 209-213,209-213,HARDCODED,ai_models.max_output_tokens,Migrate to database
+Frontend,Token Limits,MODEL_TOKEN_LIMITS (Gemini),8192,number,src/OneMindAI.tsx,Lines 215-218,215-218,HARDCODED,ai_models.max_output_tokens,Migrate to database
+Frontend,Token Limits,MODEL_TOKEN_LIMITS (DeepSeek),65536,number,src/OneMindAI.tsx,Lines 220-223,220-223,HARDCODED,ai_models.max_output_tokens,Migrate to database
+Frontend,Token Limits,MODEL_TOKEN_LIMITS (Mistral),128000/32000,number,src/OneMindAI.tsx,Lines 225-230,225-230,HARDCODED,ai_models.max_output_tokens,Migrate to database
+Frontend,Token Limits,MODEL_TOKEN_LIMITS (Perplexity),8192/4096,number,src/OneMindAI.tsx,Lines 232-234,232-234,HARDCODED,ai_models.max_output_tokens,Migrate to database
+Frontend,Token Limits,MODEL_TOKEN_LIMITS (Groq),8192,number,src/OneMindAI.tsx,Lines 236-240,236-240,HARDCODED,ai_models.max_output_tokens,Migrate to database
+Frontend,Token Limits,MODEL_TOKEN_LIMITS (xAI),8192,number,src/OneMindAI.tsx,Lines 242-244,242-244,HARDCODED,ai_models.max_output_tokens,Migrate to database
+Frontend,Token Limits,MODEL_TOKEN_LIMITS (Kimi),8192,number,src/OneMindAI.tsx,Lines 246-249,246-249,HARDCODED,ai_models.max_output_tokens,Migrate to database
+Frontend,Pricing,BASE_PRICING (OpenAI),0.15-100.00,number,src/OneMindAI.tsx,Lines 261-266,261-266,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (Anthropic),0.25-15.00,number,src/OneMindAI.tsx,Lines 268-272,268-272,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (Gemini),0.0375-0.30,number,src/OneMindAI.tsx,Lines 274-277,274-277,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (DeepSeek),0.14-0.28,number,src/OneMindAI.tsx,Lines 279-281,279-281,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (Mistral),2.00-24.00,number,src/OneMindAI.tsx,Lines 283-286,283-286,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (Perplexity),4.00-20.00,number,src/OneMindAI.tsx,Lines 288-290,288-290,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (Kimi),8.00-40.00,number,src/OneMindAI.tsx,Lines 292-295,292-295,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (xAI),6.00-12.00,number,src/OneMindAI.tsx,Lines 297-298,297-298,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (Groq),0.05-0.79,number,src/OneMindAI.tsx,Lines 300-304,300-304,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (Falcon),0.10-1.60,number,src/OneMindAI.tsx,Lines 306-311,306-311,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (Sarvam),0.10-0.50,number,src/OneMindAI.tsx,Lines 313-315,313-315,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (HuggingFace),3.00-8.00,number,src/OneMindAI.tsx,Lines 317-318,317-318,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Pricing,BASE_PRICING (Generic),3.00-8.00,number,src/OneMindAI.tsx,Lines 320-321,320-321,HARDCODED,ai_models.input_price_per_million/output_price_per_million,Migrate to database
+Frontend,Token Estimation,estimateTokens (tiktoken),0.75,number,src/OneMindAI.tsx,Line 330,330,HARDCODED,N/A,Keep - industry standard
+Frontend,Token Estimation,estimateTokens (tiktoken),0.002,number,src/OneMindAI.tsx,Line 330,330,HARDCODED,N/A,Keep - industry standard
+Frontend,Token Estimation,estimateTokens (sentencepiece),0.95,number,src/OneMindAI.tsx,Line 331,331,HARDCODED,N/A,Keep - industry standard
+Frontend,Token Estimation,estimateTokens (sentencepiece),0.003,number,src/OneMindAI.tsx,Line 331,331,HARDCODED,N/A,Keep - industry standard
+Frontend,Token Estimation,estimateTokens (bytebpe),0.6,number,src/OneMindAI.tsx,Line 332,332,HARDCODED,N/A,Keep - industry standard
+Frontend,Token Estimation,estimateTokens (bytebpe),0.004,number,src/OneMindAI.tsx,Line 332,332,HARDCODED,N/A,Keep - industry standard
+Frontend,Cost Calculation,expectedOutputTokens,1000,number,src/OneMindAI.tsx,Line 340,340,HARDCODED,expected_output_tokens,Use from system_config
+Frontend,Cost Calculation,TOKENS_PER_MILLION,1000000,number,src/OneMindAI.tsx,Line 355,355,HARDCODED,N/A,Keep - standard constant
+Frontend,Time Estimation,timeLabel (base),3,number,src/OneMindAI.tsx,Line 375,375,HARDCODED,N/A,Keep - UX constant
+Frontend,Time Estimation,timeLabel (multiplier),3,number,src/OneMindAI.tsx,Line 375,375,HARDCODED,N/A,Keep - UX constant
+Frontend,Time Estimation,timeLabel (offset),2,number,src/OneMindAI.tsx,Line 375,375,HARDCODED,N/A,Keep - UX constant
+Frontend,Time Estimation,timeLabel (threshold1),20,number,src/OneMindAI.tsx,Line 376,376,HARDCODED,N/A,Keep - UX constant
+Frontend,Time Estimation,timeLabel (threshold2),90,number,src/OneMindAI.tsx,Line 377,377,HARDCODED,N/A,Keep - UX constant
+Frontend,Output Labels,outcomeLabel (threshold1),800,number,src/OneMindAI.tsx,Line 383,383,HARDCODED,N/A,Keep - UX constant
+Frontend,Output Labels,outcomeLabel (threshold2),2000,number,src/OneMindAI.tsx,Line 384,384,HARDCODED,N/A,Keep - UX constant
+Frontend,Output Labels,outcomeLabel (threshold3),4000,number,src/OneMindAI.tsx,Line 385,385,HARDCODED,N/A,Keep - UX constant
+Frontend,Output Tokens,computeOutCap (multiplier),0.9,number,src/OneMindAI.tsx,Line 399,399,HARDCODED,N/A,Keep - performance constant
+Frontend,Prompt Limits,PROMPT_SOFT_LIMIT,5000,number,src/OneMindAI.tsx,Line 533,533,ADMIN_CONFIG,prompt_soft_limit,Already using system_config
+Frontend,Prompt Limits,PROMPT_HARD_LIMIT,10000,number,src/OneMindAI.tsx,Line 534,534,ADMIN_CONFIG,prompt_hard_limit,Already using system_config
+Frontend,Prompt Limits,MAX_PROMPT_LENGTH,7000,number,src/OneMindAI.tsx,Line 535,535,ADMIN_CONFIG,max_prompt_length,Already using system_config
+Frontend,Error Testing,MOCK_FAIL_AFTER_RETRIES,2,number,src/OneMindAI.tsx,Line 545,545,HARDCODED,N/A,Keep - testing constant
+Frontend,Engine Config,seededEngines contextLimit,128_000,number,src/OneMindAI.tsx,Line 178,178,HARDCODED,N/A,Keep - provider spec
+Frontend,Engine Config,seededEngines contextLimit,200_000,number,src/OneMindAI.tsx,Line 179,179,HARDCODED,N/A,Keep - provider spec
+Frontend,Engine Config,seededEngines contextLimit,1_000_000,number,src/OneMindAI.tsx,Line 180,180,HARDCODED,N/A,Keep - provider spec
+Frontend,Engine Config,seededEngines contextLimit,64_000,number,src/OneMindAI.tsx,Line 182,182,HARDCODED,N/A,Keep - provider spec
+Frontend,Engine Config,seededEngines contextLimit,32_000,number,src/OneMindAI.tsx,Line 183,183,HARDCODED,N/A,Keep - provider spec
+Frontend,Temperature,makeClaudeRequest temperature,0.7,number,src/OneMindAI.tsx,Line 2046,2046,HARDCODED,default_temperature,NEEDS MIGRATION
+Frontend,Input Debounce,onInputCapture debounce,300,number,src/OneMindAI.tsx,Line 490,490,HARDCODED,debounce_ms,Use from system_config
+Frontend,Input Truncation,onInputCapture truncate,120,number,src/OneMindAI.tsx,Line 484,484,HARDCODED,N/A,Keep - UI constant
+Frontend,Truncation Error,TruncationError statusCode,413,number,src/OneMindAI.tsx,Line 1601,1601,HARDCODED,N/A,Keep - HTTP status constant
+Frontend,Model Token Limit,getModelTokenLimit fallback,8192,number,src/OneMindAI.tsx,Line 1582,1582,HARDCODED,N/A,Keep - fallback constant
+Frontend,Marked Config,marked breaks,true,boolean,src/OneMindAI.tsx,Line 404,404,HARDCODED,N/A,Keep - library config
+Frontend,Marked Config,marked gfm,true,boolean,src/OneMindAI.tsx,Line 405,405,HARDCODED,N/A,Keep - library config
+Frontend,Default Selection,selected (openai),true,boolean,src/OneMindAI.tsx,Line 571,571,HARDCODED,N/A,Keep - default UX
+Frontend,Default Selection,selected (deepseek),true,boolean,src/OneMindAI.tsx,Line 571,571,HARDCODED,N/A,Keep - default UX
+Frontend,Default Selection,selected (mistral),true,boolean,src/OneMindAI.tsx,Line 571,571,HARDCODED,N/A,Keep - default UX
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG prompt_soft_limit,5000,number,src/hooks/useAdminConfig.ts,Line 46,46,HARDCODED,prompt_soft_limit,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG prompt_hard_limit,10000,number,src/hooks/useAdminConfig.ts,Line 47,47,HARDCODED,prompt_hard_limit,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG prompt_chunk_size,4000,number,src/hooks/useAdminConfig.ts,Line 48,48,HARDCODED,prompt_chunk_size,Fallback value (dead code)
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG max_prompt_length,7000,number,src/hooks/useAdminConfig.ts,Line 49,49,HARDCODED,max_prompt_length,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG stream_timeout_ms,30000,number,src/hooks/useAdminConfig.ts,Line 52,52,HARDCODED,stream_timeout_ms,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG request_timeout_ms,60000,number,src/hooks/useAdminConfig.ts,Line 53,53,HARDCODED,request_timeout_ms,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG expected_output_tokens,1000,number,src/hooks/useAdminConfig.ts,Line 56,56,HARDCODED,expected_output_tokens,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG signup_bonus_credits,100,number,src/hooks/useAdminConfig.ts,Line 57,57,HARDCODED,signup_bonus_credits,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG markup_percentage,30,number,src/hooks/useAdminConfig.ts,Line 58,58,HARDCODED,markup_percentage,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG debounce_ms,300,number,src/hooks/useAdminConfig.ts,Line 61,61,HARDCODED,debounce_ms,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG animation_duration_ms,200,number,src/hooks/useAdminConfig.ts,Line 62,62,HARDCODED,animation_duration_ms,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG update_interval_ms,15,number,src/hooks/useAdminConfig.ts,Line 63,63,HARDCODED,update_interval_ms,Fallback value
+Frontend Hook,Admin Config,DEFAULT_SYSTEM_CONFIG toast_duration_ms,5000,number,src/hooks/useAdminConfig.ts,Line 64,64,HARDCODED,toast_duration_ms,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG openai max_output_cap,16384,number,src/hooks/useAdminConfig.ts,Line 68,68,HARDCODED,provider_config.max_output_cap,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG openai rate_limit_rpm,3500,number,src/hooks/useAdminConfig.ts,Line 68,68,HARDCODED,provider_config.rate_limit_rpm,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG openai timeout_seconds,30,number,src/hooks/useAdminConfig.ts,Line 68,68,HARDCODED,provider_config.timeout_seconds,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG openai retry_count,3,number,src/hooks/useAdminConfig.ts,Line 68,68,HARDCODED,provider_config.retry_count,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG anthropic max_output_cap,8192,number,src/hooks/useAdminConfig.ts,Line 69,69,HARDCODED,provider_config.max_output_cap,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG anthropic rate_limit_rpm,3500,number,src/hooks/useAdminConfig.ts,Line 69,69,HARDCODED,provider_config.rate_limit_rpm,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG gemini max_output_cap,8192,number,src/hooks/useAdminConfig.ts,Line 70,70,HARDCODED,provider_config.max_output_cap,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG gemini rate_limit_rpm,3600,number,src/hooks/useAdminConfig.ts,Line 70,70,HARDCODED,provider_config.rate_limit_rpm,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG deepseek max_output_cap,8192,number,src/hooks/useAdminConfig.ts,Line 71,71,HARDCODED,provider_config.max_output_cap,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG mistral max_output_cap,32768,number,src/hooks/useAdminConfig.ts,Line 72,72,HARDCODED,provider_config.max_output_cap,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG mistral rate_limit_rpm,3600,number,src/hooks/useAdminConfig.ts,Line 72,72,HARDCODED,provider_config.rate_limit_rpm,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG perplexity max_output_cap,4096,number,src/hooks/useAdminConfig.ts,Line 73,73,HARDCODED,provider_config.max_output_cap,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG perplexity rate_limit_rpm,1800,number,src/hooks/useAdminConfig.ts,Line 73,73,HARDCODED,provider_config.rate_limit_rpm,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG groq max_output_cap,8192,number,src/hooks/useAdminConfig.ts,Line 74,74,HARDCODED,provider_config.max_output_cap,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG xai max_output_cap,16384,number,src/hooks/useAdminConfig.ts,Line 75,75,HARDCODED,provider_config.max_output_cap,Fallback value
+Frontend Hook,Provider Config,DEFAULT_PROVIDER_CONFIG kimi max_output_cap,8192,number,src/hooks/useAdminConfig.ts,Line 76,76,HARDCODED,provider_config.max_output_cap,Fallback value
+Frontend Hook,Cache,CACHE_DURATION_MS,5 * 60 * 1000,number,src/hooks/useAdminConfig.ts,Line 84,84,HARDCODED,N/A,Keep - cache constant
+Frontend Hook,Provider Max Output,getProviderMaxOutput fallback,8192,number,src/hooks/useAdminConfig.ts,Line 349,349,HARDCODED,N/A,Keep - fallback constant
+Backend,Cache,CACHE_TTL,5 * 60 * 1000,number,server/ai-proxy.cjs,Line 25,25,HARDCODED,N/A,Keep - cache constant
+Backend,Port,PORT,3002,number,server/ai-proxy.cjs,Line 46,46,HARDCODED,AI_PROXY_PORT,Use environment variable
+Backend,CORS,allowedOrigins localhost,5173,number,server/ai-proxy.cjs,Line 62,62,HARDCODED,ALLOWED_ORIGINS,Use environment variable
+Backend,CORS,allowedOrigins localhost,5176,number,server/ai-proxy.cjs,Line 63,63,HARDCODED,ALLOWED_ORIGINS,Use environment variable
+Backend,CORS,allowedOrigins localhost,3000,number,server/ai-proxy.cjs,Line 64,64,HARDCODED,ALLOWED_ORIGINS,Use environment variable
+Backend,CORS,allowedOrigins 127.0.0.1,5173,number,server/ai-proxy.cjs,Line 65,65,HARDCODED,ALLOWED_ORIGINS,Use environment variable
+Backend,CORS,allowedOrigins 127.0.0.1,5176,number,server/ai-proxy.cjs,Line 66,66,HARDCODED,ALLOWED_ORIGINS,Use environment variable
+Backend,Body Parsing,express.json limit,10mb,string,server/ai-proxy.cjs,Line 89,89,HARDCODED,N/A,Keep - security constant
+Backend,Rate Limiting,windowMs,60 * 1000,number,server/ai-proxy.cjs,Line 93,93,HARDCODED,RATE_LIMIT_WINDOW_MS,Use environment variable
+Backend,Rate Limiting,max,60,number,server/ai-proxy.cjs,Line 94,94,HARDCODED,RATE_LIMIT_MAX,Use environment variable
+Backend,OpenAI,default model,gpt-4o,string,server/ai-proxy.cjs,Line 820,820,HARDCODED,N/A,Keep - provider default
+Backend,OpenAI,max_completion_tokens cap,128000,number,server/ai-proxy.cjs,Line 824,824,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,OpenAI,max_tokens cap,16384,number,server/ai-proxy.cjs,Line 825,825,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,OpenAI,temperature,0.7,number,server/ai-proxy.cjs,Line 829,829,HARDCODED,default_temperature,NEEDS MIGRATION
+Backend,Anthropic,default model,claude-3-5-sonnet-20241022,string,server/ai-proxy.cjs,Line 910,910,HARDCODED,N/A,Keep - provider default
+Backend,Anthropic,max_output_cap fallback,8192,number,server/ai-proxy.cjs,Line 908,908,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,Anthropic,temperature,0.7,number,server/ai-proxy.cjs,Line 914,914,HARDCODED,default_temperature,NEEDS MIGRATION
+Backend,Anthropic,anthropic-version header,2023-06-01,string,server/ai-proxy.cjs,Line 927,927,HARDCODED,N/A,Keep - API version
+Backend,Gemini,default model,gemini-1.5-pro,string,server/ai-proxy.cjs,Line 1011,1011,HARDCODED,N/A,Keep - provider default
+Backend,Gemini,max_output_cap fallback,8192,number,server/ai-proxy.cjs,Line 1017,1017,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,Gemini,temperature,0.7,number,server/ai-proxy.cjs,Line 1019,1019,HARDCODED,default_temperature,NEEDS MIGRATION
+Backend,Mistral,default model,mistral-large-latest,string,server/ai-proxy.cjs,Line 1146,1146,HARDCODED,N/A,Keep - provider default
+Backend,Mistral,max_output_cap fallback,32768,number,server/ai-proxy.cjs,Line 1149,1149,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,Mistral,temperature,0.7,number,server/ai-proxy.cjs,Line 1150,1150,HARDCODED,default_temperature,NEEDS MIGRATION
+Backend,Perplexity,default model,sonar-pro,string,server/ai-proxy.cjs,Line 1225,1225,HARDCODED,N/A,Keep - provider default
+Backend,Perplexity,max_output_cap fallback,4096,number,server/ai-proxy.cjs,Line 1228,1228,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,Perplexity,temperature,0.7,number,server/ai-proxy.cjs,Line 1229,1229,HARDCODED,default_temperature,NEEDS MIGRATION
+Backend,DeepSeek,default model,deepseek-chat,string,server/ai-proxy.cjs,Line 1301,1301,HARDCODED,N/A,Keep - provider default
+Backend,DeepSeek,max_output_cap fallback,8192,number,server/ai-proxy.cjs,Line 1304,1304,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,DeepSeek,temperature,0.7,number,server/ai-proxy.cjs,Line 1305,1305,HARDCODED,default_temperature,NEEDS MIGRATION
+Backend,Groq,default model (implied),llama-3.3-70b-versatile,string,server/ai-proxy.cjs,Line 1377,1377,HARDCODED,N/A,Keep - provider default
+Backend,Groq,max_output_cap fallback,8192,number,server/ai-proxy.cjs,Line 1378,1378,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,Groq,temperature,0.7,number,server/ai-proxy.cjs,Line 1378,1378,HARDCODED,default_temperature,NEEDS MIGRATION
+Backend,xAI,default model (implied),grok-beta,string,server/ai-proxy.cjs,Line 1453,1453,HARDCODED,N/A,Keep - provider default
+Backend,xAI,max_output_cap fallback,16384,number,server/ai-proxy.cjs,Line 1454,1454,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,xAI,temperature,0.7,number,server/ai-proxy.cjs,Line 1454,1454,HARDCODED,default_temperature,NEEDS MIGRATION
+Backend,Kimi,default model (implied),moonshot-v1-128k,string,server/ai-proxy.cjs,Line 1529,1529,HARDCODED,N/A,Keep - provider default
+Backend,Kimi,max_output_cap fallback,8192,number,server/ai-proxy.cjs,Line 1530,1530,HARDCODED,provider_config.max_output_cap,Use getProviderLimit
+Backend,Kimi,temperature,0.7,number,server/ai-proxy.cjs,Line 1530,1530,HARDCODED,default_temperature,NEEDS MIGRATION
+Database,Migrations,system_config default values,various,various,supabase/migrations/006_system_and_provider_config.sql,Seed data,varies,SEED_DATA,N/A,Keep - initial values
+Database,Migrations,provider_config default values,various,various,supabase/migrations/006_system_and_provider_config.sql,Seed data,varies,SEED_DATA,N/A,Keep - initial values
+Database,Migrations,ai_models seed data,various,various,supabase/migrations/007_ai_models_config.sql,Seed data,varies,SEED_DATA,N/A,Keep - initial values

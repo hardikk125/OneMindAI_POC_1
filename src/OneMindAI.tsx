@@ -1,12 +1,15 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { marked } from "marked";
 import { FileUploadZone } from './components/FileUploadZone';
+import { CompanyBanner, COMPANIES, type Company } from './components/CompanyBanner';
+import { Grid3X3, Layers, LayoutList, Search } from 'lucide-react';
 import EnhancedMarkdownRenderer from './components/EnhancedMarkdownRenderer';
 import { SelectableMarkdownRenderer } from './components/SelectableMarkdownRenderer';
 import { TableChartRenderer } from './components/TableChartRenderer';
 import { ErrorRecoveryPanel } from './components/ErrorRecoveryPanel';
 import { ExportDropdown } from './components/ExportButton';
 import { HyperText } from './components/ui/hyper-text';
+import { TextDotsLoader } from './components/ui/loader';
 import { UploadedFile } from "./lib/file-utils";
 import { terminalLogger } from "./lib/terminal-logger";
 import { exportAllToWord, exportAllToPDF, ExportData } from './lib/export-utils';
@@ -27,6 +30,12 @@ import { useAuth } from './lib/supabase';
 import { deductCredits, calculateCredits, CREDIT_PRICING } from './lib/supabase/credit-service';
 import { AuthModal, UserMenu } from './components/auth';
 import { useUIConfig, getPromptsForRole } from './hooks/useUIConfig';
+import { useAdminConfig, getSystemConfig, getProviderMaxOutput, ProviderConfigItem } from './hooks/useAdminConfig';
+import { useAIModels } from './hooks/useAIModels';
+import { INDUSTRY_STANDARDS } from './config/constants';
+import { HubSpotSendButton } from './components/HubSpotSendButton';
+import { trackChange, trackStateChange, trackError, trackComponent, trackApiCall } from './lib/change-tracker';
+import { HelpIcon } from './components/ui/help-icon';
 
 /**
  * OneMindAI — v14 (Mobile-First Preview, patched again)
@@ -166,7 +175,7 @@ function unicodeBtoa(str: string): string {
 
 // ===== Engines Registry =====
 const seededEngines: Engine[] = [
-  { id: "openai", name: "ChatGPT", provider: "openai", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["gpt-5-2025-08-07", "gpt-4.1", "gpt-4o", "gpt-4o-2024-11-20", "gpt-4o-2024-08-06", "gpt-4o-2024-05-13", "gpt-4.1-mini", "gpt-4o-mini"], selectedVersion: "gpt-5-2025-08-07", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["chatgpt"] },
+  { id: "openai", name: "ChatGPT", provider: "openai", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["gpt-5.1", "gpt-5-2025-08-07", "gpt-4.1", "gpt-4o", "gpt-4o-2024-11-20", "gpt-4o-2024-08-06", "gpt-4o-2024-05-13", "gpt-4.1-mini", "gpt-4o-mini"], selectedVersion: "gpt-4.1", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["chatgpt"] },
   { id: "claude", name: "Claude", provider: "anthropic", tokenizer: "sentencepiece", contextLimit: 200_000, versions: ["claude-3.5-sonnet", "claude-3-5-sonnet-20241022", "claude-3-haiku", "claude-3-haiku-20240307"], selectedVersion: "claude-3-haiku-20240307", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["claude"] },
   { id: "gemini", name: "Gemini", provider: "gemini", tokenizer: "sentencepiece", contextLimit: 1_000_000, versions: ["gemini-2.0-flash-exp", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite"], selectedVersion: "gemini-2.5-flash-lite", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["gemini"] },
   { id: "deepseek", name: "DeepSeek", provider: "deepseek", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["deepseek-chat", "deepseek-coder"], selectedVersion: "deepseek-chat", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["deepseek"] },
@@ -181,9 +190,76 @@ const seededEngines: Engine[] = [
   { id: "generic", name: "Custom HTTP Engine", provider: "generic", tokenizer: "bytebpe", contextLimit: 64_000, versions: ["v1"], selectedVersion: "v1", outPolicy: { mode: "auto" }, endpoint: "", apiKey: DEFAULT_API_KEYS["sarvam"] },
 ];
 
+// ===== Model Token Limits (max output tokens per model) =====
+// FALLBACK VALUES: These are used when database (ai_models table) is unavailable
+// Primary source: Admin Panel > Model Config (database: ai_models.max_output_tokens)
+// To update: Use Admin Panel or run migration 007_ai_models_config.sql
+const MODEL_TOKEN_LIMITS: Record<string, Record<string, number>> = {
+  openai: {
+    "gpt-5.1": 131072,                // GPT-5.1 - 128K context
+    "gpt-5-2025-08-07": 131072,      // GPT-5 - 128K context
+    "gpt-4.1": 16384,                // GPT-4 Turbo supports 16K output
+    "gpt-4o": 16384,                 // GPT-4o supports 16K output
+    "gpt-4o-2024-11-20": 16384,     // GPT-4o Nov 2024
+    "gpt-4o-2024-08-06": 16384,     // GPT-4o Aug 2024
+    "gpt-4o-2024-05-13": 16384,     // GPT-4o May 2024
+    "gpt-4.1-mini": 16384,          // GPT-4 Mini supports 16K output
+    "gpt-4o-mini": 16384,            // GPT-4o Mini supports 16K output
+  },
+  anthropic: {
+    "claude-3.5-sonnet": 8192,       // Claude 3.5 Sonnet - 8K output
+    "claude-3-5-sonnet-20241022": 8192, // Claude 3.5 Sonnet Oct 2024
+    "claude-3-haiku": 4096,          // Claude 3 Haiku - 4K output limit
+    "claude-3-haiku-20240307": 4096, // Claude 3 Haiku Mar 2024
+  },
+  gemini: {
+    "gemini-2.0-flash-exp": 8192,    // Gemini 2.0 Flash
+    "gemini-2.0-flash-lite": 8192,   // Gemini 2.0 Flash Lite
+    "gemini-2.5-flash-lite": 8192,   // Gemini 2.5 Flash Lite
+  },
+  deepseek: {
+    "deepseek-chat": 65536,          // DeepSeek Chat - 64K output (provider limit)
+    "deepseek-coder": 65536,         // DeepSeek Coder - 64K output (provider limit)
+    "deepseek-reasoner": 65536,      // DeepSeek Reasoner - 64K output (provider limit)
+  },
+  mistral: {
+    "mistral-large-latest": 128000,  // Mistral Large - 128K output (provider limit)
+    "mistral-large-2": 128000,       // Mistral Large 2 - 128K output (provider limit)
+    "mistral-medium-2312": 32000,    // Mistral Medium - 32K output (provider limit)
+    "mistral-small": 32000,          // Mistral Small - 32K output (provider limit)
+    "mistral-7b": 32000,             // Mistral 7B - 32K output (provider limit)
+  },
+  perplexity: {
+    "sonar-pro": 8192,               // Perplexity Sonar Pro
+    "sonar-small": 4096,             // Perplexity Sonar Small
+  },
+  groq: {
+    "llama-3.3-70b-versatile": 8192, // Llama 3.3 70B
+    "llama-3.1-8b-instant": 8192,   // Llama 3.1 8B
+    "mixtral-8x7b-32768": 8192,     // Mixtral 8x7B
+    "gemma2-9b-it": 8192,           // Gemma 2 9B
+  },
+  xai: {
+    "grok-2": 8192,                  // xAI Grok 2
+    "grok-beta": 8192,               // xAI Grok Beta
+  },
+  kimi: {
+    "moonshot-v1-8k": 8192,          // Kimi Moonshot 8K
+    "moonshot-v1-32k": 8192,         // Kimi Moonshot 32K
+    "moonshot-v1-128k": 8192,        // Kimi Moonshot 128K
+  },
+};
+
+// Default fallback limit for unknown models
+const DEFAULT_TOKEN_LIMIT = 8192;
+
 // ===== Pricing (USD per 1M tokens) — real pricing from providers =====
+// FALLBACK VALUES: These are used when database (ai_models table) is unavailable
+// Primary source: Admin Panel > Model Config (database: ai_models.input_price_per_million, output_price_per_million)
+// To update: Use Admin Panel or run migration 007_ai_models_config.sql
 const BASE_PRICING: Record<string, Record<string, { in: number; out: number; note: string }>> = {
   openai: {
+    "gpt-5.1": { in: 25.00, out: 100.00, note: "GPT-5.1 - Ultra-advanced reasoning" },
     "gpt-5-2025-08-07": { in: 15.00, out: 60.00, note: "GPT-5 - Most advanced reasoning" },
     "gpt-4.1": { in: 10.00, out: 30.00, note: "GPT-4 Turbo - Strong reasoning" },
     "gpt-4o": { in: 2.50, out: 10.00, note: "GPT-4o - Balanced quality" },
@@ -275,9 +351,9 @@ function calculateEstimatedCost(
     const versionPricing = providerPricing[engine.selectedVersion];
     if (!versionPricing) continue;
     
-    // Cost per 1M tokens, so divide by 1,000,000
-    const inCost = (promptTokens / 1_000_000) * versionPricing.in;
-    const outCost = (expectedOutputTokens / 1_000_000) * versionPricing.out;
+    // Cost per 1M tokens, so divide by TOKENS_PER_MILLION
+    const inCost = (promptTokens / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * versionPricing.in;
+    const outCost = (expectedOutputTokens / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * versionPricing.out;
     const cost = inCost + outCost;
     
     breakdown.push({
@@ -309,28 +385,12 @@ function outcomeLabel(outCap: number): string {
   if (outCap <= 4000) return "Concise report";
   return "Detailed report";
 }
-// Provider-specific max output token limits (actual API constraints)
-const PROVIDER_MAX_OUTPUT: Record<string, number> = {
-  openai: 16384,      // GPT-4o actual output limit
-  anthropic: 8192,    // Claude actual output limit per response
-  gemini: 8192,       // Gemini actual output limit
-  deepseek: 8192,     // DeepSeek strict limit [1, 8192]
-  mistral: 32768,     // Mistral Large output limit
-  perplexity: 4096,   // Perplexity max output
-  kimi: 8192,         // Kimi/Moonshot output limit
-  xai: 16384,         // xAI Grok output limit
-  groq: 8192,         // Groq output limit
-  huggingface: 4096,  // HuggingFace max output
-  sarvam: 4096,       // Sarvam max output
-  falcon: 4096,       // Falcon max output
-  generic: 4096,      // Generic fallback
-};
-
-function computeOutCap(e: Engine, inputTokens: number): number {
+// computeOutCap uses getProviderMaxOutput() from useAdminConfig.ts which has DEFAULT_PROVIDER_CONFIG fallback
+function computeOutCap(e: Engine, inputTokens: number, adminProviderConfig?: ProviderConfigItem[]): number {
   if (e.outPolicy?.mode === "fixed" && e.outPolicy.fixedTokens) return e.outPolicy.fixedTokens;
   
-  // Get provider-specific max output limit
-  const providerMax = PROVIDER_MAX_OUTPUT[e.provider] || 4096;
+  // Get provider-specific max output limit from admin config (with 8192 fallback)
+  const providerMax = getProviderMaxOutput(adminProviderConfig || [], e.provider);
   
   // Calculate available context space
   const availableTokens = Math.max(0, e.contextLimit - inputTokens);
@@ -354,14 +414,125 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  useEffect(() => {
+    if (!superDebugBus.isEnabled()) {
+      superDebugBus.setEnabled(true);
+    }
+    superDebugBus.emitComponentTriggered('OneMindAI_v14Mobile', 'OneMindAI.tsx');
+  }, []);
+
+  useEffect(() => {
+    const inputDebounceMap = new Map<EventTarget, number>();
+
+    const describeTarget = (el: Element) => {
+      const tag = el.tagName.toLowerCase();
+      const debugName = el.getAttribute('data-debug-name');
+      const debugFile = el.getAttribute('data-debug-file');
+      const debugHandler = el.getAttribute('data-debug-handler');
+      const ariaLabel = el.getAttribute('aria-label');
+      const id = el.id ? `#${el.id}` : '';
+      const cls = el.className && typeof el.className === 'string'
+        ? `.${el.className.split(' ').filter(Boolean).slice(0, 2).join('.')}`
+        : '';
+      const nameAttr = el.getAttribute('name');
+      const text = (el instanceof HTMLButtonElement || el instanceof HTMLAnchorElement)
+        ? (el.textContent || '').trim().slice(0, 40)
+        : '';
+
+      return [
+        debugName ? `[${debugName}]` : '',
+        debugFile ? `file:${debugFile}` : '',
+        debugHandler ? `fn:${debugHandler}` : '',
+        ariaLabel ? `aria:${ariaLabel}` : '',
+        `${tag}${id}${cls}`,
+        nameAttr ? `name:${nameAttr}` : '',
+        text ? `"${text}${text.length === 40 ? '...' : ''}"` : ''
+      ].filter(Boolean).join(' ');
+    };
+
+    const onClickCapture = (e: MouseEvent) => {
+      const rawTarget = e.target instanceof Element ? e.target : null;
+      // Skip clicks inside SuperDebugPanel to avoid noise
+      if (rawTarget?.closest('.super-debug-panel, [data-component-name="SuperDebugPanel"]')) return;
+      const el = rawTarget?.closest('[data-debug-name], [data-debug-file], [data-debug-handler]') || rawTarget;
+      if (!el) return;
+      const debugFile = el.getAttribute('data-debug-file') || undefined;
+      const debugHandler = el.getAttribute('data-debug-handler') || undefined;
+      superDebugBus.emitUserClick(describeTarget(el), {
+        id: el.id || undefined,
+        className: typeof el.className === 'string' ? el.className : undefined,
+        x: e.clientX,
+        y: e.clientY,
+        file: debugFile || 'unknown',
+        handler: debugHandler || 'globalClickCapture'
+      });
+    };
+
+    const onInputCapture = (e: Event) => {
+      const rawTarget = e.target instanceof Element ? e.target : null;
+      // Skip inputs inside SuperDebugPanel
+      if (rawTarget?.closest('.super-debug-panel, [data-component-name="SuperDebugPanel"]')) return;
+      const el = (rawTarget instanceof HTMLInputElement || rawTarget instanceof HTMLTextAreaElement) ? rawTarget : null;
+      if (!el) return;
+
+      const prev = inputDebounceMap.get(el);
+      if (prev) window.clearTimeout(prev);
+
+      const timeoutId = window.setTimeout(() => {
+        const metaEl = el.closest('[data-debug-name], [data-debug-file], [data-debug-handler]') || el;
+        const rawValue = el.value ?? '';
+        const safeValue = rawValue.length > 120 ? `${rawValue.slice(0, 120)}...` : rawValue;
+        superDebugBus.emitUserInput(describeTarget(metaEl), safeValue, {
+          file: metaEl.getAttribute('data-debug-file') || 'unknown',
+          handler: metaEl.getAttribute('data-debug-handler') || 'globalInputCapture'
+        });
+        inputDebounceMap.delete(el);
+      }, 300);
+
+      inputDebounceMap.set(el, timeoutId);
+    };
+
+    const onSubmitCapture = (e: Event) => {
+      const form = e.target instanceof HTMLFormElement ? e.target : null;
+      if (!form) return;
+      const actionName = form.getAttribute('data-debug-name') || form.getAttribute('name') || form.id || 'Form Submit';
+      superDebugBus.emitUserSubmit(actionName, { form: actionName }, {
+        file: 'unknown',
+        handler: 'globalSubmitCapture'
+      });
+    };
+
+    document.addEventListener('click', onClickCapture, true);
+    document.addEventListener('input', onInputCapture, true);
+    document.addEventListener('submit', onSubmitCapture, true);
+
+    return () => {
+      document.removeEventListener('click', onClickCapture, true);
+      document.removeEventListener('input', onInputCapture, true);
+      document.removeEventListener('submit', onSubmitCapture, true);
+      inputDebounceMap.forEach((id) => window.clearTimeout(id));
+      inputDebounceMap.clear();
+    };
+  }, []);
+
   // ===== UI Configuration (from admin panel) =====
   const { modeOptions, userRoles, rolePrompts, isLoading: configLoading } = useUIConfig();
 
-  // ===== Prompt Limits =====
+  // ===== Admin Configuration (from database) =====
+  const { systemConfig, providerConfig, isLoading: adminConfigLoading } = useAdminConfig();
+
+  // ===== AI Models Configuration (from database) =====
+  const { 
+    getModelTokenLimit: getDBModelTokenLimit, 
+    getPricingMap,
+    isLoading: aiModelsLoading 
+  } = useAIModels();
+
+  // ===== Prompt Limits (from database with fallbacks) =====
   const LIMITS = {
-    PROMPT_SOFT_LIMIT: 5000,    // Warning
-    PROMPT_HARD_LIMIT: 10000,   // Block
-    PROMPT_CHUNK_SIZE: 4000,    // For chunking
+    PROMPT_SOFT_LIMIT: getSystemConfig<number>(systemConfig, 'prompt_soft_limit', 5000),
+    PROMPT_HARD_LIMIT: getSystemConfig<number>(systemConfig, 'prompt_hard_limit', 10000),
+    MAX_PROMPT_LENGTH: getSystemConfig<number>(systemConfig, 'max_prompt_length', 7000),
   };
 
   // ===== MOCK ERROR TESTING (DISABLED) =====
@@ -376,11 +547,42 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   // const [mockErrorMode, setMockErrorMode] = useState<false | '429' | '500' | '503' | 'random'>(false);
   // const [mockErrorCounts, setMockErrorCounts] = useState<Record<string, number>>({});
 
+  // ===== Filter out disabled providers =====
+  const enabledProviders = useMemo(() => {
+    // Get list of enabled provider names from providerConfig
+    const enabled = new Set(
+      providerConfig
+        .filter(p => p.is_enabled)
+        .map(p => p.provider)
+    );
+    // If no providerConfig loaded yet, show all engines
+    if (providerConfig.length === 0) return null;
+    return enabled;
+  }, [providerConfig]);
+
   // ===== State =====
   const [prompt, setPrompt] = useState("");
   const [promptWarning, setPromptWarning] = useState<string | null>(null);
   const [engines, setEngines] = useState<Engine[]>(seededEngines);
-  const [selected, setSelected] = useState<Record<string, boolean>>({ openai: true, claude: true, deepseek: true, gemini: true, mistral: true });
+  const [selected, setSelected] = useState<Record<string, boolean>>(() => {
+    // Initialize selected engines based on enabled providers from admin config
+    // If admin config not loaded yet, use default (openai, deepseek, mistral)
+    if (!enabledProviders) {
+      return { openai: true, deepseek: true, mistral: true };
+    }
+    // Only select engines whose providers are enabled
+    const initialSelected: Record<string, boolean> = {};
+    seededEngines.forEach(e => {
+      initialSelected[e.id] = enabledProviders.has(e.provider);
+    });
+    return initialSelected;
+  });
+  
+  // ===== Visible Engines (filtered by admin-disabled providers) =====
+  const visibleEngines = useMemo(() => {
+    if (!enabledProviders) return engines; // Show all if config not loaded
+    return engines.filter(e => enabledProviders.has(e.provider));
+  }, [engines, enabledProviders]);
   const [results, setResults] = useState<RunResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showBusiness, setShowBusiness] = useState(true);
@@ -391,19 +593,206 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [currentError, setCurrentError] = useState<any>(null);
   const [lastFailedRequest, setLastFailedRequest] = useState<{ engine: Engine; prompt: string; outCap: number } | null>(null);
   const [showEngineRecommendations, setShowEngineRecommendations] = useState(false);
+  const [showRecommendedDropdown, setShowRecommendedDropdown] = useState(false);
   const [errorQueue, setErrorQueue] = useState<Array<{id: string; error: any; engine: Engine; prompt: string; outCap: number}>>([]);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [apiBalances, setApiBalances] = useState<Record<string, { balance: string; loading: boolean; error?: string }>>({});
-  const [showBalanceManager, setShowBalanceManager] = useState(false);
   const [localBalances, setLocalBalances] = useState<BalanceRecord[]>([]);
+
+  // ===== Engine Info Text (from Supabase - admin editable) =====
+  const [engineInfoText] = useState<Record<string, {
+    tagline: string;
+    description: string;
+    bestFor: string[];
+    badge?: string;
+    badgeColor?: string;
+  }>>({
+    openai: {
+      tagline: 'Industry-leading AI with advanced reasoning',
+      description: 'GPT models excel at complex reasoning, coding, and creative tasks. GPT-4o offers multimodal capabilities with up to 1M token context.',
+      bestFor: ['Complex reasoning', 'Code generation', 'Creative writing', 'Multimodal tasks'],
+      badge: 'MOST POPULAR',
+      badgeColor: 'blue'
+    },
+    claude: {
+      tagline: 'Thoughtful AI with exceptional safety',
+      description: 'Claude excels at nuanced analysis with 200K context. Claude 3.5 Sonnet is 2x faster than Opus with superior long-context understanding.',
+      bestFor: ['Nuanced analysis', 'Long documents', 'Code review', 'Academic writing'],
+      badge: 'BEST SAFETY',
+      badgeColor: 'purple'
+    },
+    gemini: {
+      tagline: 'Google\'s multimodal AI with massive context',
+      description: 'Gemini 2.0 features native multimodal capabilities and tool use. Flash models offer best cost-efficiency with 1M token context.',
+      bestFor: ['Multimodal tasks', 'Large documents', 'Cost-effective workloads', 'Research'],
+      badge: 'BEST VALUE',
+      badgeColor: 'green'
+    },
+    deepseek: {
+      tagline: 'Open-source powerhouse for reasoning',
+      description: 'DeepSeek R1 achieves 79.8% on AIME 2024, matching OpenAI o1. V3 excels at knowledge tasks. Extremely cost-effective.',
+      bestFor: ['Mathematical reasoning', 'Complex problem solving', 'Code analysis', 'Budget tasks'],
+      badge: 'BEST REASONING',
+      badgeColor: 'orange'
+    },
+    mistral: {
+      tagline: 'European AI with strong multilingual support',
+      description: 'Mistral Large offers excellent performance with 128K output limit. Strong at European languages and technical tasks.',
+      bestFor: ['Multilingual tasks', 'Technical writing', 'European compliance'],
+      badge: 'EU LEADER',
+      badgeColor: 'indigo'
+    },
+    perplexity: {
+      tagline: 'AI with real-time web search',
+      description: 'Perplexity Sonar combines LLM capabilities with live web search for up-to-date information.',
+      bestFor: ['Research', 'Fact-checking', 'Current events', 'Citations'],
+      badge: 'LIVE SEARCH',
+      badgeColor: 'cyan'
+    },
+    groq: {
+      tagline: 'Ultra-fast inference on custom hardware',
+      description: 'Groq runs open-source models on custom LPU chips for industry-leading inference speeds.',
+      bestFor: ['Speed-critical tasks', 'High throughput', 'Real-time applications'],
+      badge: 'FASTEST',
+      badgeColor: 'red'
+    },
+    xai: {
+      tagline: 'Grok - AI with personality',
+      description: 'xAI\'s Grok offers witty, direct responses with real-time X/Twitter integration.',
+      bestFor: ['Conversational AI', 'Social media analysis', 'Creative tasks'],
+      badge: 'NEW',
+      badgeColor: 'slate'
+    },
+    kimi: {
+      tagline: 'Moonshot AI with 128K context',
+      description: 'KIMI by Moonshot AI offers strong Chinese language support with large context windows.',
+      bestFor: ['Chinese language', 'Long documents', 'Asian markets'],
+      badge: 'CHINA #1',
+      badgeColor: 'rose'
+    },
+    falcon: {
+      tagline: 'Open-source LLM from TII',
+      description: 'Falcon models from Technology Innovation Institute offer strong performance with Apache 2.0 license. Falcon-180B rivals GPT-3.5.',
+      bestFor: ['Open-source projects', 'Self-hosting', 'Research', 'Cost control'],
+      badge: 'OPEN SOURCE',
+      badgeColor: 'green'
+    },
+    sarvam: {
+      tagline: 'Indian AI with multilingual support',
+      description: 'Sarvam AI specializes in Indian languages and cultural context. Built for Indian market with strong Hindi and regional language support.',
+      bestFor: ['Indian languages', 'Local context', 'Regional content', 'India market'],
+      badge: 'INDIA FIRST',
+      badgeColor: 'orange'
+    },
+    huggingface: {
+      tagline: 'Access 100K+ open models',
+      description: 'HuggingFace Inference API provides access to thousands of open-source models. Flexible endpoint configuration for any model.',
+      bestFor: ['Model experimentation', 'Open-source models', 'Custom endpoints', 'Research'],
+      badge: 'FLEXIBLE',
+      badgeColor: 'purple'
+    },
+    generic: {
+      tagline: 'Connect any HTTP API',
+      description: 'Generic HTTP engine allows you to connect any custom AI API endpoint. Perfect for proprietary or self-hosted models.',
+      bestFor: ['Custom APIs', 'Self-hosted models', 'Proprietary systems', 'Integration'],
+      badge: 'CUSTOM',
+      badgeColor: 'slate'
+    }
+  });
+
+  // ===== Model-Specific Information =====
+  const modelInfo: Record<string, string> = {
+    // OpenAI Models
+    'gpt-5-2025-08-07': 'Latest GPT-5 with enhanced reasoning and 1M context',
+    'gpt-4.1': 'GPT-4 Turbo with improved performance',
+    'gpt-4o': 'Multimodal GPT-4 with vision and audio',
+    'gpt-4o-2024-11-20': 'GPT-4o November update with faster responses',
+    'gpt-4o-2024-08-06': 'GPT-4o August update',
+    'gpt-4o-2024-05-13': 'GPT-4o May release',
+    'gpt-4.1-mini': 'Compact GPT-4.1 for cost efficiency',
+    'gpt-4o-mini': 'Smallest GPT-4o for high-volume tasks',
+    
+    // Claude Models
+    'claude-3.5-sonnet': 'Most capable Claude with 200K context',
+    'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet October update',
+    'claude-3-haiku': 'Fastest Claude for quick responses',
+    'claude-3-haiku-20240307': 'Claude 3 Haiku March release',
+    
+    // Gemini Models
+    'gemini-2.0-flash-exp': 'Experimental Gemini 2.0 with 1M context',
+    'gemini-2.0-flash-lite': 'Lightweight Gemini 2.0 for speed',
+    'gemini-2.5-flash-lite': 'Latest Gemini 2.5 Flash variant',
+    
+    // DeepSeek Models
+    'deepseek-chat': 'General purpose DeepSeek for conversations',
+    'deepseek-coder': 'Specialized for code generation and analysis',
+    
+    // Mistral Models
+    'mistral-large-latest': 'Most capable Mistral with 128K output',
+    'mistral-medium-2312': 'Balanced Mistral for general tasks',
+    'mistral-small': 'Compact Mistral for cost efficiency',
+    
+    // Perplexity Models
+    'sonar-pro': 'Premium Perplexity with web search',
+    'sonar-small': 'Compact Perplexity for quick searches',
+    
+    // Kimi Models
+    'moonshot-v1-8k': 'KIMI with 8K context',
+    'moonshot-v1-32k': 'KIMI with 32K context',
+    'moonshot-v1-128k': 'KIMI with 128K context for long documents',
+    
+    // Groq Models
+    'llama-3.3-70b-versatile': 'Llama 3.3 70B on Groq LPU',
+    'llama-3.1-8b-instant': 'Ultra-fast Llama 3.1 8B',
+    'mixtral-8x7b-32768': 'Mixtral MoE with 32K context',
+    'gemma2-9b-it': 'Google Gemma 2 9B instruction-tuned',
+    
+    // Falcon Models
+    'falcon-180b-chat': 'Largest Falcon for complex tasks',
+    'falcon-40b-instruct': 'Falcon 40B instruction-tuned',
+    'falcon-7b-instruct': 'Compact Falcon for efficiency',
+    'falcon-mamba-7b': 'Falcon with Mamba architecture',
+    'falcon-11b': 'Falcon 11B balanced model',
+    
+    // Sarvam Models
+    'sarvam-2b': 'Latest Sarvam with Indian language support',
+    'sarvam-1': 'Original Sarvam model',
+    
+    // xAI Models
+    'grok-beta': 'Grok beta with X/Twitter integration',
+    
+    // HuggingFace/Generic
+    'hf-model': 'Custom HuggingFace model endpoint',
+    'v1': 'Generic HTTP API endpoint'
+  };
+
+  // ===== Engines are loaded from seededEngines (all 9 engines) =====
+  // No database loading needed - seededEngines already has all engines
+  useEffect(() => {
+    console.log(`[Engines] Using ${seededEngines.length} seeded engines`);
+    // Default selection: ChatGPT, DeepSeek, and Mistral only
+    const defaultSelected = ['openai', 'deepseek', 'mistral'];
+    const newSelected: Record<string, boolean> = {};
+    seededEngines.forEach(e => {
+      newSelected[e.id] = defaultSelected.includes(e.id);
+    });
+    setSelected(newSelected);
+  }, []); // Run once on mount
 
   // ===== Load Local Balances =====
   useEffect(() => {
     setLocalBalances(loadBalances());
-  }, [showBalanceManager]); // Reload when balance manager closes
+  }, []); // Run once on mount
 
   // ===== Application Startup Logging =====
   useEffect(() => {
+    // Track component mount
+    trackComponent('OneMindAI', 'mount', { 
+      isAuthenticated, 
+      enginesCount: seededEngines.length,
+      selectedEngines: Object.keys(selected).filter(k => selected[k])
+    });
+    
     // Initialize auto-recovery system
     initializeAutoRecovery();
     logger.info('✅ Auto-recovery system initialized');
@@ -421,13 +810,18 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     // Terminal logging
     terminalLogger.appStart();
     terminalLogger.componentMount('OneMindAI_v14Mobile');
+    
+    // Track unmount
+    return () => {
+      trackComponent('OneMindAI', 'unmount');
+    };
   }, []);
   const [expandedEngines, setExpandedEngines] = useState<Set<string>>(new Set());
   const [showGreenGlow, setShowGreenGlow] = useState(false);
   const [priceOverrides, setPriceOverrides] = useState<Record<string, Record<string, { in: number; out: number }>>>({});
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [storyMode, setStoryMode] = useState(true);
-  const [storyStep, setStoryStep] = useState<1 | 2 | 3 | 4>(1);
+  const [storyStep, setStoryStep] = useState<0 | 1 | 2 | 3 | 4>(0);
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [compiledDoc, setCompiledDoc] = useState<string>("");
   const [showCombinedResponse, setShowCombinedResponse] = useState(false);
@@ -444,55 +838,88 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [selectedFocusArea, setSelectedFocusArea] = useState<{id: string, title: string} | null>(null);
   const [selectedPromptPreview, setSelectedPromptPreview] = useState<{id: string, title: string, template: string} | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [companyLayout, setCompanyLayout] = useState<'list' | 'grid' | 'stack'>('grid');
+  const [showCompanySearch, setShowCompanySearch] = useState(false);
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
+  const [showPerspective, setShowPerspective] = useState(false);
 
   // ===== Focus Areas Data (Role-specific) =====
   const ROLE_FOCUS_AREAS: Record<string, Array<{id: string, title: string, prompts: Array<{id: string, title: string, template: string}>}>> = {
     "CEO": [
-      { id: "strategy", title: "Strategic Planning", prompts: [
-        { id: "s1", title: "Growth strategy analysis", template: "As CEO, analyze growth opportunities for our organization" },
-        { id: "s2", title: "Market expansion plan", template: "As CEO, create a market expansion strategy" },
-        { id: "s3", title: "Competitive positioning", template: "As CEO, evaluate our competitive position" },
+      { id: "strategy", title: "A. Strategic Vision & Planning", prompts: [
+        { id: "a1", title: "A1. Growth Strategy Analysis", template: "I need to develop a comprehensive growth strategy for our organization.\n\nHere's my situation:\n• Company: [describe your company, industry, size]\n• Current revenue: [$X annually]\n• Growth target: [X% over Y years]\n• Key challenges: [describe main obstacles]\n\nHelp me:\n• Identify the most promising growth vectors (organic vs. M&A, new markets vs. existing)\n• Assess our competitive advantages and how to leverage them\n• Develop a prioritized roadmap with clear milestones\n• Identify resource requirements and potential risks\n• Create metrics to track progress\n\nMy specific concerns are: [describe - market saturation, competitive pressure, capability gaps, or capital constraints]." },
+        { id: "a2", title: "A2. Market Expansion Strategy", template: "I'm considering expanding into new markets and need a strategic framework.\n\nHere's what I'm evaluating:\n• Current markets: [describe where you operate today]\n• Target markets: [new geographies, segments, or verticals]\n• Rationale: [why these markets]\n• Investment capacity: [rough budget available]\n\nHelp me:\n• Evaluate market attractiveness and entry barriers\n• Assess our right to win in each target market\n• Determine optimal entry strategy (organic, partnership, acquisition)\n• Identify localization requirements and cultural considerations\n• Build a phased expansion plan with go/no-go decision points\n\nMy key questions are: [describe - timing, sequencing, resource allocation, or risk tolerance]." },
+        { id: "a3", title: "A3. Competitive Positioning", template: "I need to strengthen our competitive position in the market.\n\nHere's our current situation:\n• Our position: [market leader, challenger, niche player]\n• Key competitors: [list main competitors and their strengths]\n• Our differentiators: [what makes us unique]\n• Market trends: [relevant shifts happening]\n\nHelp me:\n• Conduct a thorough competitive analysis\n• Identify sustainable competitive advantages\n• Develop strategies to defend against competitive threats\n• Find opportunities to disrupt or leapfrog competitors\n• Create messaging that clearly articulates our value proposition\n\nMy biggest competitive concern is: [describe - price pressure, technology disruption, new entrants, or losing key accounts]." },
       ]},
-      { id: "leadership", title: "Leadership & Culture", prompts: [
-        { id: "l1", title: "Leadership development", template: "As CEO, design a leadership development program" },
-        { id: "l2", title: "Culture transformation", template: "As CEO, plan a culture transformation initiative" },
+      { id: "leadership", title: "B. Leadership & Culture", prompts: [
+        { id: "b1", title: "B1. Executive Team Development", template: "I need to build and develop a world-class executive team.\n\nHere's my current team situation:\n• Team composition: [describe current C-suite and key leaders]\n• Strengths: [what the team does well]\n• Gaps: [missing capabilities or roles]\n• Succession concerns: [any key person dependencies]\n\nHelp me:\n• Assess current team capabilities against future needs\n• Identify critical hires or development priorities\n• Design leadership development programs for high-potentials\n• Create succession plans for key roles\n• Build team dynamics and collaboration\n\nMy specific leadership challenge is: [describe - need to upgrade talent, team conflict, lack of bench strength, or culture misalignment]." },
+        { id: "b2", title: "B2. Culture Transformation", template: "I need to transform our organizational culture to support our strategy.\n\nHere's where we are:\n• Current culture: [describe - what behaviors and values dominate]\n• Desired culture: [what we need to become]\n• Strategic driver: [why culture change is necessary]\n• Previous attempts: [what's been tried before]\n\nHelp me:\n• Diagnose the root causes of current culture\n• Define the target culture with specific behaviors\n• Develop a change management approach\n• Identify culture carriers and resistors\n• Create accountability mechanisms and metrics\n• Plan for the multi-year journey required\n\nMy biggest culture barrier is: [describe - legacy mindset, middle management resistance, geographic differences, or post-merger integration]." },
+        { id: "b3", title: "B3. Organizational Design", template: "I need to restructure our organization to improve performance.\n\nHere's the context:\n• Current structure: [describe - functional, divisional, matrix]\n• Size: [number of employees, locations]\n• Pain points: [what's not working]\n• Strategic shift: [what's driving the need for change]\n\nHelp me:\n• Evaluate different organizational models for our situation\n• Design a structure that enables strategy execution\n• Plan the transition with minimal disruption\n• Address spans of control and decision rights\n• Communicate changes effectively to the organization\n\nMy restructuring challenge is: [describe - too siloed, too slow, unclear accountability, or cost reduction pressure]." },
       ]},
-      { id: "stakeholder", title: "Stakeholder Management", prompts: [
-        { id: "st1", title: "Board presentation", template: "As CEO, prepare a board presentation" },
-        { id: "st2", title: "Investor relations", template: "As CEO, draft investor communication" },
+      { id: "stakeholder", title: "C. Stakeholder Management", prompts: [
+        { id: "c1", title: "C1. Board Communication", template: "I need to prepare for an important board meeting or presentation.\n\nHere's the context:\n• Meeting purpose: [regular update, strategic decision, crisis response]\n• Key topics: [what needs to be covered]\n• Board composition: [describe key directors and their concerns]\n• Sensitive issues: [any difficult topics to address]\n\nHelp me:\n• Structure the presentation for maximum impact\n• Anticipate tough questions and prepare responses\n• Present complex information clearly and concisely\n• Build consensus for strategic decisions\n• Manage difficult conversations professionally\n\nMy specific board challenge is: [describe - skeptical directors, competing priorities, need for major investment approval, or performance concerns]." },
+        { id: "c2", title: "C2. Investor Relations", template: "I need to communicate effectively with investors and analysts.\n\nHere's my situation:\n• Company status: [public, private, PE-backed]\n• Investor base: [describe key investors]\n• Current narrative: [how the market perceives us]\n• Upcoming events: [earnings, investor day, roadshow]\n\nHelp me:\n• Craft a compelling investment thesis\n• Develop key messages for different investor audiences\n• Prepare for analyst questions and concerns\n• Address performance gaps or strategy pivots\n• Build long-term investor confidence\n\nMy investor relations challenge is: [describe - stock underperformance, strategy skepticism, competitive concerns, or need to attract new investors]." },
+        { id: "c3", title: "C3. Crisis Communication", template: "I'm facing a crisis situation that requires CEO-level communication.\n\nHere's what's happening:\n• The crisis: [describe the situation]\n• Stakeholders affected: [customers, employees, investors, regulators, public]\n• Current status: [what's been done so far]\n• Media attention: [level of external scrutiny]\n\nHelp me:\n• Develop a crisis communication strategy\n• Craft messages for different stakeholder groups\n• Prepare for media inquiries and public statements\n• Demonstrate leadership and accountability\n• Plan the path to recovery and reputation repair\n\nMy immediate priority is: [describe - containing damage, reassuring stakeholders, or taking decisive action]." },
       ]},
     ],
     "CDIO": [
-      { id: "digital", title: "Digital Transformation", prompts: [
-        { id: "d1", title: "Digital roadmap", template: "As CDIO, create a digital transformation roadmap" },
-        { id: "d2", title: "Technology assessment", template: "As CDIO, assess current technology stack" },
+      { id: "digital", title: "A. Digital Transformation", prompts: [
+        { id: "a1", title: "A1. Digital Strategy Roadmap", template: "I need to create a comprehensive digital transformation roadmap for our organization.\n\nHere's our current state:\n• Industry: [describe your industry and digital maturity]\n• Current technology landscape: [legacy systems, recent investments]\n• Business drivers: [why digital transformation is critical now]\n• Budget envelope: [rough investment capacity over 3-5 years]\n\nHelp me:\n• Assess our digital maturity across key dimensions\n• Identify highest-impact transformation opportunities\n• Prioritize initiatives based on value and feasibility\n• Design a phased roadmap with clear milestones\n• Build the business case for executive and board approval\n• Define success metrics and governance structure\n\nMy biggest transformation challenge is: [describe - legacy system constraints, organizational resistance, talent gaps, or unclear ROI]." },
+        { id: "a2", title: "A2. Technology Modernization", template: "I need to modernize our technology stack while managing risk and cost.\n\nHere's our situation:\n• Current systems: [describe key platforms and their age]\n• Technical debt: [known issues and limitations]\n• Integration complexity: [how systems connect]\n• Business criticality: [which systems can't fail]\n\nHelp me:\n• Assess which systems to modernize, replace, or retire\n• Evaluate build vs. buy vs. SaaS decisions\n• Design a migration strategy that minimizes disruption\n• Manage the transition from legacy to modern platforms\n• Balance innovation investment with maintenance costs\n\nMy modernization priority is: [describe - customer-facing systems, core operations, data infrastructure, or security]." },
+        { id: "a3", title: "A3. Cloud Strategy", template: "I need to develop and execute our cloud strategy.\n\nHere's where we are:\n• Current state: [on-premise, hybrid, multi-cloud]\n• Cloud adoption: [what's already in cloud, what's not]\n• Drivers: [cost, agility, scalability, innovation]\n• Constraints: [regulatory, data residency, security]\n\nHelp me:\n• Define our cloud strategy (public, private, hybrid, multi-cloud)\n• Prioritize workloads for cloud migration\n• Select cloud providers and negotiate contracts\n• Design cloud architecture and governance\n• Build cloud-native capabilities in the organization\n• Manage costs and optimize cloud spend\n\nMy cloud challenge is: [describe - migration complexity, cost overruns, skills gap, or vendor lock-in concerns]." },
       ]},
-      { id: "data", title: "Data & Analytics", prompts: [
-        { id: "da1", title: "Data strategy", template: "As CDIO, design a comprehensive data strategy" },
-        { id: "da2", title: "AI/ML implementation", template: "As CDIO, plan AI/ML implementation" },
+      { id: "data", title: "B. Data & AI Strategy", prompts: [
+        { id: "b1", title: "B1. Enterprise Data Strategy", template: "I need to develop a comprehensive data strategy that enables business value.\n\nHere's our data landscape:\n• Data sources: [describe key data assets and systems]\n• Current capabilities: [analytics, reporting, data science]\n• Data quality: [known issues and gaps]\n• Governance: [current policies and compliance requirements]\n\nHelp me:\n• Define our data vision and strategic objectives\n• Design data architecture and integration approach\n• Establish data governance and quality frameworks\n• Build data literacy across the organization\n• Identify high-value use cases for data monetization\n• Create a roadmap for data capability development\n\nMy data challenge is: [describe - siloed data, quality issues, lack of governance, or unclear business value]." },
+        { id: "b2", title: "B2. AI/ML Implementation", template: "I need to develop and scale AI/ML capabilities in our organization.\n\nHere's our AI journey:\n• Current state: [POCs, production models, or just starting]\n• Use cases: [where AI could add value]\n• Data readiness: [quality and availability for AI]\n• Talent: [data scientists, ML engineers on staff]\n\nHelp me:\n• Identify and prioritize AI use cases by business impact\n• Build the AI/ML technology stack and infrastructure\n• Develop or acquire AI talent and capabilities\n• Establish MLOps practices for production AI\n• Address AI ethics, bias, and governance\n• Scale from pilots to enterprise-wide deployment\n\nMy AI priority is: [describe - customer experience, operations optimization, product innovation, or decision automation]." },
+        { id: "b3", title: "B3. Analytics & Business Intelligence", template: "I need to improve our analytics and BI capabilities to drive better decisions.\n\nHere's our current state:\n• BI tools: [what platforms we use]\n• Adoption: [who uses analytics and how]\n• Self-service: [can business users access data independently]\n• Pain points: [what's not working]\n\nHelp me:\n• Assess and rationalize our BI tool landscape\n• Design a modern analytics architecture\n• Enable self-service analytics for business users\n• Improve data visualization and storytelling\n• Build analytics culture and data literacy\n• Measure and demonstrate analytics ROI\n\nMy analytics challenge is: [describe - too many tools, low adoption, data access issues, or lack of insights-to-action]." },
       ]},
-      { id: "security", title: "Cybersecurity", prompts: [
-        { id: "sec1", title: "Security assessment", template: "As CDIO, conduct a security posture assessment" },
-        { id: "sec2", title: "Zero trust architecture", template: "As CDIO, design zero trust security architecture" },
+      { id: "security", title: "C. Cybersecurity & Risk", prompts: [
+        { id: "c1", title: "C1. Security Posture Assessment", template: "I need to assess and improve our cybersecurity posture.\n\nHere's our security context:\n• Industry: [and relevant regulations - HIPAA, PCI, etc.]\n• Current security program: [describe maturity level]\n• Recent incidents: [any breaches or near-misses]\n• Key assets: [what we're protecting]\n\nHelp me:\n• Conduct a comprehensive security assessment\n• Identify critical vulnerabilities and gaps\n• Prioritize remediation based on risk\n• Benchmark against industry standards (NIST, ISO 27001)\n• Build a security improvement roadmap\n• Communicate security posture to the board\n\nMy security concern is: [describe - ransomware, data breaches, insider threats, or compliance gaps]." },
+        { id: "c2", title: "C2. Zero Trust Architecture", template: "I need to implement a Zero Trust security architecture.\n\nHere's our environment:\n• Current perimeter: [traditional network security approach]\n• Remote workforce: [% remote, BYOD policies]\n• Cloud adoption: [hybrid, multi-cloud complexity]\n• Identity management: [current IAM capabilities]\n\nHelp me:\n• Design a Zero Trust architecture for our environment\n• Prioritize Zero Trust initiatives (identity, network, data, workload)\n• Select and integrate Zero Trust technologies\n• Plan the transition from perimeter-based security\n• Build organizational buy-in for the change\n• Measure Zero Trust maturity and effectiveness\n\nMy Zero Trust priority is: [describe - identity verification, micro-segmentation, or data protection]." },
+        { id: "c3", title: "C3. Incident Response & Recovery", template: "I need to strengthen our incident response and disaster recovery capabilities.\n\nHere's our current state:\n• IR program: [describe current incident response maturity]\n• DR capabilities: [backup, recovery time objectives]\n• Recent tests: [when did we last test our plans]\n• Team: [dedicated security operations or shared responsibility]\n\nHelp me:\n• Develop or improve our incident response plan\n• Design disaster recovery and business continuity strategies\n• Build and train an incident response team\n• Conduct tabletop exercises and simulations\n• Establish communication protocols for incidents\n• Define recovery priorities and procedures\n\nMy IR/DR concern is: [describe - untested plans, slow recovery times, or lack of trained responders]." },
       ]},
     ],
-    "Head of Sales": [
-      { id: "market", title: "Market & Opportunity", prompts: [
-        { id: "m1", title: "Market analysis", template: "As Head of Sales, analyze market opportunities" },
-        { id: "m2", title: "Competitive intelligence", template: "As Head of Sales, gather competitive intelligence" },
+    "Sales": [
+      { id: "market", title: "A. Market & Opportunity", prompts: [
+        { id: "a1", title: "A1. Market Intelligence & Trends", template: "I need to identify emerging market opportunities before my competitors catch them.\n\nHere's my situation: [Describe your industry/territory]\n\nHelp me understand:\n• What specific signals should I be monitoring for disruption or change?\n• Which sources or tools can give me early warning of shifts?\n• How do I translate these signals into actionable sales opportunities?\n• What cadence should I use to review market intelligence?\n\nCurrently, I'm tracking [describe what you do now, if anything].\n\nMy biggest blind spots are around [describe specific areas like regulatory changes, technology trends, competitor moves, or client buying patterns]." },
+        { id: "a2", title: "A2. Target Account Selection", template: "I need to prioritize my target accounts more effectively to maximize ROI on my team's efforts.\n\nHere's what I'm dealing with: I have [number] accounts in my territory worth approximately [$X] in potential revenue.\n\nCurrently, I'm allocating resources based on [describe current approach - gut feel, account size, relationship strength, etc.].\n\nHelp me develop:\n• An ideal client profile (ICP) framework specific to my offerings\n• A scoring methodology that considers firmographics, buying signals, competitive position, and strategic fit\n• A white space analysis approach to spot untapped potential\n• An investment allocation model that balances hunting vs. farming\n\nMy specific challenge is [describe: too many small deals, missing whale opportunities, spreading team too thin, unclear prioritization criteria, or competitive blind spots]." },
+        { id: "a3", title: "A3. Trigger Event Identification", template: "I'm missing high-probability opportunities because I'm not catching trigger events early enough.\n\nI sell [describe your solutions] to [describe target clients].\n\nHelp me:\n• Identify which trigger events are most predictive of buying intent for my solutions\n• Set up systems or tools to monitor these events across my accounts\n• Create playbooks for how to respond when specific triggers occur\n• Develop messaging that connects the trigger event to business value I deliver\n\nThe trigger events most relevant to me include: [check all that apply and add details - M&A activity, new executive appointments, earnings misses/beats, regulatory changes, competitor wins/losses, funding rounds, digital transformation announcements, technology stack changes, office expansions/closures, customer experience issues].\n\nI currently [describe how you monitor these now, if at all]." },
       ]},
-      { id: "prebid", title: "Pre-Bid Phase", prompts: [
-        { id: "pb1", title: "Qualification criteria", template: "As Head of Sales, define deal qualification criteria" },
-        { id: "pb2", title: "Stakeholder mapping", template: "As Head of Sales, map stakeholders for opportunity" },
+      { id: "prebid", title: "B. Pre-Bid Phase", prompts: [
+        { id: "b1", title: "B1. Stakeholder Mapping", template: "I need to map all stakeholders and identify the real decision maker for this opportunity.\n\nHere's what I know so far:\n• Company: [name and industry]\n• Opportunity: [brief description of what they're buying]\n• Deal size: [approximate value]\n• My current contacts: [list names, titles, and their apparent role]\n\nHelp me:\n• Identify who the economic buyer is (who controls budget and can say yes)\n• Map all influencers (who can say no or shape requirements)\n• Identify technical evaluators (who assess our capabilities)\n• Understand end users (who will use the solution)\n• Determine procurement's role and authority\n• Assess whether there's a coach/champion who wants us to win\n\nWhat I'm uncertain about: [describe gaps - can't reach certain levels, conflicting signals about authority, multiple decision makers, unclear buying process, or matrixed organization complexity]." },
+        { id: "b2", title: "B2. Access & Relationship Building", template: "I need to get access to senior executives who control strategic decisions and budgets.\n\nHere's my situation:\n• Target company: [name]\n• Current relationship level: [describe - stuck at Director/VP level, only IT contacts, single business unit, etc.]\n• Who I need to reach: [specific titles or names if known]\n• What I've tried: [describe attempts - emails, LinkedIn, going through current contacts, events, etc.]\n\nHelp me:\n• Develop strategies to get past gatekeepers (EAs, screening processes)\n• Craft compelling reasons for executives to take the meeting\n• Leverage my current contacts to facilitate introductions upward\n• Build trust and credibility quickly with new senior stakeholders\n• Prepare for executive conversations that demonstrate business acumen\n\nMy specific access barriers are: [describe - gatekeepers blocking, current contacts won't introduce me up, executives not responding, can't articulate compelling enough value for their level, or lacking referrals/warm introductions]." },
+        { id: "b3", title: "B3. Requirements Shaping", template: "I need to get involved early enough to shape the client's requirements before they lock in an RFP.\n\nHere's where I am:\n• Opportunity: [describe what the client is trying to solve]\n• Stage: [describe - informal discussions, formal RFP expected in X months, already issued, etc.]\n• Competition: [who else is involved, if known]\n• My relationships: [describe access and influence level]\n\nWhat I need:\n• Strategies to gain early access when I'm not yet in the conversation\n• Discovery questions that uncover their true business needs vs. perceived requirements\n• Ways to educate the client on evaluation criteria that favor our strengths\n• Techniques to make our approach feel like the logical solution\n• How to position against incumbent specifications if I'm already late\n\nMy specific challenge: [describe - being brought in after requirements set, competing against incumbent-written RFP, no access to requirements authors, client has preconceived solution in mind, or procurement-driven process limiting shaping opportunity]." },
+        { id: "b4", title: "B4. Qualification & Go/No-Go", template: "I need to make a confident go/no-go decision on this pursuit.\n\nHere's the opportunity:\n• Client: [name and brief background]\n• Opportunity: [description and scope]\n• Estimated value: [$X over Y years]\n• Competition: [known competitors]\n• Our relationship/position: [describe]\n• Required investment to pursue: [rough estimate if known]\n\nHelp me assess:\n• Win probability using objective criteria (not hope)\n• Strategic fit with our priorities and capabilities\n• Required investment (pre-sales, bid team, executive time, proof of concept)\n• Risk factors that could make this unprofitable or problematic\n• Whether we can get organizational buy-in and resources\n• If this is a 'buy' opportunity (client legitimately evaluating) vs 'die' opportunity (meeting vendor requirements with predetermined winner)\n\nMy concerns are: [describe specific worries - client just price shopping, incumbent has inside track, we lack key capabilities, margin will be too low, delivery doesn't want it, unclear decision process, too competitive, or unrealistic client expectations]." },
+        { id: "b5", title: "B5. Pre-Sales & Solution Architecture", template: "I need stronger pre-sales support to win this technical deal.\n\nHere's my situation:\n• Opportunity: [describe the technical solution being evaluated]\n• Client's technical environment: [what you know about their stack, architecture, scale]\n• Key technical requirements: [list critical must-haves]\n• Technical evaluators: [titles and concerns if known]\n• Competition: [technical strengths of competitors]\n• Current pre-sales challenges: [solution architects overcommitted, proposed solution doesn't match client needs, architects lack credibility, disconnect between sales and delivery, late involvement of technical team, client technical team skeptical]\n\nHelp me:\n• Get the right architect engaged at the right time\n• Ensure our solution design matches client's actual needs and constraints\n• Build technical credibility with client's technical evaluators\n• Validate that what we're proposing is actually deliverable\n• Prepare our team for technical deep dives and proof of concepts\n• Align sales narrative with technical solution story." },
       ]},
-      { id: "bid", title: "Bid Phase", prompts: [
-        { id: "b1", title: "Proposal strategy", template: "As Head of Sales, develop proposal strategy" },
-        { id: "b2", title: "Pricing strategy", template: "As Head of Sales, create pricing strategy" },
+      { id: "bid", title: "C. Bid Phase", prompts: [
+        { id: "c1", title: "C1. Bid Strategy & Theme Development", template: "I need to develop a compelling bid strategy with clear win themes for this competitive pursuit.\n\nHere's the context:\n• Client: [name and industry]\n• Their key business challenges: [what you understand about their pain points]\n• Opportunity scope: [what they're buying]\n• Known competitors: [who and their likely positioning]\n• Our relationship position: [incumbent, challenger, or dark horse]\n• Client's decision criteria: [if known - cost, capability, relationship, risk mitigation, innovation, etc.]\n\nHelp me develop:\n• 3-5 win themes that differentiate us and resonate with client hot buttons\n• Ghost strategies that expose competitor weaknesses without naming them directly\n• Proof points (case studies, references, metrics) that validate each theme\n• Alignment between our solution and their CEO/board-level strategic priorities\n• A compelling narrative arc for the proposal that builds to why we're the only choice\n\nWhat I'm struggling with: [describe - we look like everyone else, competing primarily on price, unclear what really matters to client, our differentiators feel weak, or lack compelling proof points for our claims]." },
+        { id: "c2", title: "C2. Pricing Strategy & Deal Economics", template: "I need to develop the right pricing strategy for this deal that wins while protecting margins.\n\nHere's the situation:\n• Opportunity value: [total contract value and duration]\n• Scope: [high-level description of work]\n• Client's budget expectations: [if known or suspected]\n• Competitive pricing pressure: [what you know about competitor pricing or market rates]\n• Our cost structure: [rough idea of delivery costs if known]\n\nHelp me decide:\n• Fixed-price vs. Time & Materials vs. Outcome-based - which model and why\n• Optimal offshore/nearshore/onshore delivery mix for cost and quality\n• Risk contingencies and how to size them appropriately\n• Volume discounts, ramp pricing, or other commercial structures\n• How to defend premium pricing if we're more expensive\n• What I can negotiate on vs. what's non-negotiable\n\nMy specific pricing challenges: [describe - client demanding rates 30% below standard, competitors undercutting significantly, unclear scope making pricing risky, pressure to low-ball to win, delivery says price won't cover costs, or difficulty articulating value vs. just rates]." },
+        { id: "c3", title: "C3. Solution Design & Architecture", template: "I need to ensure our solution design is compelling, innovative, and actually deliverable.\n\nHere's what I'm proposing:\n• Client's business problem: [describe what they're trying to solve]\n• Technical requirements: [key technical must-haves]\n• Current state: [their existing environment/process]\n• Our proposed solution: [high-level description]\n• Constraints: [budget, timeline, technology, organizational, etc.]\n\nHelp me validate:\n• Does our solution actually address their business problem or just technical requirements?\n• Are we over-engineering (gold-plating) or under-delivering?\n• What innovation can we add that competitors won't have?\n• Can we realistically deliver this with our current capabilities?\n• Are there risks in the technical approach we're not seeing?\n• How do we demonstrate feasibility convincingly?\n\nMy concerns: [describe - promising capabilities we don't fully have, not sure solution matches their environment, might be too complex/expensive, delivery team hasn't validated approach, lacking innovation to differentiate, or client technical team skeptical it will work]." },
+        { id: "c4", title: "C4. Cross-Practice Collaboration", template: "I need to get multiple practices working together to create an integrated solution for this opportunity.\n\nHere's the situation:\n• Client opportunity: [describe scope and complexity]\n• Practices needed: [list - e.g., Strategy, Technology, Cloud, Data/AI, Security, Change Management, etc.]\n• Current collaboration status: [what's working or not working]\n• Key practice leaders: [names/roles if relevant]\n\nHelp me:\n• Get practice leaders aligned on the opportunity and committed to winning together\n• Resolve conflicts over ownership and client relationship control\n• Create consistent messaging across all practices\n• Address resource conflicts and allocation disputes\n• Resolve margin allocation and P&L issues between practices\n• Build a truly integrated solution vs. Frankenstein of separate offers\n\nWhat's breaking down: [describe - practice leaders fighting for primary relationship, inconsistent client messages, can't agree on solution approach, one practice won't commit resources, margin allocation disputes, or siloed proposals that don't integrate]." },
+        { id: "c5", title: "C5. Proposal Production & Quality", template: "I need to improve our proposal development to create a winning submission.\n\nHere's my situation:\n• Opportunity: [brief description]\n• Proposal deadline: [date]\n• Page limit/format requirements: [if any]\n• Evaluation criteria: [if known]\n• Current proposal status: [outline done, first draft, review stage, etc.]\n\nMy proposal challenges:\n• Insufficient bid factory capacity - too many proposals, not enough resources\n• Quality issues - proposals are functional but not compelling\n• Storytelling - reads like a spec sheet, doesn't engage emotionally\n• Executive summary - doesn't grab attention or make the case for why us\n• Incorporating feedback - struggle to integrate color team review comments\n• Compliance - miss requirements or don't address evaluation criteria fully\n• Graphics/layout - text-heavy, not visually engaging\n• Consistency - different sections feel disconnected\n\nHelp me:\n• Create a proposal outline and storyboard that flows and builds our case\n• Write a compelling executive summary that decision makers will actually read\n• Develop win themes that weave throughout the proposal\n• Make it compliant while still being engaging\n• Incorporate visual storytelling that reinforces messages\n\nSpecific help needed: [describe - need full proposal structure, executive summary help, making technical content accessible, or improving overall quality]." },
+        { id: "c6", title: "C6. Orals & Presentations", template: "I need to prepare for our finalist presentation/orals and make sure we nail it.\n\nHere's the context:\n• Opportunity: [brief description]\n• Presentation date: [when]\n• Format: [duration, audience, presentation vs. Q&A split, demo expectations]\n• Audience: [who will be in the room - titles and their likely concerns]\n• Evaluation focus: [what they're assessing - technical, team, approach, etc.]\n• Our presentation team: [who's presenting and their roles]\n• Competition: [who else is presenting]\n\nHelp me improve:\n• Executive presence - coming across with gravitas and confidence\n• Handling tough questions - addressing concerns without being defensive\n• Demo effectiveness - showing capability without technical glitches\n• Differentiation clarity - making it obvious why we're different/better\n• Team chemistry - how we work together in front of the client\n• Opening and closing - strong memorable start and finish\n\nWhat needs work: [describe specific concerns about presentation performance, team readiness, content flow, demo risks, or anticipated difficult questions]." },
       ]},
-      { id: "negotiation", title: "Negotiation & Closing", prompts: [
-        { id: "n1", title: "Provide negotiation tactics to close pending deals", template: "Provide negotiation tactics to close pending deals" },
-        { id: "n2", title: "Ensure legal compliance in contract negotiations", template: "Ensure legal compliance in contract negotiations" },
-        { id: "n3", title: "Give tips for successful deal closures", template: "Give tips for successful deal closures" },
+      { id: "negotiation", title: "D. Negotiation & Closing", prompts: [
+        { id: "d1", title: "D1. Commercial Negotiations", template: "I need to get unstuck from these negotiations without killing margins.\n\nHere's where we are:\n• Deal: [brief description]\n• Current sticking points: [what's blocking closure]\n• Client demands: [what they're asking for]\n• My constraints: [what I can't give]\n• Timeline pressure: [how urgent is closure]\n\nThe sticking points are:\n• Price/rate pressure: [describe demands]\n• Payment terms: [what they want vs. what we need]\n• SLA commitments: [service levels and penalties]\n• Liability caps: [risk exposure concerns]\n• IP ownership: [who owns what]\n• Scope creep: [additions during contracting]\n\nHelp me:\n• Develop negotiation strategies that protect key interests\n• Identify tradeable items vs. non-negotiables\n• Create alternative value propositions if I can't move on price\n• Understand what the client really needs vs. nice-to-haves\n• Know when to walk away\n\nMy specific challenge: [describe - relentless price pressure with no give on other terms, unrealistic demands, competing internal pressures to close vs. protect margin, or unclear what client will actually accept]." },
+        { id: "d2", title: "D2. Legal & Contracting", template: "Legal issues are blocking closure of this deal and I need to resolve them.\n\nHere's the situation:\n• Deal: [description]\n• Contract type: [MSA, SOW, specific agreement]\n• Current stage: [initial review, redlines exchanged, stalled, etc.]\n• Timeline: [how urgent]\n\nThe specific legal problems:\n• MSA negotiations: [what terms are contentious]\n• Liability limitations: [indemnification, caps, carve-outs]\n• Termination clauses: [notice periods, termination for convenience, wind-down]\n• Data protection: [GDPR, data residency, privacy requirements]\n• Compliance terms: [regulatory requirements, audit rights, certifications]\n\nHelp me:\n• Understand which terms are truly deal-breakers vs. negotiable\n• Develop alternative language that addresses both parties' concerns\n• Know industry-standard positions to anchor negotiations\n• Decide when to escalate to senior legal/executives\n• Assess risk exposure of various positions\n\nWhat's blocking us: [describe - our legal won't budge on key terms, client legal being unreasonable, risk committee concerns, regulatory complexity, or fundamental misalignment on risk allocation]." },
+        { id: "d3", title: "D3. Procurement & Vendor Management", template: "I'm facing a difficult procurement process that's threatening the deal.\n\nHere's the situation:\n• Deal: [description]\n• Procurement's role: [how involved, what authority]\n• Their tactics: [reverse auctions, rate pressure, compliance requirements]\n• My business sponsor: [who wants us, their influence over procurement]\n\nThe procurement challenges:\n• Vendor onboarding: [forms, compliance, insurance requirements]\n• Compliance documentation: [certifications, financial stability, references]\n• Preferred supplier lists: [pressure to accept deep discounts for PSL status]\n• Commoditization: [treating strategic work like commodity purchase]\n• Rate tables: [demands for published rates that lock us in]\n• Reverse auctions: [competitive bidding driving price to bottom]\n\nHelp me:\n• Navigate procurement while protecting the business relationship\n• Elevate back to business stakeholders when procurement overreaches\n• Justify premium pricing against commodity treatment\n• Understand what procurement metrics/goals are driving their behavior\n• Know what documentation/requirements are negotiable vs. standard\n\nMy specific challenge: [describe - procurement has taken over from business stakeholders, unreasonable demands, trying to commoditize complex work, or business sponsor won't override procurement]." },
+        { id: "d4", title: "D4. Internal Approvals & Deal Desk", template: "I'm stuck in internal approvals trying to get this deal closed.\n\nHere's what's happening:\n• Deal: [description and value]\n• Current approval stage: [deal desk, risk committee, finance, exec sponsor, etc.]\n• What's blocking: [specific objections or concerns]\n• Timeline: [client expectations and pressure]\n\nInternal roadblocks:\n• Deal desk rejecting pricing: [too low margin, non-standard terms, discount too deep]\n• Risk committee concerns: [client financial health, technical risk, contract terms]\n• Delivery capacity: [can't commit resources, other priorities, skillset gaps]\n• Executive approval: [can't get sponsor sign-off, competing priorities]\n• Finance issues: [payment terms, revenue recognition, deal structure]\n\nHelp me:\n• Build the business case that gets internal stakeholders to yes\n• Address risk concerns with mitigation strategies\n• Navigate internal politics and competing priorities\n• Know when to escalate and to whom\n• Understand what modifications would get approval\n\nMy specific blocker is: [describe - pricing below threshold, delivery doesn't want it, risk concerns about client, can't get executive attention, or organizational bureaucracy]." },
+        { id: "d5", title: "D5. Competitive Displacement", template: "A competitor is blocking me from closing this deal and I need to counter them.\n\nHere's the situation:\n• Deal: [description]\n• Stage: [how close to closure]\n• Competitor: [who and their position]\n• Their tactics: [what they're doing to block me]\n• Our position: [strengths and weaknesses vs. them]\n\nWhat the competitor is doing:\n• Incumbent leverage: Using existing relationships and installed base\n• Last-minute pricing: Dropping price dramatically to retain business\n• FUD tactics: Spreading fear, uncertainty, doubt about our capabilities\n• Client risk aversion: Playing on fear of switching vendors\n• Lock-in strategies: Contract extensions, bundling, or other barriers\n\nHelp me:\n• Develop counter-strategies for each competitor tactic\n• Identify and exploit their vulnerabilities\n• Reframe client risk perception (greater risk to stay vs. switch)\n• Create urgency and compelling reasons to move now\n• Build coalition of support within client organization\n\nMy specific challenge: [describe - incumbent relationship too strong, competitor undercutting on price, client getting cold feet about change, procurement prefers incumbent, or we're late to the game]." },
+      ]},
+      { id: "postwintransition", title: "E. Post-Win Transition", prompts: [
+        { id: "e1", title: "E1. Sales-to-Delivery Handoff", template: "I need to ensure a smooth handoff to delivery after winning this deal.\n\nHere's the situation:\n• Deal: [description]\n• Start date: [when delivery begins]\n• Delivery team: [who's taking over]\n• Client expectations: [what they're anticipating]\n• What's documented: [contracts, SOW, what else]\n\nWhat concerns me about handoff:\n• Incomplete knowledge transfer: What I know that delivery doesn't\n• Undocumented commitments: Things I promised that aren't written down\n• Stakeholder introductions: Key client relationships delivery needs\n• Delivery surprised by scope: Aspects of the deal they're not expecting\n• Timeline expectations: Client timing vs. delivery readiness\n• Resource commitments: Specific people client expects vs. who's assigned\n\nHelp me:\n• Create a comprehensive handoff plan and checklist\n• Document all commitments, expectations, and nuances\n• Facilitate introductions between delivery team and client stakeholders\n• Align delivery team on client sensitivities and relationship dynamics\n• Ensure smooth transition that maintains client confidence\n\nMy specific handoff challenge: [describe - delivery doesn't know what I promised, client relationships aren't transferred, scope interpretation differs, timeline misalignment, or I'm being cut out too quickly]." },
+        { id: "e2", title: "E2. Expectation Alignment", template: "There's a gap between what the client expects and what we're delivering and I need to close it.\n\nHere's the misalignment:\n• Deal: [description]\n• Current stage: [how far into delivery]\n• The expectation gap: [what's different]\n• Client reaction: [are they aware, what are they saying]\n• Root cause: [why the misalignment exists]\n\nWhere expectations differ:\n• Timeline/milestones: Client thought different dates or sequence\n• Resource qualifications: Expected more senior or specialized people\n• Scope interpretation: Different understanding of what's included\n• Governance model: How often we meet, who's involved, escalation\n• Success metrics: How we're measuring outcomes and progress\n• Delivery approach: Methodology, tools, process client expected\n\nHelp me:\n• Diagnose root cause of expectation misalignment\n• Develop strategy to reset expectations without damaging relationship\n• Create shared understanding through documentation\n• Prevent future misalignments\n• Recover client confidence if it's been damaged\n\nMy specific issue: [describe - sales promised something different than we can deliver, client interpreted SOW differently, undocumented verbal commitments, or delivery approach doesn't match what client anticipated]." },
+        { id: "e3", title: "E3. Delivery Risk Management", template: "We're having early delivery challenges that could damage the relationship and I need to address them.\n\nHere's what's happening:\n• Deal: [description]\n• How long into delivery: [weeks/months]\n• The problems: [what's going wrong]\n• Client awareness: [do they see it, what are they saying]\n• Impact so far: [relationship damage, trust erosion]\n\nThe delivery issues are:\n• Resource ramp-up: Can't get the right people onboarded fast enough\n• Technical challenges: Harder than expected, unforeseen complexity\n• Client resistance: Change management, political issues, lack of engagement\n• Scope ambiguity: Disagreements about what's in/out of scope\n• Missed milestones: Behind schedule on key deliverables\n• Quality concerns: Client not happy with work product\n• Communication breakdowns: Not aligned, surprised by issues\n\nHelp me:\n• Assess severity and potential relationship impact\n• Develop recovery plan to get back on track\n• Manage client expectations and maintain trust\n• Identify if this is temporary or systemic issue\n• Determine if we need to reset scope, timeline, or approach\n• Know when to escalate and bring in additional help\n\nMy biggest concern: [describe - client losing confidence in us, missed milestone triggering penalty, political fallout, risk of contract termination, or this becoming reference problem]." },
+        { id: "e4", title: "E4. Account Team Structure", template: "I need to clarify account ownership and structure now that we've moved from sale to delivery.\n\nHere's the situation:\n• Account: [name]\n• Deal just closed: [description]\n• Current team: [who's involved from sales and delivery]\n• Future opportunity: [expansion potential]\n\nWhat's unclear about account structure:\n• Account ownership: Does sales or delivery lead the relationship going forward?\n• Client relationship management: Who's the primary day-to-day contact?\n• Upsell responsibility: Who identifies and pursues expansion opportunities?\n• Escalation protocols: Who handles issues, who do they escalate to?\n• Strategic planning: Who develops account growth strategy?\n• Compensation: How does revenue get credited?\n\nHelp me:\n• Design an account team structure that serves client and drives growth\n• Define clear roles and responsibilities\n• Create governance model for account management\n• Balance delivery focus with growth focus\n• Ensure no one feels cut out or undermined\n• Set up success metrics for account team\n\nMy specific challenge: [describe - sales-delivery friction over ownership, delivery wants to own it but isn't focused on growth, client relationships are fragmented, unclear accountability, or compensation disputes]." },
+      ]},
+      { id: "accountgrowth", title: "F. Account Growth", prompts: [
+        { id: "f1", title: "F1. Whitespace Identification", template: "I know there's more revenue potential in this account but I'm not seeing all of it.\n\nHere's my current account situation:\n• Account: [name and industry]\n• Current footprint: [what we're doing, revenue, which BU/geography]\n• Relationship strength: [who we know, how deep]\n• Contract status: [when does current work end, renewal likelihood]\n\nHelp me identify whitespace:\n• Other business units or divisions: Where else in the organization could we expand?\n• Adjacent services: What related capabilities could we cross-sell?\n• Geographic expansion: Other locations where we could replicate success?\n• Capability upgrades: How could we enhance or expand current engagement?\n• Strategic initiatives: What's on the client's roadmap we could support?\n• Competitive displacement: Where do competitors have business we could win?\n\nWhat I need:\n• Framework to systematically analyze expansion opportunities\n• Questions to ask to uncover hidden needs\n• Approach to prioritize opportunities\n• Strategy to position new offerings\n\nMy challenge: [describe - don't have visibility beyond current business unit, current engagement is tactical not strategic, limited access to broader organization, or don't know what else to look for]." },
+        { id: "f2", title: "F2. Upsell & Cross-Sell Execution", template: "I'm blocked from expanding in this account despite having current work and I need to break through.\n\nHere's the situation:\n• Account: [name]\n• Current work: [what we're doing and revenue]\n• Expansion opportunity: [what I want to sell]\n• Estimated additional value: [$X]\n\nWhat's blocking expansion:\n• Budget constraints: Client says no money available\n• Delivery issues: Problems with current work limiting trust\n• Competing priorities: Other initiatives taking precedence\n• Value demonstration: Can't show enough ROI for expansion\n• Wrong stakeholders: Don't have access to decision makers for new work\n• Competitive entrenchment: Other vendors own those relationships\n\nHelp me:\n• Diagnose the real blocker (vs. what client is saying)\n• Build business case that gets budget allocated\n• Address delivery concerns if they exist\n• Position expansion as accelerating their priorities\n• Get access to the right stakeholders\n• Counter competitive positioning\n\nMy specific situation: [describe - current delivery is struggling, expanded scope but no budget increase, different division doesn't know us, or competitor has stronger relationship for the new service]." },
+        { id: "f3", title: "F3. Multi-BU/Geography Expansion", template: "I've had success in one area but can't expand to other parts of the organization.\n\nHere's where I am:\n• Account: [name]\n• Current success: [where we're working, what we've achieved]\n• Target expansion: [other BUs, geographies, or divisions]\n• Why I believe there's opportunity: [similar needs, same challenges]\n\nThe barriers to expansion are:\n• Different decision-makers: New areas have their own leaders who don't know us\n• Local competitor entrenchment: Other vendors already established there\n• Lack of internal champions: No one advocating for us in target areas\n• Insufficient success stories: Can't demonstrate relevance to their specific situation\n• Not-invented-here syndrome: They don't want solutions from corporate/other divisions\n• Budget/prioritization: Other areas have different priorities or constraints\n\nHelp me:\n• Develop strategy to get introduced and build credibility in new areas\n• Create success stories that resonate with different audiences\n• Identify and cultivate internal champions\n• Position our work as relevant to their specific context\n• Navigate organizational politics and dynamics\n\nMy specific challenge: [describe - current business unit won't facilitate introductions, target area is burned by previous vendors, different culture/needs, budget owned locally, or corporate mandate isn't driving adoption]." },
+        { id: "f4", title: "F4. Strategic Account Planning", template: "I need to develop a strategic growth plan for this major account rather than managing it reactively.\n\nHere's my account:\n• Account: [name and industry]\n• Current relationship: [revenue, scope, tenure]\n• Account potential: [realistic revenue target over 3-5 years]\n• Current approach: [how I'm managing it today]\n\nWhat I'm missing in strategic planning:\n• Multi-year roadmap: Where could this account go over 3-5 years?\n• Relationship investment strategy: Which relationships to build, what's the plan?\n• Capability gap analysis: What do I need to develop to win more?\n• Competitive threat assessment: Who's trying to take share, how do I defend?\n• Success metrics: How do I measure account health and growth trajectory?\n• Resource allocation: What investment is justified given potential?\n\nHelp me:\n• Create a comprehensive strategic account plan\n• Develop relationship map with investment priorities\n• Build multi-year growth scenario with milestones\n• Identify capability gaps and development plan\n• Design governance structure for account management\n• Set metrics that drive the right behaviors\n\nMy current gap: [describe - no formal planning process, managing quarter-to-quarter, unclear long-term potential, haven't mapped broader organization, or lack executive sponsorship for strategic approach]." },
+        { id: "f5", title: "F5. Client Success & Value Realization", template: "I'm struggling to show the business value we're delivering to this client in terms they care about.\n\nHere's the situation:\n• Account: [name]\n• What we're delivering: [current work]\n• Contract status: [when is renewal, expansion opportunity]\n• Client satisfaction: [what you sense or know]\n\nThe value demonstration issues:\n• Unclear success metrics: We never defined how to measure success\n• No outcome tracking: Measuring outputs (things we do) not outcomes (business results)\n• Weak QBR discipline: Not regularly reviewing value and adjusting\n• Can't articulate value: Converting what we do into business terms executives understand\n• Attribution challenges: Hard to show our contribution vs. other factors\n\nHelp me:\n• Define success metrics that matter to business leaders\n• Create system to track and report business outcomes\n• Build compelling value narrative with data and stories\n• Design QBR approach that reinforces value partnership\n• Develop business case for renewal and expansion\n• Connect our work to their strategic priorities and KPIs\n\nMy specific challenge: [describe - delivering technical work but can't show business impact, client sees us as cost center not value driver, executive sponsor changed and new person doesn't see value, or competing for budget against other priorities]." },
       ]},
     ],
   };
@@ -548,6 +975,21 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     }
   };
 
+  // ===== Sync selected engines with admin-enabled providers =====
+  // When admin disables a provider, automatically deselect all its engines
+  useEffect(() => {
+    if (!enabledProviders) return; // Config not loaded yet
+    
+    setSelected((prev: Record<string, boolean>) => {
+      const updated: Record<string, boolean> = {};
+      seededEngines.forEach(e => {
+        // Keep engine selected only if: (1) it was selected before AND (2) its provider is enabled
+        updated[e.id] = prev[e.id] && enabledProviders.has(e.provider);
+      });
+      return updated;
+    });
+  }, [enabledProviders]);
+
   // ===== Smoke tests (non-UI assertions) =====
   useEffect(() => {
     // Test estimateTokens monotonicity
@@ -556,7 +998,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     if (!(b >= a)) console.warn("estimateTokens not monotonic for tiktoken");
     // Test computeOutCap never exceeds context
     const e = seededEngines[0];
-    const cap = computeOutCap(e, 1000);
+    const cap = computeOutCap(e, 1000, providerConfig);
     if (!(cap <= Math.max(0, e.contextLimit - 1000))) console.warn("computeOutCap exceeds free space");
   }, []);
 
@@ -609,8 +1051,28 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   };
 
   // ===== Derived pricing with overrides =====
+  // Priority: 1. User overrides, 2. Database values, 3. Hardcoded fallback
   const pricing = useMemo(() => {
-    const merged: any = JSON.parse(JSON.stringify(BASE_PRICING));
+    // Start with database pricing (if available), fall back to hardcoded
+    const dbPricing = getPricingMap();
+    const hasDbPricing = Object.keys(dbPricing).length > 0;
+    const basePricing = hasDbPricing ? dbPricing : BASE_PRICING;
+    
+    const merged: any = JSON.parse(JSON.stringify(basePricing));
+    
+    // Merge in hardcoded values for any missing providers/models
+    if (hasDbPricing) {
+      Object.entries(BASE_PRICING).forEach(([prov, models]) => {
+        merged[prov] = merged[prov] || {};
+        Object.entries(models).forEach(([model, val]) => {
+          if (!merged[prov][model]) {
+            merged[prov][model] = val;
+          }
+        });
+      });
+    }
+    
+    // Apply user overrides last (highest priority)
     Object.entries(priceOverrides).forEach(([prov, byModel]) => {
       merged[prov] = merged[prov] || {};
       Object.entries(byModel).forEach(([model, val]) => {
@@ -618,7 +1080,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
       });
     });
     return merged as typeof BASE_PRICING;
-  }, [priceOverrides]);
+  }, [priceOverrides, getPricingMap]);
 
   const selectedEngines = useMemo(() => engines.filter(e => selected[e.id]), [engines, selected]);
 
@@ -636,20 +1098,26 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   function computePreview(e: Engine, text: string) {
     const P = estimateTokens(text, e.tokenizer);
     const nowIn = Math.min(P, e.contextLimit);
-    const outCap = computeOutCap(e, nowIn);
-    const minOut = Math.min(outCap, Math.max(200, Math.floor(0.35 * outCap)));
+    const outCap = computeOutCap(e, nowIn, providerConfig);
+    // Realistic output estimate: typical responses are 500-1500 tokens
+    // Use 25% of outCap, capped between 300 and 1500 tokens
+    const realisticOut = Math.min(1500, Math.max(300, Math.floor(0.25 * outCap)));
     const pr = getPrice(e);
-    // Pricing is per 1M tokens, so divide by 1,000,000
-    const minSpend = pr ? (nowIn / 1_000_000) * pr.in + (minOut / 1_000_000) * pr.out : 0;
-    const maxSpend = pr ? (nowIn / 1_000_000) * pr.in + (outCap / 1_000_000) * pr.out : 0;
-    return { nowIn, outCap, minSpend, maxSpend };
+    // Pricing is per 1M tokens, so divide by TOKENS_PER_MILLION
+    const minSpend = pr ? (nowIn / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * pr.in + (realisticOut / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * pr.out : 0;
+    const maxSpend = pr ? (nowIn / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * pr.in + (outCap / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * pr.out : 0;
+    return { nowIn, outCap, realisticOut, minSpend, maxSpend };
   }
 
   const previews = useMemo(() => selectedEngines.map(e => ({ e, ...computePreview(e, prompt) })), [selectedEngines, prompt]);
 
   const totals = useMemo(() => previews.reduce((a, p) => {
-    a.min += p.minSpend; a.max += p.maxSpend; a.inTok += p.nowIn; a.outTok += p.outCap; return a;
-  }, { min: 0, max: 0, inTok: 0, outTok: 0 }), [previews]);
+    a.min += p.minSpend; a.max += p.maxSpend; a.inTok += p.nowIn; a.outTok += p.outCap; 
+    // Use realistic estimate (minSpend uses realisticOut) for display
+    a.realistic = (a.realistic || 0) + p.minSpend;
+    a.realisticOutTok = (a.realisticOutTok || 0) + p.realisticOut;
+    return a;
+  }, { min: 0, max: 0, inTok: 0, outTok: 0, realistic: 0, realisticOutTok: 0 }), [previews]);
 
   function warningForEngine(e: Engine): string | null {
     if (!liveMode) return null;
@@ -665,6 +1133,15 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     
     // Remove HTML tags and extract meaningful content
     const withoutHtml = errorStr.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // ===== TRUNCATION ERROR HANDLING (All Providers) =====
+    // Check if this is a TruncationError (status 413 with truncation message)
+    if (error?.name === 'TruncationError' || statusCode === 413 || 
+        withoutHtml.includes('truncated') || withoutHtml.includes('maximum token limit')) {
+      const tokensGenerated = error?.tokensGenerated || 'unknown';
+      const maxTokens = error?.maxTokens || 'limit';
+      return `✂️ ${engineName}: Response was cut off at ${tokensGenerated} tokens (limit: ${maxTokens}). The AI couldn't finish its response. Try:\n• Ask a more specific question\n• Request a shorter response\n• Break your question into smaller parts`;
+    }
     
     // ===== xAI Grok Specific Error Handling =====
     if (provider === 'xai') {
@@ -1082,7 +1559,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     return `❌ ${engineName}: ${withoutHtml.substring(0, 150)}`;
   }
 
-  // Streaming helper functions
+  // Streaming helper functions - optimized for smooth real-time updates
   function updateStreamingContent(engineId: string, content: string, isStreaming: boolean) {
     setStreamingStates(prev => ({
       ...prev,
@@ -1098,8 +1575,47 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     });
   }
 
+  // Get model-specific token limit (from database, with hardcoded fallback)
+  function getModelTokenLimit(provider: string, modelId: string): number {
+    // First try database value
+    const dbLimit = getDBModelTokenLimit(provider, modelId);
+    if (dbLimit !== 8192) { // 8192 is the default fallback in useAIModels
+      return dbLimit;
+    }
+    // Fall back to hardcoded values if database doesn't have the model
+    return MODEL_TOKEN_LIMITS[provider]?.[modelId] || DEFAULT_TOKEN_LIMIT;
+  }
+
+  // Custom error class for response truncation
+  class TruncationError extends Error {
+    statusCode: number;
+    status: number;
+    provider: string;
+    partialContent: string;
+    tokensGenerated: number;
+    maxTokens: number;
+    
+    constructor(provider: string, partialContent: string, tokensGenerated: number, maxTokens: number) {
+      super(`Response was truncated because it reached the maximum token limit (${tokensGenerated}/${maxTokens} tokens). The AI's response was cut off mid-sentence.`);
+      this.name = 'TruncationError';
+      this.statusCode = 413; // Payload Too Large (semantic choice)
+      this.status = 413;
+      this.provider = provider;
+      this.partialContent = partialContent;
+      this.tokensGenerated = tokensGenerated;
+      this.maxTokens = maxTokens;
+    }
+  }
+
   async function* streamFromProvider(e: Engine, prompt: string, outCap: number) {
     // ===== Super Debug: Function Entry =====
+    superDebugBus.emitHandlerCalled('streamFromProvider', 'OneMindAI.tsx', {
+      provider: e.provider,
+      engineId: e.id,
+      engineName: e.name,
+      prompt,
+      outCap
+    });
     superDebugBus.emit('FUNCTION_ENTER', `streamFromProvider() called for ${e.name}`, {
       engineId: e.id,
       engineName: e.name,
@@ -1116,21 +1632,83 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     logger.step(4, `streamFromProvider() called for ${e.name}`);
     logger.data('Engine Config', { id: e.id, provider: e.provider, version: e.selectedVersion });
     
-    // CRITICAL: Limit prompt length to avoid API 400 errors
-    const MAX_PROMPT_LENGTH = 7000;
-    if (prompt.length > MAX_PROMPT_LENGTH) {
-      console.warn(`[${e.name}] Prompt too long (${prompt.length} chars). Truncating to ${MAX_PROMPT_LENGTH} chars.`);
-      prompt = prompt.substring(0, MAX_PROMPT_LENGTH) + "\n\n[Note: Your prompt was truncated because it exceeded the maximum length of 7,000 characters. Please provide a shorter, more focused question for better results.]";
+    // CRITICAL: Limit prompt length to avoid API 400 errors (from admin config)
+    const maxPromptLength = LIMITS.MAX_PROMPT_LENGTH;
+    const originalPromptLength = prompt.length;
+    if (prompt.length > maxPromptLength) {
+      console.warn(`[${e.name}] Prompt too long (${prompt.length} chars). Truncating to ${maxPromptLength} chars.`);
+      prompt = prompt.substring(0, maxPromptLength) + "\n\n[Note: Your prompt was truncated because it exceeded the maximum length of " + maxPromptLength + " characters. Please provide a shorter, more focused question for better results.]";
+      
+      // ===== PROMPT JOURNEY: Stage 3 - Truncated =====
+      superDebugBus.emitPromptJourney('truncated', prompt, {
+        originalLength: originalPromptLength,
+        currentLength: prompt.length,
+        truncatedAt: maxPromptLength,
+        truncationReason: `Prompt exceeded ${maxPromptLength} character limit`,
+        provider: e.provider,
+        engineName: e.name
+      });
     }
     logger.data('Input Prompt Length', `${prompt.length} characters`);
+    // Get model-specific token limit and adjust outCap
+    const modelLimit = getModelTokenLimit(e.provider, e.selectedVersion);
+    const adjustedOutCap = Math.min(outCap, modelLimit);
+    
     logger.data('Max Output Tokens', outCap);
+    logger.data('Model Token Limit', modelLimit);
+    logger.data('Adjusted Output Tokens', adjustedOutCap);
+    
+    // ===== Super Debug: Real-time API Flow Tracking =====
+    const willUseProxy = !e.apiKey;
+    const debugProxyUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002';
+    const debugEndpoint = willUseProxy ? `${debugProxyUrl}/api/${e.provider}` : `https://api.${e.provider}.com/...`;
+    
+    // Step 1: Emit API request start with parameters (no temperature)
+    superDebugBus.emitApiRequest(e.provider, debugEndpoint, {
+      model: e.selectedVersion,
+      max_tokens: adjustedOutCap,
+      stream: true,
+      useProxy: willUseProxy,
+      promptLength: prompt.length
+    });
+    
+    // Known backend limits for mismatch detection
+    const BACKEND_CAPS: Record<string, number> = {
+      openai: 16384,
+      anthropic: 8192,
+      gemini: 8192,
+      deepseek: 8192,  // Backend caps at 8192, but frontend allows 65536!
+      mistral: 32768,  // Backend caps at 32768, but frontend allows 128000!
+      perplexity: 4096,
+      groq: 8192,
+      xai: 16384,
+      kimi: 8192,
+    };
+    
+    const backendCap = BACKEND_CAPS[e.provider] || 8192;
+    
+    // Step 2-3: Emit backend processing info with potential mismatches (no temperature)
+    if (willUseProxy) {
+      superDebugBus.emitBackendProcess(
+        e.provider,
+        { max_tokens: adjustedOutCap, model: e.selectedVersion },
+        { max_tokens: Math.min(adjustedOutCap, backendCap), model: e.selectedVersion, cappedAt: backendCap }
+      );
+      
+      // Emit token cap if there's a mismatch
+      if (adjustedOutCap > backendCap) {
+        superDebugBus.emitTokenCap(e.provider, adjustedOutCap, backendCap, backendCap);
+      }
+    }
     
     // Terminal logging
     terminalLogger.functionCall('streamFromProvider', {
       engineName: e.name,
       provider: e.provider,
       promptLength: prompt.length,
-      maxOutputTokens: outCap
+      maxOutputTokens: outCap,
+      modelLimit,
+      adjustedOutCap
     });
     
     // Enhance prompt with uploaded file content
@@ -1199,6 +1777,25 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
       });
     }
     
+    // ===== PROMPT JOURNEY: Stage 2 - Enhanced with Files =====
+    const filesAdded = [
+      ...textFiles.map(f => f.name),
+      ...wordDocs.map(f => f.name),
+      ...jsonFiles.map(f => f.name),
+      ...pdfs.map(f => f.name),
+      ...dataFiles.map(f => f.name)
+    ];
+    if (filesAdded.length > 0 || enhancedPrompt !== prompt) {
+      superDebugBus.emitPromptJourney('enhanced', enhancedPrompt, {
+        originalLength: originalPromptLength,
+        currentLength: enhancedPrompt.length,
+        provider: e.provider,
+        engineName: e.name,
+        filesAdded,
+        transformations: filesAdded.length > 0 ? [`Added ${filesAdded.length} file(s) content`] : []
+      });
+    }
+    
     // Check if we should use the proxy (no API key) or direct calls (has API key)
     const useProxy = !e.apiKey;
     const supportedProviders = ['anthropic', 'openai', 'gemini', 'mistral', 'perplexity', 'kimi', 'deepseek', 'xai', 'groq', 'falcon', 'sarvam'];
@@ -1214,16 +1811,46 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         const proxyUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002';
         const providerEndpoint = `${proxyUrl}/api/${e.provider === 'anthropic' ? 'anthropic' : e.provider}`;
         
+        // ===== Super Debug: Real-time Fetch Tracking =====
+        const fetchStartTime = Date.now();
+        superDebugBus.emitFetchStart(providerEndpoint, 'POST', e.provider);
+        
+        // Build the request payload
+        const requestPayload = {
+          messages: [{ role: 'user', content: enhancedPrompt }],
+          model: e.selectedVersion,
+          max_tokens: adjustedOutCap,
+          stream: true,
+        };
+        
+        // ===== PROMPT JOURNEY: Stage 4 - Sent to API =====
+        superDebugBus.emitPromptJourney('sent_to_api', enhancedPrompt, {
+          originalLength: originalPromptLength,
+          currentLength: enhancedPrompt.length,
+          provider: e.provider,
+          engineName: e.name,
+          maxTokens: adjustedOutCap
+        });
+        
+        // ===== Super Debug: Emit full message payload =====
+        superDebugBus.emitMessagePayload(e.provider, requestPayload.messages, {
+          model: requestPayload.model,
+          max_tokens: requestPayload.max_tokens,
+          stream: requestPayload.stream
+        });
+        
+        // ===== Super Debug: Emit actual API payload being sent =====
+        superDebugBus.emitApiPayloadSent(providerEndpoint, 'POST', requestPayload, e.provider);
+        
         const response = await fetch(providerEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: enhancedPrompt }],
-            model: e.selectedVersion,
-            max_tokens: outCap,
-            stream: true,
-          }),
+          body: JSON.stringify(requestPayload),
         });
+        
+        // ===== Super Debug: Response Received =====
+        const fetchDuration = Date.now() - fetchStartTime;
+        superDebugBus.emitFetchResponse(providerEndpoint, response.status, fetchDuration, e.provider);
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Proxy request failed' }));
@@ -1249,30 +1876,62 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         const decoder = new TextDecoder();
         let buffer = '';
         
+        let chunkCount = 0;
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log(`[Proxy Stream] ${e.name} ended after ${chunkCount} chunks`);
+            break;
+          }
           
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
           
           for (const line of lines) {
+            // Handle SSE format (data: prefix)
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') continue;
               try {
                 const parsed = JSON.parse(data);
-                const content = parsed.choices?.[0]?.delta?.content || 
+                // OpenAI format
+                let content = parsed.choices?.[0]?.delta?.content || 
+                               // Anthropic format
                                parsed.delta?.text ||
-                               parsed.content?.[0]?.text || '';
-                if (content) yield content;
+                               // Generic format
+                               parsed.content?.[0]?.text ||
+                               // Gemini format (from proxy)
+                               parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (content) {
+                  chunkCount++;
+                  // ===== Super Debug: Track stream chunk content =====
+                  superDebugBus.emitStreamChunk(content, false);
+                  yield content;
+                }
               } catch {
                 // Skip non-JSON lines
+              }
+            } else if (line.trim()) {
+              // Handle raw JSON (Gemini format - not SSE)
+              try {
+                const parsed = JSON.parse(line);
+                // Gemini streaming format
+                const geminiText = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (geminiText) {
+                  chunkCount++;
+                  // ===== Super Debug: Track stream chunk content =====
+                  superDebugBus.emitStreamChunk(geminiText, false);
+                  yield geminiText;
+                }
+              } catch {
+                // Not JSON, skip
               }
             }
           }
         }
+        // ===== Super Debug: Mark stream as complete =====
+        superDebugBus.emitStreamChunk('', true);
         return;
       } catch (proxyError: any) {
         console.error('Proxy error:', proxyError);
@@ -1303,7 +1962,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         
         if (shouldFail && engineRetryCount < MOCK_FAIL_AFTER_RETRIES) {
           // Increment retry count for this engine
-          setMockErrorCounts(prev => ({ ...prev, [e.id]: (prev[e.id] || 0) + 1 }));
+          setMockErrorCounts((prev: Record<string, number>) => ({ ...prev, [e.id]: (prev[e.id] || 0) + 1 }));
           
           const mockErrors: Record<string, { status: number; message: string }> = {
             '429': { 
@@ -1338,7 +1997,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         } else if (engineRetryCount >= MOCK_FAIL_AFTER_RETRIES) {
           console.log(`✅ [MOCK] ${e.name} succeeding after ${engineRetryCount} retries`);
           // Reset for next run
-          setMockErrorCounts(prev => ({ ...prev, [e.id]: 0 }));
+          setMockErrorCounts((prev: Record<string, number>) => ({ ...prev, [e.id]: 0 }));
         }
       }
 
@@ -1382,12 +2041,13 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           messageContent = enhancedPrompt;
         }
 
+        
         // Wrap API call with auto-recovery
         const makeClaudeRequest = async () => {
           return await client.messages.create({
             model: e.selectedVersion,
-            max_tokens: outCap,
-            temperature: 0.7,
+            max_tokens: adjustedOutCap,
+            temperature: null,
             messages: [{ role: 'user', content: messageContent }],
             stream: true,
           });
@@ -1433,9 +2093,19 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           provider: 'anthropic'
         });
 
+        let claudeFullContent = '';
+        let claudeStopReason: string | null = null;
+        let claudeOutputTokens = 0;
+        
         for await (const event of stream) {
           if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+            claudeFullContent += event.delta.text;
             yield event.delta.text;
+          }
+          // Capture stop_reason from message_delta event
+          if (event.type === 'message_delta') {
+            claudeStopReason = event.delta?.stop_reason || null;
+            claudeOutputTokens = event.usage?.output_tokens || 0;
           }
         }
         
@@ -1444,6 +2114,13 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           engineId: e.id,
           provider: 'anthropic'
         });
+        
+        // TRUNCATION DETECTION: If stop_reason is "max_tokens", the response was cut off
+        // Note: Claude uses "end_turn" for normal completion, "max_tokens" for truncation
+        if (claudeStopReason === 'max_tokens') {
+          console.error(`[Claude TRUNCATION] Response was truncated at ${claudeFullContent.length} chars, ${claudeOutputTokens} tokens`);
+          throw new TruncationError(e.provider, claudeFullContent, claudeOutputTokens, adjustedOutCap);
+        }
       } else if (e.provider === 'openai') {
         logger.step(5, 'Initializing OpenAI SDK');
         const { default: OpenAI } = await import('openai');
@@ -1518,7 +2195,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         logger.data('API Request', {
           model: e.selectedVersion,
           max_tokens: outCap,
-          temperature: 0.7,
+          temperature: null,
           stream: true,
           hasImages: images.length > 0
         });
@@ -1547,8 +2224,8 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           return await client.chat.completions.create({
             model: e.selectedVersion,
             messages: [{ role: 'user', content: messageContent }],
-            max_tokens: outCap,
-            temperature: 0.7,
+            max_tokens: adjustedOutCap,
+            temperature: null,
             stream: true,
           });
         };
@@ -1590,38 +2267,40 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         terminalLogger.streamStart(e.name);
         terminalLogger.apiCallStart('OpenAI', e.selectedVersion, {
           maxTokens: outCap,
-          temperature: 0.7,
+          temperature: null,
           stream: true
         });
         
         let chunkCount = 0;
         let totalChars = 0;
+        let fullContent = '';
+        let finishReason: string | null = null;
         const streamStartTime = Date.now();
         
         for await (const chunk of stream) {
           const content = chunk.choices[0]?.delta?.content;
+          // Capture finish_reason from the final chunk
+          if (chunk.choices[0]?.finish_reason) {
+            finishReason = chunk.choices[0].finish_reason;
+          }
           if (content) {
             chunkCount++;
             totalChars += content.length;
-            
-            // Browser console logging
-            if (chunkCount === 1) logger.info('First chunk received');
-            if (chunkCount % 50 === 0) logger.info(`Received ${chunkCount} chunks...`);
-            
-            // Terminal logging - detailed chunk info
-            terminalLogger.chunkReceived(e.name, chunkCount, content, {
-              totalCharsReceived: totalChars,
-              avgChunkSize: (totalChars / chunkCount).toFixed(2)
-            });
-            
+            fullContent += content;
             yield content;
           }
         }
         
         const streamDuration = Date.now() - streamStartTime;
-        logger.success(`OpenAI streaming complete - Total chunks: ${chunkCount}`);
+        logger.success(`OpenAI streaming complete - Total chunks: ${chunkCount}, finish_reason: ${finishReason}`);
         terminalLogger.streamEnd(e.name, chunkCount, totalChars, streamDuration);
         terminalLogger.apiCallEnd('OpenAI', streamDuration, chunkCount, totalChars);
+        
+        // TRUNCATION DETECTION: If finish_reason is "length", the response was cut off
+        if (finishReason === 'length') {
+          console.error(`[OpenAI TRUNCATION] Response was truncated at ${totalChars} chars, ${chunkCount} chunks`);
+          throw new TruncationError(e.provider, fullContent, chunkCount, adjustedOutCap);
+        }
       } else if (e.provider === 'gemini') {
 // ===== Test Error Injection for Gemini (temporary) =====
         // Set GEMINI_TEST_ERROR to simulate errors, or null to disable
@@ -1629,6 +2308,87 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         //          '400' (invalid), '403' (permission), '404' (not found), 'safety' (safety block)
         const GEMINI_TEST_ERROR: '429' | '500' | '503' | '504' | '400' | '403' | '404' | 'safety' | null = null;  // ← DISABLED - Normal operation
         // =============================================
+
+        const geminiApiKey = e.apiKey || DEFAULT_API_KEYS['gemini'];
+        
+        // If no API key, use proxy
+        if (!geminiApiKey) {
+          const apiUrl = `${import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002'}/api/gemini`;
+          
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: e.selectedVersion,
+              messages: [{ role: 'user', content: enhancedPrompt }],
+              max_tokens: outCap,
+              temperature: null,
+              stream: true,
+            }),
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Gemini proxy error: ${errorText}`);
+          }
+          
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          
+          if (reader) {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                  // Process any remaining buffer
+                  if (buffer.trim()) {
+                    const lines = buffer.split('\n');
+                    for (const line of lines) {
+                      if (line.startsWith('data: ')) {
+                        const data = line.slice(6).trim();
+                        if (data && data !== '[DONE]') {
+                          try {
+                            const parsed = JSON.parse(data);
+                            const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+                            if (content) yield content;
+                          } catch { /* ignore */ }
+                        }
+                      }
+                    }
+                  }
+                  break;
+                }
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Keep incomplete line in buffer
+                
+                for (const line of lines) {
+                  const trimmedLine = line.trim();
+                  if (trimmedLine.startsWith('data: ')) {
+                    const data = trimmedLine.slice(6).trim();
+                    if (data === '[DONE]') return;
+                    if (!data) continue;
+                    
+                    try {
+                      const parsed = JSON.parse(data);
+                      const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+                      if (content) {
+                        yield content;
+                      }
+                    } catch {
+                      // Ignore parsing errors for incomplete JSON
+                    }
+                  }
+                }
+              }
+            } finally {
+              reader.releaseLock();
+            }
+          }
+          return;
+        }
 
         const { GoogleGenerativeAI } = await import('@google/generative-ai');
         
@@ -1641,7 +2401,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           undefined
         );
         
-        const genAI = new GoogleGenerativeAI(e.apiKey);
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
         
         // Check if there are images to send
         const images = uploadedFiles.filter(f => f.type.startsWith('image/'));
@@ -1719,7 +2479,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           const model = genAI.getGenerativeModel({ 
             model: e.selectedVersion,
             generationConfig: {
-              temperature: 0.7,
+              temperature: null,
               maxOutputTokens: outCap,
             },
           });
@@ -1761,11 +2521,26 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
 
         logger.success('Gemini streaming started');
         
+        let geminiFullContent = '';
+        let geminiFinishReason: string | null = null;
+        
         for await (const chunk of result.stream) {
           const text = chunk.text();
           if (text) {
+            geminiFullContent += text;
             yield text;
           }
+          // Capture finish reason from candidates
+          if (chunk.candidates?.[0]?.finishReason) {
+            geminiFinishReason = chunk.candidates[0].finishReason;
+          }
+        }
+        
+        // TRUNCATION DETECTION: If finishReason is "MAX_TOKENS", the response was cut off
+        // Gemini uses "STOP" for normal completion, "MAX_TOKENS" for truncation
+        if (geminiFinishReason === 'MAX_TOKENS') {
+          console.error(`[Gemini TRUNCATION] Response was truncated at ${geminiFullContent.length} chars`);
+          throw new TruncationError(e.provider, geminiFullContent, geminiFullContent.length, outCap);
         }
       } else if (e.provider === 'mistral') {
         // Super Debug: Library trigger for Mistral API
@@ -1794,7 +2569,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: 0.7,
+              temperature: null,
               stream: true,
             }),
           });
@@ -1860,6 +2635,9 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           throw new Error('No response body');
         }
 
+        let mistralFullContent = '';
+        let mistralFinishReason: string | null = null;
+
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -1871,12 +2649,24 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
             for (const line of lines) {
               if (line.startsWith('data: ')) {
                 const data = line.slice(6);
-                if (data === '[DONE]') return;
+                if (data === '[DONE]') {
+                  // Check for truncation before returning
+                  if (mistralFinishReason === 'length') {
+                    console.error(`[Mistral TRUNCATION] Response was truncated at ${mistralFullContent.length} chars`);
+                    throw new TruncationError(e.provider, mistralFullContent, mistralFullContent.length, outCap);
+                  }
+                  return;
+                }
 
                 try {
                   const parsed = JSON.parse(data);
                   const content = parsed.choices[0]?.delta?.content;
+                  // Capture finish_reason
+                  if (parsed.choices[0]?.finish_reason) {
+                    mistralFinishReason = parsed.choices[0].finish_reason;
+                  }
                   if (content) {
+                    mistralFullContent += content;
                     yield content;
                   }
                 } catch {
@@ -1887,6 +2677,12 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           }
         } finally {
           reader.releaseLock();
+        }
+        
+        // Final truncation check if stream ended without [DONE]
+        if (mistralFinishReason === 'length') {
+          console.error(`[Mistral TRUNCATION] Response was truncated at ${mistralFullContent.length} chars`);
+          throw new TruncationError(e.provider, mistralFullContent, mistralFullContent.length, outCap);
         }
       } else if (e.provider === 'perplexity') {
         const apiKey = e.apiKey || DEFAULT_API_KEYS['perplexity'];
@@ -1899,17 +2695,22 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         
         // Wrap API call with auto-recovery
         const makePerplexityRequest = async () => {
-          const response = await fetch('/api/perplexity/chat/completions', {
+          // Use proxy if no API key, otherwise direct API call
+          const apiUrl = apiKey 
+            ? 'https://api.perplexity.ai/chat/completions'
+            : `${import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_PROXY_URL || 'http://localhost:3002'}/api/perplexity`;
+          
+          const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`,
+              ...(apiKey && { 'Authorization': `Bearer ${apiKey}` }),
             },
             body: JSON.stringify({
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: 0.7,
+              temperature: null,
               stream: true,
             }),
           });
@@ -1970,29 +2771,71 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
 
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
+        let perplexityFullContent = '';
+        let perplexityFinishReason: string | null = null;
 
         if (reader) {
           try {
             while (true) {
               const { done, value } = await reader.read();
-              if (done) break;
+              if (done) {
+                // Process any remaining buffer
+                if (buffer.trim()) {
+                  const lines = buffer.split('\n');
+                  for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                      const data = line.slice(6).trim();
+                      if (data && data !== '[DONE]') {
+                        try {
+                          const parsed = JSON.parse(data);
+                          const content = parsed.choices?.[0]?.delta?.content;
+                          if (parsed.choices?.[0]?.finish_reason) {
+                            perplexityFinishReason = parsed.choices[0].finish_reason;
+                          }
+                          if (content) {
+                            perplexityFullContent += content;
+                            yield content;
+                          }
+                        } catch { /* ignore */ }
+                      }
+                    }
+                  }
+                }
+                break;
+              }
 
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = chunk.split('\n');
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
               for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6);
-                  if (data === '[DONE]') return;
+                const trimmedLine = line.trim();
+                if (trimmedLine.startsWith('data: ')) {
+                  const data = trimmedLine.slice(6).trim();
+                  if (data === '[DONE]') {
+                    // Check for truncation before returning
+                    if (perplexityFinishReason === 'length') {
+                      console.error(`[Perplexity TRUNCATION] Response was truncated at ${perplexityFullContent.length} chars`);
+                      throw new TruncationError(e.provider, perplexityFullContent, perplexityFullContent.length, outCap);
+                    }
+                    return;
+                  }
+                  if (!data) continue;
 
                   try {
                     const parsed = JSON.parse(data);
-                    const content = parsed.choices[0]?.delta?.content;
+                    const content = parsed.choices?.[0]?.delta?.content;
+                    // Capture finish_reason
+                    if (parsed.choices?.[0]?.finish_reason) {
+                      perplexityFinishReason = parsed.choices[0].finish_reason;
+                    }
                     if (content) {
+                      perplexityFullContent += content;
                       yield content;
                     }
                   } catch {
-                    // Ignore parsing errors
+                    // Ignore parsing errors for incomplete JSON
                   }
                 }
               }
@@ -2001,10 +2844,16 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
             reader.releaseLock();
           }
         }
+        
+        // Final truncation check
+        if (perplexityFinishReason === 'length') {
+          console.error(`[Perplexity TRUNCATION] Response was truncated at ${perplexityFullContent.length} chars`);
+          throw new TruncationError(e.provider, perplexityFullContent, perplexityFullContent.length, outCap);
+        }
       } else if (e.provider === 'kimi') {
         // Wrap API call with auto-recovery
         const makeKimiRequest = async () => {
-          const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+          return await fetch(`https://api.moonshot.cn/v1/chat/completions`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -2014,7 +2863,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: 0.7,
+              temperature: null,
               stream: true,
             }),
           });
@@ -2075,6 +2924,8 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
 
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
+        let kimiFullContent = '';
+        let kimiFinishReason: string | null = null;
 
         if (reader) {
           try {
@@ -2088,12 +2939,24 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               for (const line of lines) {
                 if (line.startsWith('data: ')) {
                   const data = line.slice(6);
-                  if (data === '[DONE]') return;
+                  if (data === '[DONE]') {
+                    // Check for truncation before returning
+                    if (kimiFinishReason === 'length') {
+                      console.error(`[Kimi TRUNCATION] Response was truncated at ${kimiFullContent.length} chars`);
+                      throw new TruncationError(e.provider, kimiFullContent, kimiFullContent.length, outCap);
+                    }
+                    return;
+                  }
 
                   try {
                     const parsed = JSON.parse(data);
                     const content = parsed.choices[0]?.delta?.content;
+                    // Capture finish_reason
+                    if (parsed.choices[0]?.finish_reason) {
+                      kimiFinishReason = parsed.choices[0].finish_reason;
+                    }
                     if (content) {
+                      kimiFullContent += content;
                       yield content;
                     }
                   } catch {
@@ -2105,6 +2968,12 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           } finally {
             reader.releaseLock();
           }
+        }
+        
+        // Final truncation check
+        if (kimiFinishReason === 'length') {
+          console.error(`[Kimi TRUNCATION] Response was truncated at ${kimiFullContent.length} chars`);
+          throw new TruncationError(e.provider, kimiFullContent, kimiFullContent.length, outCap);
         }
       } else if (e.provider === 'deepseek') {
         // Super Debug: Library trigger for DeepSeek API
@@ -2133,7 +3002,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: 0.7,
+              temperature: null,
               stream: true,
             }),
           });
@@ -2188,6 +3057,8 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
 
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
+        let deepseekFullContent = '';
+        let deepseekFinishReason: string | null = null;
 
         if (reader) {
           try {
@@ -2201,12 +3072,24 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               for (const line of lines) {
                 if (line.startsWith('data: ')) {
                   const data = line.slice(6);
-                  if (data === '[DONE]') return;
+                  if (data === '[DONE]') {
+                    // Check for truncation before returning
+                    if (deepseekFinishReason === 'length') {
+                      console.error(`[DeepSeek TRUNCATION] Response was truncated at ${deepseekFullContent.length} chars`);
+                      throw new TruncationError(e.provider, deepseekFullContent, deepseekFullContent.length, outCap);
+                    }
+                    return;
+                  }
 
                   try {
                     const parsed = JSON.parse(data);
                     const content = parsed.choices[0]?.delta?.content;
+                    // Capture finish_reason
+                    if (parsed.choices[0]?.finish_reason) {
+                      deepseekFinishReason = parsed.choices[0].finish_reason;
+                    }
                     if (content) {
+                      deepseekFullContent += content;
                       yield content;
                     }
                   } catch {
@@ -2218,6 +3101,12 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           } finally {
             reader.releaseLock();
           }
+        }
+        
+        // Final truncation check
+        if (deepseekFinishReason === 'length') {
+          console.error(`[DeepSeek TRUNCATION] Response was truncated at ${deepseekFullContent.length} chars`);
+          throw new TruncationError(e.provider, deepseekFullContent, deepseekFullContent.length, outCap);
         }
       } else if (e.provider === 'xai') {
         // xAI Grok using OpenAI-compatible API
@@ -2234,17 +3123,31 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           model: e.selectedVersion,
           messages: [{ role: 'user', content: enhancedPrompt }],
           max_tokens: outCap,
-          temperature: 0.7,
+          temperature: null,
           stream: true,
         });
 
         logger.success('xAI Grok streaming started');
 
+        let xaiFullContent = '';
+        let xaiFinishReason: string | null = null;
+
         for await (const chunk of stream) {
           const content = chunk.choices[0]?.delta?.content;
+          // Capture finish_reason from the final chunk
+          if (chunk.choices[0]?.finish_reason) {
+            xaiFinishReason = chunk.choices[0].finish_reason;
+          }
           if (content) {
+            xaiFullContent += content;
             yield content;
           }
+        }
+        
+        // TRUNCATION DETECTION: If finish_reason is "length", the response was cut off
+        if (xaiFinishReason === 'length') {
+          console.error(`[xAI TRUNCATION] Response was truncated at ${xaiFullContent.length} chars`);
+          throw new TruncationError(e.provider, xaiFullContent, xaiFullContent.length, outCap);
         }
       } else if (e.provider === 'groq') {
         // Groq using OpenAI-compatible API
@@ -2261,17 +3164,31 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           model: e.selectedVersion,
           messages: [{ role: 'user', content: enhancedPrompt }],
           max_tokens: outCap,
-          temperature: 0.7,
+          temperature: null,
           stream: true,
         });
 
         logger.success('Groq streaming started');
 
+        let groqFullContent = '';
+        let groqFinishReason: string | null = null;
+
         for await (const chunk of stream) {
           const content = chunk.choices[0]?.delta?.content;
+          // Capture finish_reason from the final chunk
+          if (chunk.choices[0]?.finish_reason) {
+            groqFinishReason = chunk.choices[0].finish_reason;
+          }
           if (content) {
+            groqFullContent += content;
             yield content;
           }
+        }
+        
+        // TRUNCATION DETECTION: If finish_reason is "length", the response was cut off
+        if (groqFinishReason === 'length') {
+          console.error(`[Groq TRUNCATION] Response was truncated at ${groqFullContent.length} chars`);
+          throw new TruncationError(e.provider, groqFullContent, groqFullContent.length, outCap);
         }
       } else if (e.provider === 'falcon') {
         // Falcon LLM via HuggingFace Inference API
@@ -2288,7 +3205,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               inputs: enhancedPrompt,
               parameters: {
                 max_new_tokens: Math.max(outCap, 8000),
-                temperature: 0.7,
+                temperature: null,
                 return_full_text: false,
                 stream: true,
               },
@@ -2362,7 +3279,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: 0.7,
+              temperature: null,
               stream: true,
             }),
           });
@@ -2726,6 +3643,26 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   };
 
   async function runAll() {
+    superDebugBus.emitUserClick('Run Live', {
+      file: 'OneMindAI.tsx',
+      handler: 'runAll'
+    });
+    superDebugBus.emitUserSubmit('Chat Message', { prompt }, {
+      file: 'OneMindAI.tsx',
+      handler: 'runAll'
+    });
+    superDebugBus.emitHandlerCalled('runAll', 'OneMindAI.tsx', {
+      prompt,
+      selectedEngines: selectedEngines.map(e => ({ id: e.id, name: e.name, provider: e.provider })),
+      uploadedFiles: uploadedFiles.map(f => ({ name: f.name, size: f.size, type: f.type }))
+    });
+    
+    // ===== PROMPT JOURNEY: Stage 1 - User Input =====
+    superDebugBus.emitPromptJourney('user_input', prompt, {
+      originalLength: prompt.length,
+      currentLength: prompt.length
+    });
+
     if (selectedEngines.length === 0 || !prompt.trim()) {
       logger.warning('Cannot run: No engines selected or empty prompt');
       return;
@@ -2789,21 +3726,59 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         // Start streaming (prompt truncation handled in streamFromProvider)
         updateStreamingContent(e.id, '', true);
 
-        for await (const chunk of streamFromProvider(e, prompt, outCap)) {
+        // Batch updates for smoother rendering - update every 3 chunks or 50ms
+        let lastUpdateTime = Date.now();
+        let lastChunkTime = Date.now();
+        const UPDATE_INTERVAL = getSystemConfig<number>(systemConfig, 'update_interval_ms', 15); // ~67fps for smooth rendering
+        const STREAM_TIMEOUT = getSystemConfig<number>(systemConfig, 'stream_timeout_ms', 30000); // 30 seconds without chunks = timeout
+        
+        const streamIterator = streamFromProvider(e, prompt, outCap);
+        
+        for await (const chunk of streamIterator) {
           fullContent += chunk;
           tokenCount++;
-          updateStreamingContent(e.id, fullContent, true);
+          lastChunkTime = Date.now();
           
-          // Super Debug: Chunk received and merged
-          superDebugBus.emitChunk(chunk, e.id, fullContent);
+          // Update UI at 60fps max for smooth streaming
+          const now = Date.now();
+          if (now - lastUpdateTime >= UPDATE_INTERVAL) {
+            updateStreamingContent(e.id, fullContent, true);
+            lastUpdateTime = now;
+          }
           
-          // No artificial delay - true real-time streaming
+          // Super Debug: Only emit every 50 chunks to reduce overhead
+          if (tokenCount % 50 === 0) {
+            superDebugBus.emitChunk(chunk, e.id, fullContent);
+          }
+          
+          // Check for stream timeout (no chunks for 30 seconds)
+          if (now - lastChunkTime > STREAM_TIMEOUT) {
+            console.warn(`[Stream Timeout] ${e.name} - No chunks received for ${STREAM_TIMEOUT/1000}s`);
+            break;
+          }
         }
+        
+        // Log stream completion
+        console.log(`[Stream Complete] ${e.name}: ${tokenCount} chunks, ${fullContent.length} chars`);
+        
+        // Final update to ensure all content is displayed
+        updateStreamingContent(e.id, fullContent, true);
 
         // Finish streaming
         updateStreamingContent(e.id, fullContent, false);
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
         logger.success(`${e.name} completed in ${elapsed}s - ${fullContent.length} characters`);
+        
+        // ===== RESPONSE TRANSFORMATION: Complete =====
+        superDebugBus.emitResponseTransformation('complete', fullContent, {
+          provider: e.provider,
+          engineName: e.name,
+          totalChunks: tokenCount,
+          finishReason: 'stop', // Default - actual finish_reason would come from API
+          tokensGenerated: tokenCount,
+          maxTokens: outCap,
+          processingFunction: 'runAll'
+        });
         
         // Super Debug: Pipeline step - streaming complete
         superDebugBus.emit('PIPELINE_STEP', `${e.name} streaming completed`, {
@@ -2823,8 +3798,8 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         const estimatedOutputTokens = estimateTokens(fullContent, e.tokenizer);
         
         const pricing = getPrice(e);
-        const inputCost = pricing ? (estimatedInputTokens / 1_000_000) * pricing.in : 0;
-        const outputCost = pricing ? (estimatedOutputTokens / 1_000_000) * pricing.out : 0;
+        const inputCost = pricing ? (estimatedInputTokens / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * pricing.in : 0;
+        const outputCost = pricing ? (estimatedOutputTokens / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * pricing.out : 0;
 
         // ===== CREDIT DEDUCTION (after successful API response) =====
         // Only deduct credits if user is authenticated
@@ -2969,8 +3944,8 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               const estimatedOutputTokens = estimateTokens(finalContent, e.tokenizer);
               
               const pricing = getPrice(e);
-              const inputCost = pricing ? (estimatedInputTokens / 1_000_000) * pricing.in : 0;
-              const outputCost = pricing ? (estimatedOutputTokens / 1_000_000) * pricing.out : 0;
+              const inputCost = pricing ? (estimatedInputTokens / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * pricing.in : 0;
+              const outputCost = pricing ? (estimatedOutputTokens / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * pricing.out : 0;
 
               // ===== CREDIT DEDUCTION (after successful auto-retry) =====
               if (user?.id) {
@@ -4603,6 +5578,26 @@ My specific issue: [describe - losing clients after first project, can't grow ac
   // ===== Main App (authenticated) =====
   return (
     <div className={`${shell} space-y-4 pb-24 transition-all duration-300 ${superDebugMode ? 'mr-[480px]' : ''}`}>
+      {/* Help Icon */}
+      <HelpIcon
+        title="OneMind AI Chat"
+        description="A multi-engine AI chat interface that allows you to query multiple AI providers simultaneously and compare their responses. Get the best answer by leveraging collective intelligence from GPT-4, Claude, Gemini, and more."
+        features={[
+          'Query multiple AI engines at once (GPT-4, Claude, Gemini, DeepSeek, etc.)',
+          'Compare responses side-by-side or in combined view',
+          'Upload files and images for context-aware responses',
+          'Real-time cost estimation and credit tracking',
+          'Export responses to Word or PDF',
+          'Story mode for narrative-style responses',
+        ]}
+        tips={[
+          'Select multiple engines to get diverse perspectives on your query',
+          'Use the role selector to customize AI behavior for your use case',
+          'Enable Story Mode for more engaging, narrative responses',
+          'Check the cost estimate before running expensive queries',
+        ]}
+        position="top-right"
+      />
       {/* Header */}
       <div className={headerBar}>
         <div className="min-w-0">
@@ -4694,7 +5689,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
       </div>
 
       {/* Story Mode Progress Indicator */}
-      {storyMode && (
+      {storyMode && storyStep > 0 && (
         <div className="flex items-center justify-between bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl p-3 shadow">
           <div className="flex items-center gap-2 text-sm">
             <span className="font-semibold">Step {storyStep} of 4</span>
@@ -4706,6 +5701,23 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </span>
           </div>
           <div className="flex items-center gap-3">
+            {/* Back to Company Selection Button - Show on steps 0 and 1 */}
+            {storyStep <= 1 && (
+              <button
+                onClick={() => {
+                  setStoryStep(0);
+                  setSelectedCompany(null);
+                  setSelectedRole("");
+                  setSelectedRoleDetails(null);
+                  setSelectedFocusArea(null);
+                  setSelectedPromptPreview(null);
+                }}
+                className="text-xs px-3 py-1 bg-white/20 text-white rounded-lg hover:bg-white/30 transition font-medium"
+              >
+                ← Company Selection
+              </button>
+            )}
+            
             <div className="flex gap-1">
               {[1, 2, 3, 4].map((s) => (
                 <div
@@ -4720,6 +5732,108 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         </div>
       )}
 
+      {/* Story Mode Step 0: Company Selection */}
+      {storyMode && storyStep === 0 && (
+        <div className={`${panel} p-4 sm:p-6 border-t-4 border-blue-600`}>
+          {/* Header */}
+          <div className="space-y-3 mb-6">
+            <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+              Select Your Company
+            </h2>
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-slate-600 max-w-2xl">
+                Choose the company you're working with to get tailored insights and recommendations.
+              </p>
+              {/* Layout Toggle & Search */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Search Button */}
+                <button
+                  onClick={() => setShowCompanySearch(!showCompanySearch)}
+                  className={`rounded-md p-2 transition-all ${
+                    showCompanySearch
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-gray-600 hover:text-gray-900 hover:bg-slate-200'
+                  }`}
+                  aria-label="Search companies"
+                  title="Search companies"
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+                
+                {/* Layout Toggle */}
+                <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+                  {[
+                    { mode: 'list', icon: LayoutList, label: 'List view' },
+                    { mode: 'grid', icon: Grid3X3, label: 'Grid view' },
+                    { mode: 'stack', icon: Layers, label: 'Stack view' },
+                  ].map(({ mode, icon: Icon, label }) => (
+                    <button
+                      key={mode}
+                      onClick={() => setCompanyLayout(mode as 'list' | 'grid' | 'stack')}
+                      className={`rounded-md p-2 transition-all ${
+                        companyLayout === mode
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-slate-200'
+                      }`}
+                      aria-label={label}
+                      title={label}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            {/* Search Field */}
+            {showCompanySearch && (
+              <div className="mt-3 animate-fade-in">
+                <input
+                  type="text"
+                  value={companySearchQuery}
+                  onChange={(e) => setCompanySearchQuery(e.target.value)}
+                  placeholder="Search companies..."
+                  className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
+                  autoFocus
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Company Banner */}
+          <div className="mb-6">
+            <CompanyBanner 
+              companies={COMPANIES}
+              onCompanySelect={(company) => {
+                trackStateChange('OneMindAI', 'selectedCompany', selectedCompany?.name, company?.name);
+                setSelectedCompany(company);
+              }}
+              selectedCompanyId={selectedCompany?.id}
+              layout={companyLayout}
+              searchQuery={companySearchQuery}
+            />
+          </div>
+
+          {/* Next Button */}
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={() => {
+                if (selectedCompany) {
+                  trackStateChange('OneMindAI', 'storyStep', storyStep, 1);
+                  setStoryStep(1);
+                } else {
+                  alert('Please select a company to continue');
+                }
+              }}
+              disabled={!selectedCompany}
+              className="px-4 py-2 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed underline underline-offset-2"
+            >
+              Continue →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Story Mode Step 1: Role Selection with Silhouettes */}
       {storyMode && storyStep === 1 && (
         <div className={`${panel} p-4 sm:p-6 border-t-4 border-purple-600`}>
@@ -4727,15 +5841,39 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           <div className="space-y-3 mb-6">
             <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 1 · Identity</p>
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-              Who are you, and what do you want to do today?
+              Choose Your Role And Tell Us What You'd Like To Do Next.
             </h2>
             <p className="text-sm text-slate-600 max-w-2xl">
-              Select your role to get personalized recommendations and prompts.
+              Unlock the best results with a expertly curated prompt from the OneMindAI library.
             </p>
           </div>
 
-          {/* Role Silhouettes - Modern Horizontal Scroll */}
-          <div className="mb-6 relative">
+          {/* Company Banner - Select Company First */}
+          {/* COMMENTED OUT - Always use WESCO
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm font-semibold text-blue-700">Select Company</span>
+              {selectedCompany && (
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                  {selectedCompany.name}
+                </span>
+              )}
+            </div>
+            <CompanyBanner 
+              companies={COMPANIES}
+              onCompanySelect={setSelectedCompany}
+              selectedCompanyId={selectedCompany?.id}
+            />
+          </div>
+          */}
+
+          {/* Option 1: Role Selection */}
+          <div className="mb-6 relative animate-fade-in">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm font-semibold text-purple-700">
+                Option 1 - Select your role {selectedCompany ? `for ${selectedCompany.name}` : ''} to get curated prompts
+              </span>
+            </div>
             {/* Scroll Left Button - Always visible */}
             <button
               onClick={() => {
@@ -4762,9 +5900,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               </svg>
             </button>
             
-            {/* Gradient Fade Edges - subtle */}
-            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white/80 to-transparent pointer-events-none z-[5]"></div>
-            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white/80 to-transparent pointer-events-none z-[5]"></div>
+            {/* Gradient Fade Edges - removed to fix blur issue */}
             
             {/* Scrollable Container */}
             <div 
@@ -4772,7 +5908,20 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               className="flex items-center gap-3 overflow-x-auto scroll-smooth px-14 py-3 scrollbar-hide"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
-              {userRoles.filter(r => r.is_visible && r.is_enabled).map((role) => {
+              {userRoles
+                .filter(r => r.is_visible && r.is_enabled)
+                .sort((a, b) => {
+                  // Custom order: Sales first, then CEO, then CDIO, then alphabetical
+                  const order = ['Sales', 'CEO', 'CDIO'];
+                  const aIndex = order.indexOf(a.name);
+                  const bIndex = order.indexOf(b.name);
+                  
+                  if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+                  if (aIndex !== -1) return -1;
+                  if (bIndex !== -1) return 1;
+                  return a.name.localeCompare(b.name);
+                })
+                .map((role) => {
                 const isSelected = selectedRole === role.name;
                 return (
                   <button
@@ -4793,19 +5942,19 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all duration-300 min-w-[90px] flex-shrink-0 ${
                       isSelected 
                         ? 'bg-gradient-to-br from-purple-100 to-blue-100 border-2 border-purple-500 shadow-xl scale-110 -translate-y-1' 
-                        : 'bg-white border-2 border-gray-200 hover:border-purple-300 hover:bg-purple-50 hover:shadow-md hover:-translate-y-0.5'
+                        : 'bg-blue-50 border-2 border-blue-200 hover:border-purple-300 hover:bg-purple-50 hover:shadow-md hover:-translate-y-0.5'
                     }`}
                   >
                     {/* Silhouette Icon */}
                     <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
-                      isSelected ? 'bg-gradient-to-br from-purple-600 to-blue-600 shadow-lg' : 'bg-gray-100'
+                      isSelected ? 'bg-gradient-to-br from-purple-600 to-blue-600 shadow-lg' : 'bg-blue-100'
                     }`}>
-                      <svg className={`w-8 h-8 transition-colors duration-300 ${isSelected ? 'text-white' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-8 h-8 transition-colors duration-300 ${isSelected ? 'text-white' : 'text-blue-400'}`} fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                       </svg>
                     </div>
                     {/* Role Name */}
-                    <span className={`text-xs font-bold tracking-wide transition-colors duration-300 ${isSelected ? 'text-purple-900' : 'text-gray-600'}`}>
+                    <span className={`text-xs font-bold tracking-wide transition-colors duration-300 ${isSelected ? 'text-purple-900' : 'text-blue-700'}`}>
                       {role.name}
                     </span>
                     {/* Selection Indicator */}
@@ -4815,11 +5964,31 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                   </button>
                 );
               })}
+              
+              {/* Add Role Button */}
+              <button
+                onClick={() => {
+                  // TODO: Open add role modal
+                  alert('Add Role feature coming soon!');
+                }}
+                className="flex flex-col items-center gap-2 p-3 rounded-2xl transition-all duration-300 min-w-[90px] flex-shrink-0 bg-white border-2 border-dashed border-gray-300 hover:border-purple-400 hover:bg-purple-50 hover:shadow-md hover:-translate-y-0.5"
+              >
+                {/* Plus Icon */}
+                <div className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 bg-gray-50 group-hover:bg-purple-100">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </div>
+                {/* Label */}
+                <span className="text-xs font-bold tracking-wide text-gray-500">
+                  Add Role
+                </span>
+              </button>
             </div>
             
             {/* Scroll Indicator Dots */}
             <div className="flex justify-center gap-1.5 mt-3">
-              {Array.from({ length: Math.ceil(userRoles.filter(r => r.is_visible && r.is_enabled).length / 4) }).map((_, i) => (
+              {Array.from({ length: Math.ceil((userRoles.filter(r => r.is_visible && r.is_enabled).length + 1) / 4) }).map((_, i) => (
                 <button
                   key={i}
                   onClick={() => {
@@ -4830,6 +5999,21 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 />
               ))}
             </div>
+            
+            {/* Option 2: Custom Prompt - Show here when NO role is selected */}
+            {!selectedRole && (
+              <div className="mt-4 animate-fade-in">
+                <button
+                  onClick={() => {
+                    setPrompt("");
+                    setStoryStep(2);
+                  }}
+                  className="flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-900 transition-colors cursor-pointer"
+                >
+                  Option 2 - Start with a fresh, custom prompt
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Selected Role Details */}
@@ -4867,12 +6051,12 @@ My specific issue: [describe - losing clients after first project, can't grow ac
 
           {/* Focus Areas & Prompts Section */}
           {selectedRole && (
-            <div className="grid md:grid-cols-2 gap-4 animate-fade-in">
+            <div className="grid md:grid-cols-[1fr_3fr] gap-4 animate-fade-in">
               {/* Focus Areas Column */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                 <h3 className="font-semibold text-gray-900 text-sm mb-3 uppercase tracking-wide">Focus Areas</h3>
                 
-                <div className="space-y-1 max-h-[350px] overflow-y-auto">
+                <div className="space-y-1 max-h-[250px] overflow-y-auto">
                   {(ROLE_FOCUS_AREAS[selectedRole] || []).map((area, areaIndex) => (
                     <div key={area.id}>
                       {/* Focus Area Header - Expandable */}
@@ -4892,7 +6076,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                         }`}
                       >
                         <span className="font-medium text-xs">
-                          {String.fromCharCode(65 + areaIndex)}. {area.title}
+                          {area.title.match(/^[A-F]\./) ? area.title : `${String.fromCharCode(65 + areaIndex)}. ${area.title}`}
                         </span>
                         <span className={`text-purple-500 text-xs transition-transform duration-200 ${
                           selectedFocusArea?.id === area.id ? 'rotate-180' : ''
@@ -4914,13 +6098,13 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                                   template: prompt.template
                                 });
                               }}
-                              className={`block w-full text-left px-3 py-2 text-xs rounded-lg transition-colors ${
+                              className={`block w-full text-left px-3 py-2 text-xs rounded-lg transition-colors whitespace-nowrap overflow-hidden text-ellipsis ${
                                 selectedPromptPreview?.id === prompt.id
                                   ? 'bg-purple-600 text-white font-medium'
                                   : 'text-gray-600 hover:bg-purple-50 hover:text-purple-700'
                               }`}
                             >
-                              {String.fromCharCode(65 + areaIndex)}{promptIndex + 1}. {prompt.title}
+                              {prompt.title.match(/^[A-F]\d+\./) ? prompt.title : `${String.fromCharCode(65 + areaIndex)}${promptIndex + 1}. ${prompt.title}`}
                             </button>
                           ))}
                         </div>
@@ -4941,13 +6125,13 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     {/* Prompt Card */}
                     <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
                       <p className="text-sm font-semibold text-purple-900 mb-3">
-                        {selectedPromptPreview.title}
+                        {selectedPromptPreview.title.replace(/^([A-F]\d+)\. \1\./, '$1.')}
                       </p>
                       
-                      {/* Prompt Template */}
+                      {/* Prompt Template with highlighted placeholders */}
                       <div className="bg-white rounded-lg p-3 border border-purple-200 max-h-[180px] overflow-y-auto">
                         <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
-                          {selectedPromptPreview.template}
+                          {highlightPlaceholders(selectedPromptPreview.template, 'light')}
                         </p>
                       </div>
                     </div>
@@ -4962,15 +6146,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                         className="flex-1 px-4 py-2.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
                       >
                         Use This Prompt
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPrompt(selectedPromptPreview.template);
-                          setStoryStep(2);
-                        }}
-                        className="px-4 py-2.5 bg-white border border-purple-300 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-50 transition-colors"
-                      >
-                        Edit First
                       </button>
                     </div>
                   </div>
@@ -4987,14 +6162,32 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </div>
           )}
 
-          {/* Footer - Selected role and Next button */}
-          <div className="mt-6 flex justify-between items-center">
-            <div className="text-sm text-gray-500">
-              {selectedRole && (
-                <span>Selected: <span className="font-medium text-purple-700">{selectedRole}</span></span>
-              )}
+          {/* Footer - Selected role info */}
+          {selectedRole && (
+            <div className="mt-6 text-sm text-gray-500">
+              <span>Selected: <span className="font-medium text-purple-700">{selectedRole}</span></span>
             </div>
-          </div>
+          )}
+
+          {/* Option 2: Custom Prompt - Only shown when role is selected, at the very end */}
+          {selectedRole && (
+            <div className="mt-4 animate-fade-in">
+              <button
+                onClick={() => {
+                  // Clear any selected role and focus area, set empty prompt
+                  setSelectedRole("");
+                  setSelectedRoleDetails(null);
+                  setSelectedFocusArea(null);
+                  setSelectedPromptPreview(null);
+                  setPrompt("");
+                  setStoryStep(2);
+                }}
+                className="flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-900 transition-colors cursor-pointer"
+              >
+                Option 2 - Start with a fresh, custom prompt
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -5004,51 +6197,81 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           <div className="space-y-3">
             <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 2 · Customize Prompt</p>
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-              Review and customize your prompt
+              <span 
+                className={`cursor-pointer transition-all hover:text-purple-600 ${!showPerspective ? 'text-purple-700 underline decoration-purple-400 decoration-2 underline-offset-4' : ''}`}
+                onClick={() => setShowPerspective(false)}
+              >
+                Review And Customize Your Prompt
+              </span>
+              <span className="text-slate-400 mx-2">or</span>
+              <span 
+                className={`cursor-pointer transition-all hover:text-purple-600 ${showPerspective ? 'text-purple-700 underline decoration-purple-400 decoration-2 underline-offset-4' : ''}`}
+                onClick={() => setShowPerspective(true)}
+              >
+                Add Outside-In Perspective
+              </span>
             </h2>
             <p className="text-sm text-slate-600">
-              Edit the prompt below, fill in placeholders, and attach any relevant files.
+              {showPerspective 
+                ? "Get strategic insights from customer, competitor, and market perspectives."
+                : "Edit the prompt below, fill in placeholders, and attach any relevant files."
+              }
             </p>
           </div>
 
-          <div className="mt-6">
-            <label className="text-xs font-medium text-slate-500 mb-2 block">Your prompt</label>
-            <textarea
-              rows={10}
-              value={prompt}
-              onChange={(e) => handlePromptChange(e.target.value)}
-              placeholder="e.g., 'Summarise the top three strategic options I should put in my board pack next week.'"
-              className="w-full rounded-2xl border-2 border-slate-300 bg-slate-50 focus:bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
-            />
-            {/* Placeholder hint */}
-            {prompt.includes('[') && prompt.includes(']') && (
-              <div className="mt-2 p-3 bg-purple-50/50 rounded-lg border border-purple-100">
-                <p className="text-[11px] text-purple-600 mb-1 font-medium">📝 Tip: Replace the [bracketed placeholders] with your specific details</p>
-                <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
-                  {highlightPlaceholders(prompt, 'light')}
-                </p>
+          {/* Conditional Content: Prompt Editor or Outside-in Perspective */}
+          {!showPerspective ? (
+            <>
+              <div className="mt-6">
+                <label className="text-xs font-medium text-slate-500 mb-2 block">Your prompt</label>
+                <textarea
+                  rows={10}
+                  value={prompt}
+                  onChange={(e) => handlePromptChange(e.target.value)}
+                  placeholder="e.g., 'Summarise the top three strategic options I should put in my board pack next week.'"
+                  className="w-full rounded-2xl border-2 border-slate-300 bg-slate-50 focus:bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                />
+                {/* Placeholder hint */}
+                {prompt.includes('[') && prompt.includes(']') && (
+                  <div className="mt-2 p-3 bg-purple-50/50 rounded-lg border border-purple-100">
+                    <p className="text-[11px] text-purple-600 mb-1 font-medium">📝 Tip: Replace the [bracketed placeholders] with your specific details</p>
+                    <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
+                      {highlightPlaceholders(prompt, 'light')}
+                    </p>
+                  </div>
+                )}
+                {/* Character counter and warning */}
+                <div className="flex justify-between items-center text-xs mt-2">
+                  <span className="text-slate-500">
+                    {prompt.length.toLocaleString()} / {LIMITS.PROMPT_HARD_LIMIT.toLocaleString()} characters
+                  </span>
+                  {promptWarning && (
+                    <span className={prompt.length > LIMITS.PROMPT_HARD_LIMIT ? 'text-red-600 font-medium' : 'text-orange-600 font-medium'}>
+                      {promptWarning}
+                    </span>
+                  )}
+                </div>
               </div>
-            )}
-            {/* Character counter and warning */}
-            <div className="flex justify-between items-center text-xs mt-2">
-              <span className="text-slate-500">
-                {prompt.length.toLocaleString()} / {LIMITS.PROMPT_HARD_LIMIT.toLocaleString()} characters
-              </span>
-              {promptWarning && (
-                <span className={prompt.length > LIMITS.PROMPT_HARD_LIMIT ? 'text-red-600 font-medium' : 'text-orange-600 font-medium'}>
-                  {promptWarning}
-                </span>
-              )}
-            </div>
-          </div>
 
-          {/* File Upload with CRM/Collaboration Integrations */}
-          <div className="mt-6">
-            <FileUploadZone
-              files={uploadedFiles}
-              onFilesChange={setUploadedFiles}
-            />
-          </div>
+              {/* File Upload with CRM/Collaboration Integrations */}
+              <div className="mt-6">
+                <FileUploadZone
+                  files={uploadedFiles}
+                  onFilesChange={setUploadedFiles}
+                />
+              </div>
+            </>
+          ) : (
+            /* Outside-in Perspective Section */
+            <div className="mt-6">
+              <FileUploadZone
+                files={uploadedFiles}
+                onFilesChange={setUploadedFiles}
+                defaultTab="perspective"
+                perspectiveOnly={true}
+              />
+            </div>
+          )}
 
           {/* Navigation Buttons */}
           <div className="mt-6 flex justify-between gap-2">
@@ -5079,49 +6302,92 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           <div className={`${panel} p-4 sm:p-6 border-t-4 border-purple-600`}>
             <div className="space-y-3">
               <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 3 · Engines</p>
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-                    Choose your AI engines to run or Run the recommended engines
-                  </h2>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Select multiple engines to get diverse perspectives. OneMind will run them in parallel.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowEngineRecommendations(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-md hover:shadow-lg whitespace-nowrap"
-                >
-                  <span className="font-medium text-sm">Let us select for you</span>
-                </button>
+              <div className="flex-1">
+                <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
+                  <span 
+                    className={`cursor-pointer transition-all hover:text-purple-600 ${!showRecommendedDropdown ? 'text-purple-700 underline decoration-purple-400 decoration-2 underline-offset-4' : ''}`}
+                    onClick={() => setShowRecommendedDropdown(false)}
+                  >
+                    Choose your AI engines
+                  </span>
+                  <span className="text-slate-400 mx-2">or</span>
+                  <span 
+                    className={`cursor-pointer transition-all hover:text-purple-600 ${showRecommendedDropdown ? 'text-purple-700 underline decoration-purple-400 decoration-2 underline-offset-4' : ''}`}
+                    onClick={() => {
+                      setShowRecommendedDropdown(true);
+                      // Auto-select recommended engines: ChatGPT, DeepSeek, Mistral, Perplexity, Gemini, Claude
+                      const recommendedIds = ['openai', 'deepseek', 'mistral', 'perplexity', 'gemini', 'anthropic'];
+                      const newSelected: Record<string, boolean> = {};
+                      engines.forEach(e => { newSelected[e.id] = recommendedIds.includes(e.id); });
+                      setSelected(newSelected);
+                    }}
+                  >
+                    Run recommended engines
+                  </span>
+                </h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  {showRecommendedDropdown 
+                    ? "We've selected the top 5 engines for balanced, high-quality responses."
+                    : "Select multiple engines to get diverse perspectives. OneMind will run them in parallel."
+                  }
+                </p>
               </div>
+              
+              {/* Recommended Engines Dropdown - Collapsible */}
+              {showRecommendedDropdown && (
+                <details open className="mt-4 animate-fade-in">
+                  <summary className="cursor-pointer list-none">
+                    <div className="flex items-center justify-between p-3 bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 border border-purple-200 rounded-xl hover:border-purple-300 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-purple-900 text-sm">OneMindAI Recommended</h4>
+                          <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 text-[10px] font-bold rounded-full">BEST</span>
+                        </div>
+                      </div>
+                      <svg className="w-5 h-5 text-purple-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </summary>
+                  <div className="mt-2 p-4 bg-white border border-purple-100 rounded-xl">
+                    <p className="text-sm text-slate-700 leading-relaxed">
+                      Based on your prompt, we recommend <strong>{engines.slice(0, 6).map(e => e.name).join(', ')}</strong> — these engines are optimized for your query with the best balance of execution speed (~15-30 sec) and cost-efficiency, providing diverse perspectives from {[...new Set(engines.slice(0, 6).map(e => e.provider))].join(', ')}.
+                    </p>
+                    <p className="mt-2 text-xs text-purple-600 bg-purple-50 px-3 py-2 rounded-lg border border-purple-200">
+                      <strong>Why these engines?</strong> Based on your prompt analysis, we selected engines that offer the fastest execution speed for your command type while maintaining the lowest cost per token — ensuring optimal performance without overspending.
+                    </p>
+                  </div>
+                </details>
+              )}
             </div>
 
-            {/* Dynamic Estimated Cost Calculator */}
+            {/* Dynamic Estimated Cost Calculator - Uses same totals as Run Summary */}
             {(() => {
               const selectedCount = Object.values(selected).filter(Boolean).length;
               const inputChars = prompt.length;
               
-              // Use the same estimateTokens function as run summary (tiktoken as default)
-              const inputTokens = estimateTokens(prompt, 'tiktoken');
-              
-              // Estimate output: typical AI response is 2-3x input for short prompts, less for long
-              // This matches what run summary calculates after actual response
-              const estimatedOutputTokens = Math.min(4000, Math.max(100, Math.round(inputTokens * 2)));
-              
-              const { totalCost, breakdown } = calculateEstimatedCost(engines, selected, inputTokens, estimatedOutputTokens);
-              
               if (selectedCount === 0) return null;
+              
+              // Use totals from computePreview (same as Run Summary uses)
+              // totals.max = sum of maxSpend for all selected engines
+              // totals.inTok = sum of input tokens, totals.outTok = sum of output cap
               
               return (
                 <div className="mt-4 px-4 py-2.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-6">
-                      <div>
-                        <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-wide">Est. Cost</p>
-                        <p className="text-lg font-bold text-emerald-800">
-                          ${totalCost < 0.01 ? totalCost.toFixed(5) : totalCost.toFixed(4)}
-                        </p>
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-wide">Est. Cost</p>
+                          <p className="text-lg font-bold text-emerald-800">
+                            ${totals.realistic < 0.01 ? totals.realistic.toFixed(5) : totals.realistic.toFixed(4)}
+                          </p>
+                        </div>
                       </div>
                       <div className="h-8 w-px bg-emerald-200"></div>
                       <div className="flex items-center gap-4 text-xs">
@@ -5131,34 +6397,51 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                         </div>
                         <div>
                           <span className="text-slate-500">In:</span>
-                          <span className="font-semibold text-slate-700 ml-1">{inputTokens.toLocaleString()} <span className="text-slate-400">({inputChars} chars)</span></span>
+                          <span className="font-semibold text-slate-700 ml-1">{totals.inTok.toLocaleString()} <span className="text-slate-400">({inputChars} chars)</span></span>
                         </div>
                         <div>
                           <span className="text-slate-500">Est. Out:</span>
-                          <span className="font-semibold text-slate-700 ml-1">~{estimatedOutputTokens.toLocaleString()}/engine</span>
+                          <span className="font-semibold text-slate-700 ml-1">~{totals.realisticOutTok.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      {/* Transparency Logo - Circular, Centered after Est. Out */}
+                      <div className="relative group flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-emerald-300 bg-white flex items-center justify-center shadow-sm">
+                          <img 
+                            src="/src/components/Logos/Generated image (1).png" 
+                            alt="Transparent Pricing" 
+                            className="w-8 h-8 object-contain cursor-help"
+                          />
+                        </div>
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20 shadow-lg">
+                          <div className="font-semibold mb-0.5">Transparent Pricing</div>
+                          <div className="text-slate-300">We show real-time cost estimates with no hidden fees</div>
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {breakdown.length > 0 && (
+                      {previews.length > 0 && (
                         <details className="text-xs">
                           <summary className="text-emerald-600 cursor-pointer hover:text-emerald-700 font-medium">
                             Breakdown
                           </summary>
                           <div className="absolute right-4 mt-1 p-2 bg-white border border-emerald-200 rounded-lg shadow-lg z-10 grid grid-cols-2 gap-1.5 min-w-[200px]">
-                            {breakdown.map((item) => (
-                              <div key={item.engine} className="flex justify-between gap-2 px-2 py-1 bg-emerald-50 rounded text-[11px]">
-                                <span className="text-slate-600 truncate">{item.engine}</span>
-                                <span className="text-emerald-700 font-medium">${item.cost < 0.0001 ? item.cost.toFixed(5) : item.cost.toFixed(4)}</span>
+                            {previews.map((item) => (
+                              <div key={item.e.id} className="flex justify-between gap-2 px-2 py-1 bg-emerald-50 rounded text-[11px]">
+                                <span className="text-slate-600 truncate">{item.e.name}</span>
+                                <span className="text-emerald-700 font-medium">${item.minSpend < 0.0001 ? item.minSpend.toFixed(5) : item.minSpend.toFixed(4)}</span>
                               </div>
                             ))}
                           </div>
                         </details>
                       )}
                       <button
-                        onClick={() => setShowBalanceManager(true)}
+                        onClick={() => {}}
                         className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors font-medium"
+                        disabled
                       >
                         Manage Balances
                       </button>
@@ -5168,9 +6451,9 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               );
             })()}
 
-            {/* All Engines - Pills or Expanded Cards */}
+            {/* All Engines - Pills or Expanded Cards (filtered by admin-disabled providers) */}
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
-              {engines.map((engine) => {
+              {visibleEngines.map((engine) => {
                 const isSelected = selected[engine.id];
                 const isExpanded = expandedEngines.has(engine.id);
                 const brandColor = providerStyles[engine.provider] || 'bg-slate-700';
@@ -5196,7 +6479,14 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                       }`}
                       onClick={toggleExpand}
                     >
-                      <span>{engine.name}</span>
+                      <span className="flex items-center gap-1.5">
+                        {/* Health Status Indicator */}
+                        <span className="relative group">
+                          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10">Healthy</span>
+                        </span>
+                        {engine.name}
+                      </span>
                       <span className="text-xs opacity-75">Context {(engine.contextLimit / 1000).toFixed(0)}k • {engine.tokenizer}</span>
                       <div className="ml-auto flex items-center gap-1">
                         <div 
@@ -5232,11 +6522,11 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 const P = estimateTokens(prompt, engine.tokenizer);
                 const minTokens = Math.max(P, 100);
                 const nowIn = Math.min(minTokens, engine.contextLimit);
-                const outCap = computeOutCap(engine, nowIn);
+                const outCap = computeOutCap(engine, nowIn, providerConfig);
                 const minOut = Math.max(200, Math.floor(0.35 * outCap));
                 
-                const calculatedMinSpend = actualPricing ? (nowIn / 1_000_000) * actualPricing.in + (minOut / 1_000_000) * actualPricing.out : 0;
-                const calculatedMaxSpend = actualPricing ? (nowIn / 1_000_000) * actualPricing.in + (outCap / 1_000_000) * actualPricing.out : 0;
+                const calculatedMinSpend = actualPricing ? (nowIn / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * actualPricing.in + (minOut / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * actualPricing.out : 0;
+                const calculatedMaxSpend = actualPricing ? (nowIn / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * actualPricing.in + (outCap / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * actualPricing.out : 0;
                 const minSpend = Math.max(calculatedMinSpend, 0.01);
                 const maxSpend = Math.max(calculatedMaxSpend, 0.01);
                 
@@ -5301,7 +6591,45 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                           );
                         })}
                       </select>
+                      {/* Model Info Display */}
+                      {modelInfo[engine.selectedVersion] && (
+                        <p className="text-[10px] text-slate-500 mt-1 italic">
+                          ℹ️ {modelInfo[engine.selectedVersion]}
+                        </p>
+                      )}
                     </div>
+                    
+                    {/* Engine Info Text (Admin-editable from Supabase) */}
+                    {engineInfoText[engine.id] && (
+                      <div className="w-full mt-2 p-2.5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg border border-slate-200">
+                        <div className="flex items-start gap-2">
+                          {engineInfoText[engine.id].badge && (
+                            <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${
+                              engineInfoText[engine.id].badgeColor === 'blue' ? 'bg-blue-100 text-blue-700' :
+                              engineInfoText[engine.id].badgeColor === 'purple' ? 'bg-purple-100 text-purple-700' :
+                              engineInfoText[engine.id].badgeColor === 'green' ? 'bg-green-100 text-green-700' :
+                              engineInfoText[engine.id].badgeColor === 'orange' ? 'bg-orange-100 text-orange-700' :
+                              engineInfoText[engine.id].badgeColor === 'red' ? 'bg-red-100 text-red-700' :
+                              engineInfoText[engine.id].badgeColor === 'cyan' ? 'bg-cyan-100 text-cyan-700' :
+                              'bg-slate-100 text-slate-700'
+                            }`}>
+                              {engineInfoText[engine.id].badge}
+                            </span>
+                          )}
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-slate-800">{engineInfoText[engine.id].tagline}</p>
+                            <p className="text-[10px] text-slate-600 mt-1">{engineInfoText[engine.id].description}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {engineInfoText[engine.id].bestFor.slice(0, 3).map((use: string, i: number) => (
+                            <span key={i} className="px-1.5 py-0.5 text-[9px] bg-white border border-slate-200 rounded text-slate-600">
+                              {use}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
                     {/* API Key Field */}
                     <div className="w-full mt-2">
@@ -5433,13 +6761,29 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     
                     {/* Min/Max Spend Summary - Always Visible */}
                     <div className="w-full mt-2 pt-2 border-t border-slate-200">
-                      <div className="text-xs text-slate-700">
-                        <span className="font-medium">Min spend</span> <span className="font-bold text-green-600">${minSpend.toFixed(2)}</span> • 
-                        <span className="font-medium ml-2">Max</span> <span className="font-bold text-orange-600">${maxSpend.toFixed(2)}</span> • 
-                        <span className="font-medium ml-2">ETA</span> <span className="font-bold">{timeLabel(nowIn, outCap)}</span> • 
-                        <span className="font-medium ml-2">Outcome:</span> <span className="font-bold">{outcomeLabel(outCap)}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs text-slate-700">
+                          <span className="font-medium">Min spend</span> <span className="font-bold text-green-600">${minSpend.toFixed(2)}</span> • 
+                          <span className="font-medium ml-2">Max</span> <span className="font-bold text-orange-600">${maxSpend.toFixed(2)}</span> • 
+                          <span className="font-medium ml-2">ETA</span> <span className="font-bold">{timeLabel(nowIn, outCap)}</span> • 
+                          <span className="font-medium ml-2">Outcome:</span> <span className="font-bold">{outcomeLabel(outCap)}</span>
+                        </div>
+                        {/* Transparency Logo */}
+                        <div className="relative group flex items-center justify-center">
+                          <div className="w-6 h-6 rounded-full overflow-hidden border border-emerald-300 bg-white flex items-center justify-center">
+                            <img 
+                              src="/src/components/Logos/Generated image (1).png" 
+                              alt="Transparent Pricing" 
+                              className="w-5 h-5 object-contain cursor-help"
+                            />
+                          </div>
+                          {/* Tooltip */}
+                          <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20 shadow-lg">
+                            <div className="font-semibold mb-0.5">Transparent Pricing</div>
+                            <div className="text-slate-300">Real-time cost estimates with no hidden fees</div>
+                          </div>
+                        </div>
                       </div>
-                      {warn && liveMode ? <div className="text-amber-700 text-[11px] mt-1">⚠️ {warn}</div> : null}
                     </div>
                     
                     {/* Token and Cost Info - Only show when Technical toggle is ON */}
@@ -5490,11 +6834,13 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-2 w-full justify-between">
+              </div>
+
+              {/* Action Buttons - Below Run Summary, Extreme Left/Right */}
+              <div className="flex justify-between items-center w-full mt-6 px-2">
                 <button
                   onClick={() => setStoryStep(2)}
-                  className="px-4 py-2 rounded-full border-2 border-slate-300 text-sm text-slate-700 bg-white hover:border-slate-400"
+                  className="px-5 py-2.5 rounded-full border-2 border-slate-300 text-sm text-slate-700 bg-white hover:border-slate-400 hover:bg-slate-50 transition-all"
                 >
                   Back
                 </button>
@@ -5504,7 +6850,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     runAll();
                   }}
                   disabled={Object.keys(selected).filter(k => selected[k]).length === 0}
-                  className={`px-6 py-2 rounded-full text-sm font-medium shadow-sm transition ${
+                  className={`px-8 py-2.5 rounded-full text-sm font-medium shadow-sm transition ${
                     Object.keys(selected).filter(k => selected[k]).length > 0
                       ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
                       : "bg-slate-200 text-slate-400 cursor-not-allowed"
@@ -5513,7 +6859,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                   Run Engines
                 </button>
               </div>
-            </div>
+            
 
             {/* 🧪 MOCK ERROR TESTING PANEL - Story Mode (DISABLED)
             <div className="mt-4 p-3 bg-amber-50 border border-amber-300 rounded-lg">
@@ -5942,23 +7288,30 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                           );
                         })()}
                       </div>
-                    ) : content ? (
-                      <SelectableMarkdownRenderer 
-                        content={content} 
-                        engineName={engine.name}
-                        onComponentSelect={(component) => {
-                          setSelectedComponents(prev => [...prev, component]);
-                        }}
-                        onComponentDeselect={(id) => {
-                          setSelectedComponents(prev => prev.filter(c => c.id !== id));
-                        }}
-                        selectedIds={selectedComponents.map(c => c.id)}
-                        isStreaming={streaming}
-                      />
+                    ) : content || streaming ? (
+                      <div>
+                        <SelectableMarkdownRenderer 
+                          content={content || ''} 
+                          engineName={engine.name}
+                          onComponentSelect={(component) => {
+                            setSelectedComponents(prev => [...prev, component]);
+                          }}
+                          onComponentDeselect={(id) => {
+                            setSelectedComponents(prev => prev.filter(c => c.id !== id));
+                          }}
+                          selectedIds={selectedComponents.map(c => c.id)}
+                          isStreaming={streaming}
+                        />
+                        {streaming && !content && (
+                          <div className="flex items-center gap-2 py-4 text-purple-600">
+                            <span className="animate-pulse">▌</span>
+                            <span className="text-sm">Processing Request...</span>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <div className="text-4xl mb-3">⏳</div>
-                        <p className="text-slate-400 italic">Waiting for response...</p>
+                        <TextDotsLoader text="Processing request" size="lg" className="text-purple-600" />
                       </div>
                     )}
                   </div>
@@ -6161,12 +7514,19 @@ My specific issue: [describe - losing clients after first project, can't grow ac
 
                         {/* Response Content */}
                         <div className="prose prose-sm max-w-none pl-4">
-                          {content ? (
-                            <EnhancedMarkdownRenderer content={content} isStreaming={streaming} />
+                          {content || streaming ? (
+                            <div>
+                              <EnhancedMarkdownRenderer content={content || ''} isStreaming={streaming} />
+                              {streaming && !content && (
+                                <div className="flex items-center gap-2 py-4 text-purple-600">
+                                  <span className="animate-pulse">▌</span>
+                                  <span className="text-sm">Processing Request...</span>
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            <div className="flex items-center gap-2 py-4 text-slate-400 italic">
-                              <span className="text-2xl">⏳</span>
-                              <span>Waiting for response...</span>
+                            <div className="flex items-center gap-2 py-4">
+                              <TextDotsLoader text="Processing request" size="md" className="text-purple-600" />
                             </div>
                           )}
                         </div>
@@ -6250,13 +7610,22 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                               </span>
                               <span className="text-xs text-slate-400">#{index + 1}</span>
                             </div>
-                            <button
-                              onClick={() => setSelectedComponents(prev => prev.filter(c => c.id !== component.id))}
-                              className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-700 text-sm transition"
-                              title="Remove"
-                            >
-                              ✕
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {/* Send to HubSpot Button */}
+                              <div className="opacity-0 group-hover:opacity-100 transition">
+                                <HubSpotSendButton 
+                                  componentContent={component.content}
+                                  componentType={component.type}
+                                />
+                              </div>
+                              <button
+                                onClick={() => setSelectedComponents(prev => prev.filter(c => c.id !== component.id))}
+                                className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-700 text-sm transition"
+                                title="Remove"
+                              >
+                                ✕
+                              </button>
+                            </div>
                           </div>
 
                           {/* Component Content */}
@@ -6484,9 +7853,13 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                               <tr>
                                 <td className="py-2 px-3 text-slate-700">Status</td>
                                 <td className="py-2 px-3" colSpan={3}>
-                                  <span className={result?.success ? 'text-green-600' : 'text-red-600'}>
-                                    {result ? result.reason : 'Waiting for response...'}
-                                  </span>
+                                  {result ? (
+                                    <span className={result.success ? 'text-green-600' : 'text-red-600'}>
+                                      {result.reason}
+                                    </span>
+                                  ) : (
+                                    <TextDotsLoader text="Processing" size="sm" className="text-purple-600" />
+                                  )}
                                 </td>
                               </tr>
                             </tbody>
@@ -6688,17 +8061,20 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               <details>
                 <summary className="cursor-pointer font-semibold text-slate-900 flex items-center justify-between">
                   <span>📈 Run Summary (Actuals)</span>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const combined = results.map(r => `# ${r.engineName} · ${r.version}\n\n${r.responsePreview || "(no text)"}`).join("\n\n---\n\n");
-                      setCompiledDoc(combined);
-                    }}
-                    className="px-3 py-1.5 rounded-lg border text-xs bg-white hover:bg-slate-50 transition"
-                  >
-                    Compile all responses
-                  </button>
+                  <div className="relative group flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-full overflow-hidden border border-emerald-300 bg-white flex items-center justify-center">
+                      <img 
+                        src="/src/components/Logos/Generated image (1).png" 
+                        alt="Transparent Pricing" 
+                        className="w-5 h-5 object-contain cursor-help"
+                      />
+                    </div>
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20 shadow-lg">
+                      <div className="font-semibold mb-0.5">Transparent Pricing</div>
+                      <div className="text-slate-300">Real-time cost estimates with no hidden fees</div>
+                    </div>
+                  </div>
                 </summary>
 
               <div className="mt-3">
@@ -6774,32 +8150,162 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 </table>
               </div>
 
-              {/* Cost Comparison */}
+              {/* Cost Comparison - Grid Layout like Summary */}
               <div className="mt-4 pt-4 border-t">
-                <div className="text-sm font-medium mb-2">💰 Cost Analysis</div>
-                <div className="flex flex-wrap items-center gap-4 text-xs">
-                  <div>
-                    <span className="text-slate-600">Total Estimated:</span>
-                    <span className="ml-2 font-semibold">${totals.max.toFixed(4)}</span>
+                <div className="text-sm font-medium mb-3">💰 Cost Analysis</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
+                  <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                    <div className="text-slate-500 text-xs">Estimated</div>
+                    <div className="font-semibold text-base sm:text-lg">${totals.realistic.toFixed(4)}</div>
+                    <div className="text-xs text-slate-400">USD</div>
                   </div>
-                  <div>
-                    <span className="text-slate-600">Actual Cost Incurred:</span>
-                    <span className="ml-2 font-semibold text-emerald-600">
+                  <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                    <div className="text-slate-500 text-xs">Actual Cost</div>
+                    <div className="font-semibold text-base sm:text-lg text-emerald-600">
                       ${results.reduce((sum, r) => sum + r.costUSD, 0).toFixed(4)}
-                    </span>
+                    </div>
+                    <div className="text-xs text-slate-400">USD</div>
                   </div>
-                  <div>
-                    {results.reduce((sum, r) => sum + r.costUSD, 0) < totals.max ? (
-                      <span className="text-green-600 text-xs">✓ Under estimate</span>
-                    ) : results.reduce((sum, r) => sum + r.costUSD, 0) > totals.max ? (
-                      <span className="text-red-600 text-xs">⚠ Over estimate</span>
-                    ) : (
-                      <span className="text-blue-600 text-xs">= Exact match</span>
-                    )}
+                  <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                    <div className="text-slate-500 text-xs">Savings</div>
+                    <div className="font-semibold text-base sm:text-lg text-green-600">
+                      ${Math.max(0, totals.realistic - results.reduce((sum, r) => sum + r.costUSD, 0)).toFixed(4)}
+                    </div>
+                    <div className="text-xs text-slate-400">USD</div>
+                  </div>
+                  <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                    <div className="text-slate-500 text-xs">Cost/Engine</div>
+                    <div className="font-semibold text-base sm:text-lg">
+                      ${results.length > 0 ? (results.reduce((sum, r) => sum + r.costUSD, 0) / results.length).toFixed(4) : '0.0000'}
+                    </div>
+                    <div className="text-xs text-slate-400">avg</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Budget Tracking Table */}
+              <div className="mt-4 pt-4 border-t">
+                <div className="text-sm font-medium mb-3">Budget Tracking</div>
+                <div className="overflow-auto">
+                  <table className="w-full text-sm border-collapse border">
+                    <thead className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                      <tr>
+                        <th className="py-2 px-3 text-left border">Metric</th>
+                        <th className="py-2 px-3 text-right border">Amount ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b">
+                        <td className="py-2 px-3 border">Total Credits</td>
+                        <td className="py-2 px-3 text-right font-semibold border">${totalBudget.toFixed(2)}</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-2 px-3 border">Cost Estimated (This Run)</td>
+                        <td className="py-2 px-3 text-right border">${totals.realistic.toFixed(4)}</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-2 px-3 border">Cost Incurred (This Run)</td>
+                        <td className="py-2 px-3 text-right text-emerald-600 font-semibold border">${results.reduce((sum, r) => sum + r.costUSD, 0).toFixed(4)}</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-2 px-3 border">Total Spent (All Runs)</td>
+                        <td className="py-2 px-3 text-right text-orange-600 font-semibold border">${totalSpent.toFixed(4)}</td>
+                      </tr>
+                      <tr className="bg-slate-50">
+                        <td className="py-2 px-3 font-semibold border">Balance Remaining</td>
+                        <td className={`py-2 px-3 text-right font-bold border ${(totalBudget - totalSpent) < 5 ? 'text-red-600' : 'text-green-600'}`}>
+                          ${(totalBudget - totalSpent).toFixed(4)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-2 text-xs text-slate-600">
+                  Note: Real calculation is based on actual cost incurred by all selected models. Budget can be adjusted in settings.
+                </div>
+                
+                {/* Business Statement */}
+                <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-base font-medium text-blue-900 mb-2">💼 Business Forecast</div>
+                  <div className="text-sm text-blue-800">
+                    {(() => {
+                      const balance = totalBudget - totalSpent;
+                      const avgCostPerRun = results.length > 0 ? results.reduce((sum, r) => sum + r.costUSD, 0) / results.length : 0;
+                      const allEnginesCost = selectedEngines.reduce((sum, e) => {
+                        const p = previews.find(pp => pp.e.id === e.id);
+                        return sum + (p?.maxSpend || 0);
+                      }, 0);
+                      
+                      if (avgCostPerRun > 0) {
+                        const promptsWithAllEngines = allEnginesCost > 0 ? Math.floor(balance / allEnginesCost) : 0;
+                        const promptsWithSingleEngine = Math.floor(balance / avgCostPerRun);
+                        
+                        return (
+                          <div>
+                            <div className="mb-2">
+                              <strong>With the remaining balance (${balance.toFixed(2)}), you can run:</strong>
+                            </div>
+                            <div className="ml-4 mb-1">
+                              • <strong>{promptsWithAllEngines}</strong> more prompts with all selected engines (${allEnginesCost.toFixed(4)} each)
+                            </div>
+                            <div className="ml-4">
+                              • <strong>{promptsWithSingleEngine}</strong> more prompts with a single engine (${avgCostPerRun.toFixed(4)} each on average)
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div>
+                            <strong>With the remaining balance (${balance.toFixed(2)}), you have full budget available for future prompts.</strong>
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
               </div>
               </div>
+              </details>
+            </div>
+          )}
+
+          {/* Actions Tab - Send To Integrations */}
+          {results.length > 0 && (
+            <div className="mt-6 bg-white rounded-xl border-2 border-blue-500 p-4">
+              <details open>
+                <summary className="cursor-pointer font-semibold text-slate-900 flex items-center justify-between">
+                  <span>Actions - Send To</span>
+                </summary>
+                <div className="mt-4">
+                  {/* Use FileUploadZone component for integrations */}
+                  <FileUploadZone 
+                    files={uploadedFiles} 
+                    onFilesChange={setUploadedFiles}
+                    integrationsOnly={true}
+                  />
+                </div>
+              </details>
+            </div>
+          )}
+
+          {/* Next Steps Tab */}
+          {results.length > 0 && (
+            <div className="mt-6 bg-white rounded-xl border-2 border-purple-500 p-4">
+              <details open>
+                <summary className="cursor-pointer font-semibold text-slate-900 flex items-center justify-between">
+                  <span>Next Steps</span>
+                </summary>
+                <div className="mt-4 flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      // TODO: Open OneMind AI Recommendation panel
+                      alert('OneMind AI Recommendation\n\nStrategic recommendations based on your data analysis will appear here.');
+                    }}
+                    className="px-4 py-2 text-sm border-2 border-purple-300 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-400 transition-all font-medium"
+                  >
+                    OneMind AI Recommendation
+                  </button>
+                </div>
               </details>
             </div>
           )}
@@ -7587,6 +9093,9 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         )}
         
         <textarea 
+          data-debug-name="Prompt Input"
+          data-debug-file="OneMindAI.tsx"
+          data-debug-handler="handlePromptChange"
           className="w-full h-40 p-3 rounded-xl border focus:outline-none text-[15px] transition-all" 
           placeholder="Enter your research question... (Paste screenshots with Ctrl+V or drag & drop files here)" 
           value={prompt} 
@@ -7667,6 +9176,9 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         {/* Generate Button Under Prompt - Right Side */}
         <div className="mt-3 flex justify-end">
           <button 
+            data-debug-name="Generate"
+            data-debug-file="OneMindAI.tsx"
+            data-debug-handler="runAll"
             onClick={runAll} 
             disabled={isRunning || selectedEngines.length===0 || !prompt.trim()} 
             className="px-12 py-2 rounded-xl bg-[#0B1F3B] text-white text-sm font-medium disabled:opacity-50 hover:bg-[#0d2a52] transition-colors"
@@ -7830,9 +9342,9 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           </div>
         </div>
         
-        {/* All Engines - Pills or Expanded Cards */}
+        {/* All Engines - Pills or Expanded Cards (filtered by admin-disabled providers) */}
         <div className="grid md:grid-cols-2 gap-3 sm:gap-4 items-start">
-          {engines.map(engine => {
+          {visibleEngines.map(engine => {
             const isSelected = selected[engine.id];
             const isExpanded = expandedEngines.has(engine.id);
             const brandColor = providerStyles[engine.provider] || 'bg-slate-700';
@@ -7895,11 +9407,11 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             const P = estimateTokens(prompt, e.tokenizer);
             const minTokens = Math.max(P, 100);
             const nowIn = Math.min(minTokens, e.contextLimit);
-            const outCap = computeOutCap(e, nowIn);
+            const outCap = computeOutCap(e, nowIn, providerConfig);
             const minOut = Math.max(200, Math.floor(0.35 * outCap));
             
-            const calculatedMinSpend = actualPricing ? (nowIn / 1_000_000) * actualPricing.in + (minOut / 1_000_000) * actualPricing.out : 0;
-            const calculatedMaxSpend = actualPricing ? (nowIn / 1_000_000) * actualPricing.in + (outCap / 1_000_000) * actualPricing.out : 0;
+            const calculatedMinSpend = actualPricing ? (nowIn / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * actualPricing.in + (minOut / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * actualPricing.out : 0;
+            const calculatedMaxSpend = actualPricing ? (nowIn / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * actualPricing.in + (outCap / INDUSTRY_STANDARDS.TOKENS_PER_MILLION) * actualPricing.out : 0;
             const minSpend = Math.max(calculatedMinSpend, 0.01);
             const maxSpend = Math.max(calculatedMaxSpend, 0.01);
 
@@ -7995,8 +9507,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     {/* Fetch Balance Button */}
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
+                      onClick={(ev) => {
+                        ev.stopPropagation();
                         fetchBalance(e);
                       }}
                       className="px-2 py-1 text-xs border rounded hover:bg-blue-50 text-blue-600 border-blue-300"
@@ -8096,11 +9608,28 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 
                 {/* Min/Max Spend Summary - Always Visible */}
                 <div className="w-full mt-2 pt-2 border-t border-slate-200">
-                  <div className="text-xs text-slate-700">
-                    <span className="font-medium">Min spend</span> <span className="font-bold text-green-600">${minSpend.toFixed(2)}</span> • 
-                    <span className="font-medium ml-2">Max</span> <span className="font-bold text-orange-600">${maxSpend.toFixed(2)}</span> • 
-                    <span className="font-medium ml-2">ETA</span> <span className="font-bold">{timeLabel(nowIn, outCap)}</span> • 
-                    <span className="font-medium ml-2">Outcome:</span> <span className="font-bold">{outcomeLabel(outCap)}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-slate-700">
+                      <span className="font-medium">Min spend</span> <span className="font-bold text-green-600">${minSpend.toFixed(2)}</span> • 
+                      <span className="font-medium ml-2">Max</span> <span className="font-bold text-orange-600">${maxSpend.toFixed(2)}</span> • 
+                      <span className="font-medium ml-2">ETA</span> <span className="font-bold">{timeLabel(nowIn, outCap)}</span> • 
+                      <span className="font-medium ml-2">Outcome:</span> <span className="font-bold">{outcomeLabel(outCap)}</span>
+                    </div>
+                    {/* Transparency Logo */}
+                    <div className="relative group flex items-center justify-center">
+                      <div className="w-6 h-6 rounded-full overflow-hidden border border-emerald-300 bg-white flex items-center justify-center">
+                        <img 
+                          src="/src/components/Logos/Generated image (1).png" 
+                          alt="Transparent Pricing" 
+                          className="w-5 h-5 object-contain cursor-help"
+                        />
+                      </div>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20 shadow-lg">
+                        <div className="font-semibold mb-0.5">Transparent Pricing</div>
+                        <div className="text-slate-300">Real-time cost estimates with no hidden fees</div>
+                      </div>
+                    </div>
                   </div>
                   {warn && liveMode ? <div className="text-amber-700 text-[11px] mt-1">⚠️ {warn}</div> : null}
                 </div>
@@ -8503,7 +10032,15 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           <div className="sm:hidden space-y-3">
             {results.map(r => (
               <div key={r.engineId} className="rounded-xl border p-3">
-                <div className="font-medium">{r.engineName} · {r.version}</div>
+                <div className="font-medium flex items-center gap-2">
+                  {r.engineName} · {r.version}
+                  <span className="relative group">
+                    <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10">Verified Engine</span>
+                  </span>
+                </div>
                 <div className="text-[13px] mt-1">In: {r.tokensIn.toLocaleString()} • Out: {r.tokensOut.toLocaleString()} • ${r.costUSD.toFixed(4)} • {(r.durationMs/1000).toFixed(1)}s</div>
                 <div className="text-[12px] text-slate-600 mt-1">{r.success ? '✓ Success' : `✗ ${r.error || 'Failed'}`}</div>
                 {r.warnings?.length ? <div className="text-[12px] text-amber-700 mt-1">{r.warnings.join('; ')}</div> : null}
@@ -8529,7 +10066,17 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               <tbody>
                 {results.map(r => (
                   <tr key={r.engineId} className="border-b align-top">
-                    <td className="py-2 pr-3">{r.engineName}</td>
+                    <td className="py-2 pr-3">
+                      <span className="flex items-center gap-1.5">
+                        {r.engineName}
+                        <span className="relative group">
+                          <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10">Verified Engine</span>
+                        </span>
+                      </span>
+                    </td>
                     <td className="py-2 pr-3">{r.version}</td>
                     <td className="py-2 pr-3 text-right">{r.tokensIn.toLocaleString()}</td>
                     <td className="py-2 pr-3 text-right">{r.tokensOut.toLocaleString()}</td>
@@ -8545,26 +10092,35 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </table>
           </div>
           
-          {/* Cost Comparison */}
+          {/* Cost Comparison - Grid Layout like Summary */}
           <div className="mt-4 pt-4 border-t">
-            <div className="text-sm font-medium mb-2">Cost Analysis</div>
-            <div className="flex items-center gap-4 text-sm">
-              <div>
-                <span className="text-slate-600">Total Estimated:</span>
-                <span className="ml-2 font-semibold">${totals.max.toFixed(4)}</span>
+            <div className="text-sm font-medium mb-3">💰 Cost Analysis</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
+              <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                <div className="text-slate-500 text-xs">Estimated</div>
+                <div className="font-semibold text-base sm:text-lg">${totals.realistic.toFixed(4)}</div>
+                <div className="text-xs text-slate-400">USD</div>
               </div>
-              <div>
-                <span className="text-slate-600">Actual Cost Incurred:</span>
-                <span className="ml-2 font-semibold text-emerald-600">${results.reduce((sum, r) => sum + r.costUSD, 0).toFixed(4)}</span>
+              <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                <div className="text-slate-500 text-xs">Actual Cost</div>
+                <div className="font-semibold text-base sm:text-lg text-emerald-600">
+                  ${results.reduce((sum, r) => sum + r.costUSD, 0).toFixed(4)}
+                </div>
+                <div className="text-xs text-slate-400">USD</div>
               </div>
-              <div>
-                {results.reduce((sum, r) => sum + r.costUSD, 0) < totals.max ? (
-                  <span className="text-green-600 text-xs">✓ Under estimate</span>
-                ) : results.reduce((sum, r) => sum + r.costUSD, 0) > totals.max ? (
-                  <span className="text-red-600 text-xs">⚠ Over estimate</span>
-                ) : (
-                  <span className="text-blue-600 text-xs">= Exact match</span>
-                )}
+              <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                <div className="text-slate-500 text-xs">Savings</div>
+                <div className="font-semibold text-base sm:text-lg text-green-600">
+                  ${Math.max(0, totals.realistic - results.reduce((sum, r) => sum + r.costUSD, 0)).toFixed(4)}
+                </div>
+                <div className="text-xs text-slate-400">USD</div>
+              </div>
+              <div className="bg-white p-2 sm:p-3 rounded-lg border">
+                <div className="text-slate-500 text-xs">Cost/Engine</div>
+                <div className="font-semibold text-base sm:text-lg">
+                  ${results.length > 0 ? (results.reduce((sum, r) => sum + r.costUSD, 0) / results.length).toFixed(4) : '0.0000'}
+                </div>
+                <div className="text-xs text-slate-400">avg</div>
               </div>
             </div>
           </div>
@@ -8587,7 +10143,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                   </tr>
                   <tr className="border-b">
                     <td className="py-2 px-3 border">Cost Estimated (This Run)</td>
-                    <td className="py-2 px-3 text-right border">${totals.max.toFixed(4)}</td>
+                    <td className="py-2 px-3 text-right border">${totals.realistic.toFixed(4)}</td>
                   </tr>
                   <tr className="border-b">
                     <td className="py-2 px-3 border">Cost Incurred (This Run)</td>
@@ -8611,9 +10167,9 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </div>
             
             {/* Business Statement */}
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-sm font-medium text-blue-900 mb-2">💼 Business Forecast</div>
-              <div className="text-xs text-blue-800">
+            <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-base font-medium text-blue-900 mb-2">💼 Business Forecast</div>
+              <div className="text-sm text-blue-800">
                 {(() => {
                   const balance = totalBudget - totalSpent;
                   const avgCostPerRun = results.length > 0 ? results.reduce((sum, r) => sum + r.costUSD, 0) / results.length : 0;
@@ -8628,10 +10184,10 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     
                     return (
                       <div>
-                        <div className="mb-1">
+                        <div className="mb-2">
                           <strong>With the remaining balance (${balance.toFixed(2)}), you can run:</strong>
                         </div>
-                        <div className="ml-4">
+                        <div className="ml-4 mb-1">
                           • <strong>{promptsWithAllEngines}</strong> more prompts with all selected engines (${allEnginesCost.toFixed(4)} each)
                         </div>
                         <div className="ml-4">
@@ -9274,8 +10830,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
       
       {/* Balance Manager Modal */}
       <BalanceManager 
-        isOpen={showBalanceManager}
-        onClose={() => setShowBalanceManager(false)}
+        isOpen={false}
+        onClose={() => {}}
       />
     </div>
   );

@@ -86,32 +86,32 @@ const ROLE_FOCUS_AREAS: RoleFocusAreas = {
       ]
     },
   ],
-  "Head of Sales": [
+  "Sales": [
     {
       id: "market",
       title: "Market & Opportunity",
       prompts: [
-        { id: "m1", title: "Market analysis", template: "As Head of Sales, analyze market opportunities in [region]" },
-        { id: "m2", title: "Competitive intelligence", template: "As Head of Sales, gather competitive intelligence on [competitor]" },
-        { id: "m3", title: "Target account strategy", template: "As Head of Sales, develop target account strategy" },
+        { id: "m1", title: "Market analysis", template: "As Sales, analyze market opportunities in [region]" },
+        { id: "m2", title: "Competitive intelligence", template: "As Sales, gather competitive intelligence on [competitor]" },
+        { id: "m3", title: "Target account strategy", template: "As Sales, develop target account strategy" },
       ]
     },
     {
       id: "prebid",
       title: "Pre-Bid Phase",
       prompts: [
-        { id: "pb1", title: "Qualification criteria", template: "As Head of Sales, define deal qualification criteria" },
-        { id: "pb2", title: "Stakeholder mapping", template: "As Head of Sales, map stakeholders for [opportunity]" },
-        { id: "pb3", title: "Value proposition", template: "As Head of Sales, craft value proposition for [customer]" },
+        { id: "pb1", title: "Qualification criteria", template: "As Sales, define deal qualification criteria" },
+        { id: "pb2", title: "Stakeholder mapping", template: "As Sales, map stakeholders for [opportunity]" },
+        { id: "pb3", title: "Value proposition", template: "As Sales, craft value proposition for [customer]" },
       ]
     },
     {
       id: "bid",
       title: "Bid Phase",
       prompts: [
-        { id: "b1", title: "Proposal strategy", template: "As Head of Sales, develop proposal strategy for [RFP]" },
-        { id: "b2", title: "Pricing strategy", template: "As Head of Sales, create pricing strategy for [deal]" },
-        { id: "b3", title: "Win themes", template: "As Head of Sales, identify win themes for [opportunity]" },
+        { id: "b1", title: "Proposal strategy", template: "As Sales, develop proposal strategy for [RFP]" },
+        { id: "b2", title: "Pricing strategy", template: "As Sales, create pricing strategy for [deal]" },
+        { id: "b3", title: "Win themes", template: "As Sales, identify win themes for [opportunity]" },
       ]
     },
     {
@@ -255,7 +255,7 @@ function WizardNavigationMenu({ onPromptSelect, className }: WizardNavigationMen
   const [selectedRole, setSelectedRole] = React.useState<string | null>(null);
   const [selectedFocusArea, setSelectedFocusArea] = React.useState<FocusArea | null>(null);
 
-  const roles = ["CEO", "CDIO", "Head of Sales"];
+  const roles = ["CEO", "CDIO", "Sales"];
 
   const handleRoleSelect = (role: string) => {
     setSelectedRole(role);

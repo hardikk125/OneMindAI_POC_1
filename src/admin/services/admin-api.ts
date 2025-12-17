@@ -2,7 +2,7 @@
 // Admin API Service - Supabase RPC calls
 // =============================================================================
 
-import { getSupabase, isSupabaseConfigured } from '../../lib/supabase/client';
+import { getSupabase, isSupabaseConfigured, isTestMode } from '../../lib/supabase/client';
 import type {
   AdminUser,
   AIModel,
@@ -160,8 +160,10 @@ export async function getAllModels(): Promise<AIModel[]> {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('ai_models')
-      .select('*')
-      .order('provider', { ascending: true })
+      .select(`
+        *,
+        ai_engines!inner(provider)
+      `)
       .order('display_name', { ascending: true });
 
     if (error) {
@@ -169,7 +171,13 @@ export async function getAllModels(): Promise<AIModel[]> {
       return [];
     }
 
-    return data || [];
+    // Map the data to include provider from the joined table
+    const models = (data || []).map((item: any) => ({
+      ...item,
+      provider: item.ai_engines?.provider || 'unknown',
+    }));
+
+    return models;
   } catch (err) {
     console.error('Error in getAllModels:', err);
     return [];
@@ -449,10 +457,18 @@ export async function getAllTransactions(limit: number = 100): Promise<Transacti
 // =============================================================================
 
 export async function checkIsAdmin(): Promise<boolean> {
+  // In test mode, always return true to allow admin access
+  if (isTestMode()) {
+    console.log('[Admin] Test mode enabled - granting admin access');
+    return true;
+  }
+  
   if (!isSupabaseConfigured()) return false;
 
   try {
     const supabase = getSupabase();
+    if (!supabase) return false;
+    
     const { data, error } = await supabase.rpc('is_admin');
 
     if (error) {

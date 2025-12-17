@@ -5,6 +5,7 @@ import { LogoShowcase } from "./components/LogoShowcase";
 import { SavingsCard } from "./components/SavingsCard";
 import { Button } from "./ui/button";
 import { Github } from "lucide-react";
+import { HelpIcon } from "../components/ui/help-icon";
 
 const Navbar = () => (
   <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 bg-neutral-950/50 backdrop-blur-md border-b border-white/5">
@@ -77,6 +78,24 @@ const Footer = () => (
 export const LandingPage = () => {
   return (
     <div className="min-h-screen bg-neutral-950 text-white selection:bg-cyan-500/30">
+      {/* Help Icon */}
+      <HelpIcon
+        title="OneMind AI Landing"
+        description="Welcome to OneMind AI - the unified platform that orchestrates the world's best AI models. Compare responses from multiple AI providers and get the best answer for your needs."
+        features={[
+          'Access 10+ AI providers in one platform',
+          'Compare responses side-by-side',
+          'Pay-per-use pricing with no subscriptions',
+          'Enterprise-grade security and privacy',
+          'Real-time cost tracking and optimization',
+        ]}
+        tips={[
+          'Click "Get Started" to create your free account',
+          'Explore the AI Engines section to see supported models',
+          'Check the Features section for detailed capabilities',
+        ]}
+        position="bottom-right"
+      />
       <Navbar />
       <main>
         <Hero />

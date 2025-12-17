@@ -1,0 +1,47 @@
+{
+  "testId": "TD-007",
+  "purpose": "Test fallback mechanisms when things fail",
+  "scenarios": [
+    {
+      "name": "DB Unavailable",
+      "testCase": "TC-E2E-023",
+      "simulation": "Mock Supabase error or block network requests",
+      "expected": "Use DEFAULT_SYSTEM_CONFIG, log error, app continues",
+      "verification": "Check console for fallback warning, verify default values used",
+      "fallbackValues": {
+        "prompt_soft_limit": 5000,
+        "prompt_hard_limit": 10000,
+        "max_engines_per_run": 5
+      }
+    },
+    {
+      "name": "Invalid Config Value",
+      "testCase": "TC-E2E-024",
+      "simulation": "Set prompt_soft_limit to 'invalid' in DB",
+      "expected": "Use default 5000, log warning",
+      "verification": "Warning at 5000 chars, not 'invalid'",
+      "note": "parseConfigValue() handles type conversion"
+    },
+    {
+      "name": "Missing Provider Config",
+      "testCase": "TC-E2E-024",
+      "simulation": "Delete 'openai' from provider_config table",
+      "expected": "Use BASE_PRICING defaults",
+      "verification": "OpenAI still works with hardcoded max_output_cap: 16384",
+      "fallbackSource": "BASE_PRICING constant in ai-proxy.cjs"
+    },
+    {
+      "name": "Real-time Subscription Fails",
+      "testCase": "TC-E2E-026",
+      "simulation": "Disconnect Supabase or block websocket",
+      "expected": "Use cached data, no crash",
+      "verification": "App continues working, no real-time updates",
+      "note": "Graceful degradation - app still functional"
+    }
+  ],
+  "automationHelpers": {
+    "blockSupabase": "await page.route('**/rest/v1/**', route => route.abort())",
+    "mockError": "await page.route('**/system_config*', route => route.fulfill({ status: 500 }))",
+    "checkConsole": "Monitor page.on('console', msg => ...) for fallback warnings"
+  }
+}

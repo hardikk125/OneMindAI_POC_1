@@ -6,7 +6,8 @@
  */
 
 import { getSupabase, isSupabaseConfigured } from './client';
-import type { Credits, CreditTransaction, ApiUsage } from './types';
+import type { Database, Credits, CreditTransaction, ApiUsage } from './types';
+import { superDebugBus } from '../super-debug-bus';
 
 // =============================================================================
 // CREDIT PRICING (credits per 1M tokens)
@@ -14,10 +15,13 @@ import type { Credits, CreditTransaction, ApiUsage } from './types';
 
 export const CREDIT_PRICING: Record<string, Record<string, { input: number; output: number }>> = {
   openai: {
+    'gpt-5.1': { input: 2500, output: 10000 },
+    'gpt-5-2025-08-07': { input: 1500, output: 6000 },
     'gpt-4.1': { input: 100, output: 300 },
     'gpt-4o': { input: 25, output: 100 },
     'gpt-4o-mini': { input: 1.5, output: 6 },
     'gpt-4.1-mini': { input: 1.5, output: 6 },
+    'gpt-3.5-turbo': { input: 10, output: 40 },
   },
   anthropic: {
     'claude-3.5-sonnet': { input: 30, output: 150 },
@@ -47,6 +51,10 @@ export const CREDIT_PRICING: Record<string, Record<string, { input: number; outp
   perplexity: {
     'sonar-pro': { input: 30, output: 150 },
     'sonar-small': { input: 2, output: 2 },
+  },
+  xai: {
+    'grok-beta': { input: 6.00, output: 12.00 },
+    'grok-2': { input: 8.00, output: 16.00 },
   },
 };
 
@@ -104,6 +112,10 @@ export async function getCreditBalance(userId: string): Promise<number> {
   
   try {
     const supabase = getSupabase();
+    
+    // ===== Super Debug: Real-time Supabase Tracking =====
+    superDebugBus.emitSupabaseOp('select', 'credits', 'SELECT balance FROM credits WHERE user_id = ?', undefined);
+    
     const { data, error } = await supabase
       .from('credits')
       .select('balance')
@@ -112,12 +124,21 @@ export async function getCreditBalance(userId: string): Promise<number> {
     
     if (error) {
       console.error('[Credits] Error fetching balance:', error.message);
+      superDebugBus.emitSupabaseOp('select', 'credits', 'SELECT balance FROM credits WHERE user_id = ?', { error: error.message });
       return 0;
     }
     
-    return data?.balance ?? 0;
+    // Type assertion to handle TypeScript inference issue
+    const balanceData = data as { balance: number } | null;
+    const balance = balanceData?.balance ?? 0;
+    
+    // ===== Super Debug: Credit Check =====
+    superDebugBus.emitCreditOp('check', 0, balance);
+    
+    return balance;
   } catch (err) {
     console.error('[Credits] Balance fetch failed:', err);
+    superDebugBus.emitSupabaseOp('select', 'credits', 'SELECT balance FROM credits WHERE user_id = ?', { error: 'Unexpected error' });
     return 0;
   }
 }
@@ -144,29 +165,41 @@ export async function deductCredits(
   try {
     const supabase = getSupabase();
     
-    // Use RPC for atomic deduction
-    const { data, error } = await supabase.rpc('deduct_credits', {
+    // ===== Super Debug: Real-time Supabase Tracking =====
+    const rpcParams = {
       p_user_id: userId,
       p_amount: amount,
       p_description: description || `API usage: ${provider}/${model}`,
       p_provider: provider,
       p_model: model,
       p_tokens: tokens,
-    });
+    };
+    superDebugBus.emitSupabaseOp('rpc', 'deduct_credits', rpcParams, undefined);
+    
+    // Use RPC for atomic deduction
+    const { data, error } = await supabase.rpc('deduct_credits', rpcParams);
     
     if (error) {
       console.error('[Credits] Deduction failed:', error.message);
+      superDebugBus.emitSupabaseOp('rpc', 'deduct_credits', rpcParams, { error: error.message });
       return { success: false, error: error.message };
     }
     
     if (!data) {
+      superDebugBus.emitSupabaseOp('rpc', 'deduct_credits', rpcParams, { error: 'Insufficient credits' });
       return { success: false, error: 'Insufficient credits' };
     }
     
+    // Get new balance for tracking
     const newBalance = await getCreditBalance(userId);
+    
+    // ===== Super Debug: Credit Deduction =====
+    superDebugBus.emitCreditOp('deduct', amount, newBalance, provider, model);
+    
     return { success: true, newBalance };
   } catch (err) {
     console.error('[Credits] Deduction error:', err);
+    superDebugBus.emitSupabaseOp('rpc', 'deduct_credits', { error: 'Unexpected error' }, { error: 'Unexpected error' });
     return { success: false, error: 'Credit deduction failed' };
   }
 }
@@ -236,7 +269,7 @@ export async function initializeCredits(userId: string): Promise<boolean> {
         balance: SIGNUP_BONUS_CREDITS,
         lifetime_earned: SIGNUP_BONUS_CREDITS,
         lifetime_spent: 0,
-      });
+      } as any);
     
     if (error) {
       console.error('[Credits] Initialization failed:', error.message);
@@ -251,7 +284,7 @@ export async function initializeCredits(userId: string): Promise<boolean> {
         amount: SIGNUP_BONUS_CREDITS,
         type: 'signup',
         description: 'Welcome bonus credits',
-      });
+      } as any);
     
     return true;
   } catch (err) {
@@ -355,7 +388,7 @@ export async function logApiUsage(
         cost_credits: costCredits,
         success,
         error_message: errorMessage,
-      });
+      } as any);
   } catch (err) {
     console.error('[Credits] Usage logging failed:', err);
   }

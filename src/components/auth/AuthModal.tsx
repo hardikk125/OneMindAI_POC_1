@@ -58,6 +58,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showOfflineOption, setShowOfflineOption] = useState(false);
 
   // ==========================================================================
   // HANDLERS
@@ -70,6 +71,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
     setFullName('');
     setError(null);
     setSuccess(null);
+    setShowOfflineOption(false);
   }, []);
 
   const handleModeChange = useCallback((newMode: AuthMode) => {
@@ -132,7 +134,14 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
       if (mode === 'signin') {
         const { error } = await signIn(sanitizedEmail, password);
         if (error) {
-          setError(error.message);
+          if (error.message === 'SUPABASE_UNREACHABLE') {
+            // Show option to continue in offline mode
+            setError('Unable to connect to authentication server. Click "Continue Offline" to use the app without cloud features.');
+            setShowOfflineOption(true);
+          } else {
+            setError(error.message);
+            setShowOfflineOption(false);
+          }
         } else {
           onClose();
         }
@@ -157,6 +166,22 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
       setIsLoading(false);
     }
   }, [email, password, fullName, mode, validateForm, signIn, signUp, resetPassword, onClose]);
+
+  // Handle offline bypass when Supabase is unreachable
+  const handleOfflineBypass = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    const sanitizedEmail = sanitizeInput(email.trim().toLowerCase());
+    const { error } = await signIn(sanitizedEmail, password, true); // Pass true to enable bypass
+    
+    if (!error) {
+      onClose();
+    } else {
+      setError('Failed to enable offline mode');
+    }
+    setIsLoading(false);
+  }, [email, password, signIn, onClose]);
 
   const handleOAuthSignIn = useCallback(async (provider: 'google' | 'github' | 'apple' | 'microsoft' | 'twitter' | 'linkedin') => {
     setError(null);
@@ -228,8 +253,16 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
             <X className="w-5 h-5" />
           </button>
 
-          {/* Header */}
-          <div className="text-center mb-8">
+          {/* Header with Logo */}
+          <div className="text-center mb-8 mt-2">
+            {/* Logo - Centered Above Title */}
+            <div className="flex justify-center mb-1">
+              <img 
+                src="/src/components/Logos/image.png"
+                alt="Formula2GX"
+                className="w-20 h-20 object-contain"
+              />
+            </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
               {mode === 'signin' && 'OneMind AI'}
               {mode === 'signup' && 'Create Account'}
@@ -249,10 +282,22 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2 text-red-700 dark:text-red-400"
+                className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400"
               >
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span className="text-sm">{error}</span>
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm">{error}</span>
+                </div>
+                {showOfflineOption && (
+                  <button
+                    type="button"
+                    onClick={handleOfflineBypass}
+                    disabled={isLoading}
+                    className="mt-3 w-full py-2 px-4 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {isLoading ? 'Connecting...' : '🔌 Continue Offline'}
+                  </button>
+                )}
               </motion.div>
             )}
             {success && (

@@ -1,0 +1,38 @@
+{
+  "testId": "TD-004",
+  "purpose": "Test provider config changes affect engine behavior",
+  "changes": [
+    {
+      "provider": "openai",
+      "field": "max_output_cap",
+      "oldValue": 16384,
+      "newValue": 10000,
+      "expectedImpact": "OpenAI requests capped at 10000 tokens",
+      "testCase": "TC-E2E-020",
+      "verificationMethod": "Check response metadata tokensOut <= 10000"
+    },
+    {
+      "provider": "kimi",
+      "field": "is_enabled",
+      "oldValue": true,
+      "newValue": false,
+      "expectedImpact": "KIMI hidden from engine list",
+      "testCase": "TC-E2E-014",
+      "verificationMethod": "Count engines, verify KIMI not visible"
+    },
+    {
+      "provider": "anthropic",
+      "field": "timeout_seconds",
+      "oldValue": 30,
+      "newValue": 60,
+      "expectedImpact": "Anthropic requests timeout after 60s",
+      "testCase": "TC-E2E-021",
+      "verificationMethod": "Monitor request duration"
+    }
+  ],
+  "rollbackSteps": [
+    "Restore openai max_output_cap to 16384",
+    "Re-enable kimi provider",
+    "Restore anthropic timeout_seconds to 30"
+  ]
+}

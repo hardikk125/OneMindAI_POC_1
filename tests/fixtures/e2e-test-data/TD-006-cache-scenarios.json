@@ -1,0 +1,47 @@
+{
+  "testId": "TD-006",
+  "purpose": "Test cache behavior and invalidation",
+  "cacheKey": "onemindai-admin-config",
+  "cacheDuration": 300000,
+  "cacheDurationReadable": "5 minutes",
+  "scenarios": [
+    {
+      "name": "Fresh Cache",
+      "testCase": "TC-E2E-027",
+      "setup": "Clear localStorage",
+      "action": "Load admin config",
+      "expected": "Fetch from DB, cache for 5 minutes",
+      "verification": "Check localStorage has cache entry with recent timestamp"
+    },
+    {
+      "name": "Valid Cache",
+      "testCase": "TC-E2E-028",
+      "setup": "Cache exists, < 5 minutes old",
+      "action": "Load admin config",
+      "expected": "Use cached data, no DB call",
+      "verification": "Monitor network requests, should be 0 DB queries"
+    },
+    {
+      "name": "Expired Cache",
+      "testCase": "TC-E2E-029",
+      "setup": "Cache exists, > 5 minutes old",
+      "action": "Load admin config",
+      "expected": "Fetch from DB, update cache",
+      "verification": "DB query made, cache timestamp updated",
+      "note": "Mock timestamp in tests instead of waiting 5 minutes"
+    },
+    {
+      "name": "Cache Invalidation",
+      "testCase": "TC-E2E-008",
+      "setup": "Valid cache exists",
+      "action": "Update config in admin panel",
+      "expected": "Cache cleared, immediate refetch",
+      "verification": "localStorage cache removed after save"
+    }
+  ],
+  "testHelpers": {
+    "clearCache": "localStorage.removeItem('onemindai-admin-config')",
+    "getCache": "JSON.parse(localStorage.getItem('onemindai-admin-config'))",
+    "mockExpiredCache": "Set cache.timestamp to Date.now() - 400000 (> 5 min ago)"
+  }
+}

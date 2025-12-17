@@ -309,16 +309,12 @@ export async function autoFixRateLimit<T>(
   fn: () => Promise<T>,
   onProgress?: (status: string) => void
 ): Promise<T> {
-  const { retryManager, throttler } = initializeAutoRecovery();
+  const { retryManager } = initializeAutoRecovery();
   
-  console.log(`[AutoFix] 🔄 Implementing exponential backoff for ${provider}...`);
-  
+  // Execute directly without throttling - only retry on actual rate limit errors
   return retryManager.executeWithRetry(
     `rate-limit-${provider}`,
-    async () => {
-      await throttler.throttle();
-      return await fn();
-    },
+    fn, // Direct execution - no throttle overhead
     (error) => {
       // Retry on rate limit errors
       return error.statusCode === 429 || 

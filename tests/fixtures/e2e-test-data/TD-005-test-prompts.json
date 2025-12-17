@@ -1,0 +1,37 @@
+{
+  "testId": "TD-005",
+  "purpose": "Test prompts for various scenarios",
+  "prompts": {
+    "normal": {
+      "text": "What is the capital of France?",
+      "length": 32,
+      "expectedBehavior": "No warning, processes normally",
+      "testCase": "TC-E2E-019"
+    },
+    "softLimit": {
+      "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. [REPEAT THIS TEXT TO REACH 3500 CHARS]",
+      "length": 3500,
+      "expectedBehavior": "Warning shown at 3000 chars (after TD-003 changes)",
+      "testCase": "TC-E2E-015",
+      "note": "Generate full 3500 char text by repeating lorem ipsum"
+    },
+    "hardLimit": {
+      "text": "[GENERATE 9000 CHARACTER TEXT]",
+      "length": 9000,
+      "expectedBehavior": "Rejected at 8000 chars (after TD-003 changes)",
+      "testCase": "TC-E2E-016",
+      "note": "Should be blocked before submission"
+    },
+    "maxTokens": {
+      "text": "Write a very long and detailed essay about the history of artificial intelligence, covering all major milestones from the 1950s to present day. Include information about key researchers, breakthrough algorithms, and the impact on society.",
+      "requestedTokens": 50000,
+      "expectedBehavior": "Capped to provider's max_output_cap (10000 for OpenAI after TD-004)",
+      "testCase": "TC-E2E-020"
+    }
+  },
+  "generationHelpers": {
+    "softLimitPrompt": "Use 'a'.repeat(3500) in test code",
+    "hardLimitPrompt": "Use 'a'.repeat(9000) in test code",
+    "note": "Generate these programmatically in automated tests for exact character counts"
+  }
+}

@@ -17,6 +17,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings2,
+  Zap,
+  Cpu,
 } from 'lucide-react';
 import type { AdminPage } from '../types';
 
@@ -51,12 +53,14 @@ export function AdminSidebar({
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { id: 'users', label: 'Users', icon: <Users size={20} /> },
     { id: 'models', label: 'AI Models', icon: <Bot size={20} /> },
+    { id: 'ai-models', label: 'Model Config', icon: <Cpu size={20} /> },
     { id: 'pricing', label: 'Pricing', icon: <DollarSign size={20} /> },
     { id: 'ui-config', label: 'UI Config', icon: <Settings2 size={20} /> },
     { id: 'transactions', label: 'Transactions', icon: <Receipt size={20} /> },
     { id: 'bugs', label: 'Bug Reports', icon: <Bug size={20} />, badge: stats?.openBugs },
     { id: 'errors', label: 'Error Logs', icon: <AlertTriangle size={20} />, badge: stats?.criticalErrors },
     { id: 'system', label: 'System Health', icon: <Activity size={20} /> },
+    { id: 'chaos-testing', label: 'Chaos Testing', icon: <Zap size={20} /> },
   ];
 
   return (

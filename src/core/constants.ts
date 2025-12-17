@@ -281,7 +281,9 @@ export const STREAMING_PROVIDERS: string[] = [
 ];
 
 // =============================================================================
-// MAX PROMPT LENGTH
+// MAX PROMPT LENGTH - DEPRECATED
 // =============================================================================
-
-export const MAX_PROMPT_LENGTH = 7000;
+// MAX_PROMPT_LENGTH has been moved to database (system_config table)
+// Use: getSystemConfig(systemConfig, 'max_prompt_length', 7000)
+// See: src/hooks/useAdminConfig.ts for fetching from database
+// Fallback default: 7000 (defined in useAdminConfig.ts DEFAULT_SYSTEM_CONFIG)

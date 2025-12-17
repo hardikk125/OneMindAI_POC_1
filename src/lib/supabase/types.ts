@@ -241,9 +241,9 @@ export interface Database {
           p_user_id: string;
           p_amount: number;
           p_description: string;
-          p_provider?: string;
-          p_model?: string;
-          p_tokens?: number;
+          p_provider: string;
+          p_model: string;
+          p_tokens: number;
         };
         Returns: boolean;
       };

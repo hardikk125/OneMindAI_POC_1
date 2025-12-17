@@ -1,0 +1,56 @@
+{
+  "testId": "TD-008",
+  "purpose": "Simulate real-world complex scenarios",
+  "scenarios": [
+    {
+      "name": "Multi-Admin Conflict",
+      "testCase": "TC-E2E-031",
+      "setup": "2 admins open admin panel simultaneously",
+      "actions": [
+        "Admin A changes prompt_soft_limit to 3000",
+        "Admin B changes prompt_soft_limit to 4000 (2 seconds later)"
+      ],
+      "expected": "Admin B's value wins (last write wins), Admin A sees toast notification",
+      "verification": "Final value is 4000, both admins see real-time update",
+      "relevance": "Tests Phase 8 real-time subscriptions in conflict scenario"
+    },
+    {
+      "name": "High Load",
+      "testCase": "TC-E2E-034",
+      "setup": "10 users submit prompts simultaneously",
+      "expected": "All requests use same cached config, no race conditions",
+      "verification": "All 10 requests complete successfully, consistent config values",
+      "relevance": "Tests cache consistency under load"
+    },
+    {
+      "name": "Provider Failure",
+      "testCase": "TC-E2E-033",
+      "setup": "OpenAI API returns 503",
+      "expected": "Auto-retry 3 times, show error if all fail",
+      "verification": "See retry attempts in network tab, final error message shown",
+      "relevance": "Tests core error handling (regression test)",
+      "note": "This is unchanged functionality, validates no regression"
+    },
+    {
+      "name": "Rapid Config Changes",
+      "testCase": "TC-E2E-032",
+      "setup": "Admin changes config 5 times in 10 seconds",
+      "actions": [
+        "Change prompt_soft_limit: 3000 (t=0s)",
+        "Change prompt_soft_limit: 3500 (t=2s)",
+        "Change prompt_soft_limit: 4000 (t=4s)",
+        "Change prompt_soft_limit: 4500 (t=6s)",
+        "Change prompt_soft_limit: 5000 (t=8s)"
+      ],
+      "expected": "All changes saved, cache cleared each time, no data loss",
+      "verification": "Final value is 5000, all intermediate values logged",
+      "relevance": "Tests atomic operations and cache invalidation under stress"
+    }
+  ],
+  "performanceMetrics": {
+    "multiAdminLatency": "< 2 seconds for real-time update",
+    "highLoadThroughput": "10 concurrent requests in < 30 seconds",
+    "rapidChangesConsistency": "100% data integrity",
+    "retryMaxDuration": "< 10 seconds for 3 retries"
+  }
+}

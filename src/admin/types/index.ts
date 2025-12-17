@@ -144,11 +144,13 @@ export type AdminPage =
   | 'users' 
   | 'models' 
   | 'pricing' 
+  | 'ai-models'
   | 'transactions' 
   | 'bugs' 
   | 'errors' 
   | 'system'
-  | 'ui-config';
+  | 'ui-config'
+  | 'chaos-testing';
 
 export interface NavItem {
   id: AdminPage;

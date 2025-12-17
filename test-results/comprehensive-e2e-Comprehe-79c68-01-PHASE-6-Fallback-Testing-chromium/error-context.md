@@ -1,0 +1,82 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - button "Help" [ref=e4] [cursor=pointer]:
+    - img [ref=e5]
+  - generic [ref=e8]:
+    - generic [ref=e9]:
+      - 'heading "OneMindAI: Collective Intelligence, Optimised" [level=1] [ref=e10]'
+      - generic [ref=e11]: The future-proof engine that fuses the smartest minds into one perfect answer.
+      - generic [ref=e12]: Formula2GX Digital Advanced Incubation Labs Platform
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15] [cursor=pointer]:
+          - checkbox "Story Mode" [checked] [ref=e16]
+          - generic [ref=e17]: Story Mode
+        - generic [ref=e18]:
+          - checkbox "Business" [checked] [ref=e19]
+          - generic [ref=e20]: Business
+        - generic [ref=e21]:
+          - checkbox "Technical" [ref=e22]
+          - generic [ref=e23]: Technical
+        - generic [ref=e24]:
+          - checkbox "Inspect" [ref=e25]
+          - generic [ref=e26]: Inspect
+        - generic [ref=e27] [cursor=pointer]:
+          - checkbox "🔧 Debug" [ref=e28]
+          - generic [ref=e29]: 🔧 Debug
+        - button "Simulate" [ref=e30] [cursor=pointer]
+      - button "T Test User 1,000 credits" [ref=e32] [cursor=pointer]:
+        - generic [ref=e34]: T
+        - generic [ref=e35]:
+          - generic [ref=e36]: Test User
+          - generic [ref=e37]:
+            - img [ref=e38]
+            - text: 1,000 credits
+        - img [ref=e43]
+  - generic [ref=e45]:
+    - generic [ref=e46]:
+      - heading "Select Your Company" [level=2] [ref=e47]
+      - generic [ref=e48]:
+        - paragraph [ref=e49]: Choose the company you're working with to get tailored insights and recommendations.
+        - generic [ref=e50]:
+          - button "Search companies" [ref=e51] [cursor=pointer]:
+            - img [ref=e52]
+          - generic [ref=e55]:
+            - button "List view" [ref=e56] [cursor=pointer]:
+              - img [ref=e57]
+            - button "Grid view" [ref=e60] [cursor=pointer]:
+              - img [ref=e61]
+            - button "Stack view" [ref=e63] [cursor=pointer]:
+              - img [ref=e64]
+    - generic [ref=e69]:
+      - button "Wesco Wesco" [ref=e70] [cursor=pointer]:
+        - img "Wesco" [ref=e72]
+        - generic [ref=e73]: Wesco
+      - button "Accenture Accenture" [ref=e74] [cursor=pointer]:
+        - img "Accenture" [ref=e76]
+        - generic [ref=e77]: Accenture
+      - button "Capgemini Capgemini" [ref=e78] [cursor=pointer]:
+        - img "Capgemini" [ref=e80]
+        - generic [ref=e81]: Capgemini
+      - button "TCS TCS" [ref=e82] [cursor=pointer]:
+        - img "TCS" [ref=e84]
+        - generic [ref=e85]: TCS
+      - button "Infosys Infosys" [ref=e86] [cursor=pointer]:
+        - img "Infosys" [ref=e88]
+        - generic [ref=e89]: Infosys
+      - button "Wipro Wipro" [ref=e90] [cursor=pointer]:
+        - img "Wipro" [ref=e92]
+        - generic [ref=e93]: Wipro
+      - button "Cognizant Cognizant" [ref=e94] [cursor=pointer]:
+        - img "Cognizant" [ref=e96]
+        - generic [ref=e97]: Cognizant
+      - button "Deloitte Deloitte" [ref=e98] [cursor=pointer]:
+        - img "Deloitte" [ref=e100]
+        - generic [ref=e101]: Deloitte
+      - button "PwC PwC" [ref=e102] [cursor=pointer]:
+        - img "PwC" [ref=e104]
+        - generic [ref=e105]: PwC
+    - button "Continue →" [disabled] [ref=e107]
+```

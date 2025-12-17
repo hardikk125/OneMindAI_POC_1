@@ -15,8 +15,11 @@ import { ErrorLogs } from './pages/ErrorLogs';
 import { Transactions } from './pages/Transactions';
 import { SystemHealth } from './pages/SystemHealth';
 import { UIConfig } from './pages/UIConfig';
+import { ChaosTesting } from './components/ChaosTesting';
+import AIModelsConfig from './pages/AIModelsConfig';
 import type { AdminPage } from './types';
 import { Loader2, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { HelpIcon } from '../components/ui/help-icon';
 
 interface AdminAppProps {
   onExit: () => void;
@@ -83,6 +86,8 @@ export function AdminApp({ onExit }: AdminAppProps) {
         return <Models />;
       case 'pricing':
         return <Models />; // Pricing is part of Models page
+      case 'ai-models':
+        return <AIModelsConfig />;
       case 'ui-config':
         return <UIConfig />;
       case 'transactions':
@@ -93,6 +98,8 @@ export function AdminApp({ onExit }: AdminAppProps) {
         return <ErrorLogs />;
       case 'system':
         return <SystemHealth />;
+      case 'chaos-testing':
+        return <ChaosTesting />;
       default:
         return <Dashboard />;
     }
@@ -100,6 +107,28 @@ export function AdminApp({ onExit }: AdminAppProps) {
 
   return (
     <div className="min-h-screen bg-gray-900 flex">
+      {/* Help Icon */}
+      <HelpIcon
+        title="Admin Panel"
+        description="The OneMind AI Admin Panel provides comprehensive management tools for system administrators. Monitor users, manage AI models, track transactions, and configure the platform."
+        features={[
+          'Dashboard with real-time analytics and metrics',
+          'User management with role-based access control',
+          'AI model configuration and pricing management',
+          'Transaction history and credit tracking',
+          'Bug reports and error log monitoring',
+          'System health monitoring and alerts',
+          'UI configuration for customizing the platform',
+          'Chaos testing for system resilience',
+        ]}
+        tips={[
+          'Use the sidebar to navigate between different sections',
+          'Check the Dashboard for a quick overview of system status',
+          'Monitor Error Logs regularly to catch issues early',
+          'Use Chaos Testing in staging environments only',
+        ]}
+        position="top-right"
+      />
       {/* Sidebar */}
       <AdminSidebar
         currentPage={currentPage}

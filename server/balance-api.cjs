@@ -296,9 +296,53 @@ app.post('/api/balances/import', (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
+// =============================================================================
+// PROCESS ERROR HANDLERS - PREVENT CRASHES
+// =============================================================================
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('\n⚠️  UNCAUGHT EXCEPTION - Balance API continuing...');
+  console.error('[UNCAUGHT EXCEPTION]', error.message);
+  console.error('Stack:', error.stack);
+  // Don't exit - keep server running
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('\n⚠️  UNHANDLED REJECTION - Balance API continuing...');
+  console.error('[UNHANDLED REJECTION]', reason);
+  // Don't exit - keep server running
+});
+
+// Handle SIGTERM gracefully
+process.on('SIGTERM', () => {
+  console.log('\n🛑 SIGTERM received - Balance API shutting down gracefully');
+  process.exit(0);
+});
+
+// Handle SIGINT (Ctrl+C) gracefully
+process.on('SIGINT', () => {
+  console.log('\n🛑 SIGINT received - Balance API shutting down gracefully');
+  process.exit(0);
+});
+
+// =============================================================================
+// START SERVER
+// =============================================================================
+
+const server = app.listen(PORT, () => {
   console.log(`\n🏦 Balance API Server running on http://localhost:${PORT}`);
   console.log(`📁 CSV Database: ${CSV_PATH}`);
+  console.log(`🛡️  Crash Protection: ENABLED`);
   ensureCSVExists();
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  console.error('\n❌ Balance API Server Error:', error.message);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Please free the port or use a different one.`);
+    process.exit(1);
+  }
 });
