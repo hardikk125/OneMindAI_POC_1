@@ -5,6 +5,7 @@
   "main": "ai-proxy.cjs",
   "scripts": {
     "start": "node ai-proxy.cjs",
+    "proxy": "node ai-proxy.cjs",
     "dev": "node --watch ai-proxy.cjs"
   },
   "engines": {
