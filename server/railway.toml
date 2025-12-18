@@ -1,6 +1,5 @@
 # Railway Configuration for OneMind AI Backend
-# NOTE: If Railway is pointed to root, use this config
-# If Railway is pointed to /server directory, use server/railway.toml
+# Place this in the server directory when Railway is pointed to /server
 
 [build]
 builder = "NIXPACKS"
