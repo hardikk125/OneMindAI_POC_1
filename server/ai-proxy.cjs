@@ -110,13 +110,8 @@ app.use((req, res, next) => {
 });
 
 // =============================================================================
-// HEALTH CHECK (Root path for Railway default healthcheck)
+// HEALTH CHECK
 // =============================================================================
-
-// Root endpoint - Railway checks this by default
-app.get('/', (req, res) => {
-  res.status(200).send('OK');
-});
 
 app.get('/health', (req, res) => {
   res.json({ 
@@ -1676,21 +1671,30 @@ async function callProvider(provider, model, prompt, maxTokens) {
       }
       
       case 'mistral': {
-        const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`
-          },
-          body: JSON.stringify({
-            model: model || 'mistral-large-latest',
-            messages: [{ role: 'user', content: prompt }],
-            max_tokens: maxTokens,
-            temperature: null
-          })
-        });
-        const data = await res.json();
-        content = data.choices?.[0]?.message?.content || '';
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 min timeout
+        
+        try {
+          const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: model || 'mistral-large-latest',
+              messages: [{ role: 'user', content: prompt }],
+              max_tokens: maxTokens,
+              temperature: null
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          const data = await res.json();
+          content = data.choices?.[0]?.message?.content || '';
+        } finally {
+          clearTimeout(timeoutId);
+        }
         break;
       }
       
@@ -1714,6 +1718,7 @@ async function callProvider(provider, model, prompt, maxTokens) {
       }
       
       case 'deepseek': {
+        console.log(`[DeepSeek] Calling API with prompt length: ${prompt.length}, max_tokens: ${maxTokens}`);
         const res = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: {
@@ -1724,11 +1729,17 @@ async function callProvider(provider, model, prompt, maxTokens) {
             model: model || 'deepseek-chat',
             messages: [{ role: 'user', content: prompt }],
             max_tokens: maxTokens,
-            temperature: null
+            temperature: 0.7
           })
         });
         const data = await res.json();
+        console.log(`[DeepSeek] Response status: ${res.status}, has choices: ${!!data.choices}, error: ${data.error?.message || 'none'}`);
+        if (data.error) {
+          console.error(`[DeepSeek] API Error:`, data.error);
+          throw new Error(data.error.message || 'DeepSeek API error');
+        }
         content = data.choices?.[0]?.message?.content || '';
+        console.log(`[DeepSeek] Content length: ${content.length}`);
         break;
       }
       
@@ -1811,7 +1822,7 @@ app.post('/api/onemind', async (req, res) => {
       prompt, 
       max_tokens = 4096, 
       engines = null,  // Optional: specific engines to use
-      timeout = 60000  // 60 second timeout per engine
+      timeout = 600000  // 600 second (10 minute) timeout per engine for large prompts
     } = req.body;
     
     if (!prompt) {
