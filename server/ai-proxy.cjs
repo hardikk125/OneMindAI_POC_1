@@ -1596,6 +1596,321 @@ app.use((err, req, res, next) => {
   });
 });
 
+// =============================================================================
+// ONEMIND UNIFIED API - Execute All Enabled Engines in Parallel
+// =============================================================================
+
+// Helper: Get all enabled providers from database
+async function getEnabledProviders() {
+  if (!supabase) {
+    console.warn('[OneMind] Supabase not configured, using default providers');
+    return [
+      { provider: 'deepseek', model: 'deepseek-chat' },
+      { provider: 'mistral', model: 'mistral-large-latest' }
+    ];
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('provider_config')
+      .select('provider, is_enabled, default_model')
+      .eq('is_enabled', true);
+    
+    if (error) throw error;
+    return data.map(p => ({ provider: p.provider, model: p.default_model }));
+  } catch (err) {
+    console.error('[OneMind] Failed to fetch enabled providers:', err.message);
+    return [
+      { provider: 'openai', model: 'gpt-4o' },
+      { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
+      { provider: 'gemini', model: 'gemini-2.0-flash-exp' }
+    ];
+  }
+}
+
+// Helper: Call individual provider
+async function callProvider(provider, model, prompt, maxTokens) {
+  const startTime = Date.now();
+  
+  try {
+    let response, content;
+    
+    switch (provider) {
+      case 'openai': {
+        const OpenAI = require('openai');
+        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        response = await client.chat.completions.create({
+          model: model || 'gpt-4o',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: maxTokens,
+          temperature: null
+        });
+        content = response.choices[0]?.message?.content || '';
+        break;
+      }
+      
+      case 'anthropic': {
+        const Anthropic = require('@anthropic-ai/sdk');
+        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        response = await client.messages.create({
+          model: model || 'claude-3-5-sonnet-20241022',
+          max_tokens: maxTokens,
+          messages: [{ role: 'user', content: prompt }]
+        });
+        content = response.content[0]?.text || '';
+        break;
+      }
+      
+      case 'gemini': {
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
+        const geminiModel = genAI.getGenerativeModel({ model: model || 'gemini-2.0-flash-exp' });
+        response = await geminiModel.generateContent(prompt);
+        content = response.response.text();
+        break;
+      }
+      
+      case 'mistral': {
+        const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: model || 'mistral-large-latest',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: maxTokens,
+            temperature: null
+          })
+        });
+        const data = await res.json();
+        content = data.choices?.[0]?.message?.content || '';
+        break;
+      }
+      
+      case 'perplexity': {
+        const res = await fetch('https://api.perplexity.ai/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: model || 'llama-3.1-sonar-large-128k-online',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: maxTokens,
+            temperature: null
+          })
+        });
+        const data = await res.json();
+        content = data.choices?.[0]?.message?.content || '';
+        break;
+      }
+      
+      case 'deepseek': {
+        const res = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: model || 'deepseek-chat',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: maxTokens,
+            temperature: null
+          })
+        });
+        const data = await res.json();
+        content = data.choices?.[0]?.message?.content || '';
+        break;
+      }
+      
+      case 'groq': {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: model || 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: maxTokens,
+            temperature: null
+          })
+        });
+        const data = await res.json();
+        content = data.choices?.[0]?.message?.content || '';
+        break;
+      }
+      
+      case 'xai': {
+        const res = await fetch('https://api.x.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.XAI_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: model || 'grok-beta',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: maxTokens,
+            temperature: null
+          })
+        });
+        const data = await res.json();
+        content = data.choices?.[0]?.message?.content || '';
+        break;
+      }
+      
+      default:
+        throw new Error(`Unsupported provider: ${provider}`);
+    }
+    
+    const latency = Date.now() - startTime;
+    const tokens = Math.ceil(content.length / 4); // Rough estimate
+    
+    return {
+      provider,
+      model,
+      content,
+      tokens,
+      latency_ms: latency,
+      status: 'success'
+    };
+    
+  } catch (error) {
+    const latency = Date.now() - startTime;
+    return {
+      provider,
+      model,
+      content: null,
+      error: error.message,
+      latency_ms: latency,
+      status: 'error'
+    };
+  }
+}
+
+// POST /api/onemind - Unified API endpoint
+app.post('/api/onemind', async (req, res) => {
+  const requestId = `onemind_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const startTime = Date.now();
+  
+  console.log(`[OneMind] Request ${requestId} started`);
+  
+  try {
+    const { 
+      prompt, 
+      max_tokens = 4096, 
+      engines = null,  // Optional: specific engines to use
+      timeout = 60000  // 60 second timeout per engine
+    } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ error: 'prompt is required' });
+    }
+    
+    // Get enabled providers (from request or database)
+    let providers;
+    if (engines && Array.isArray(engines) && engines.length > 0) {
+      // Use specified engines
+      providers = engines.map(e => typeof e === 'string' ? { provider: e, model: null } : e);
+    } else {
+      // Get all enabled from database
+      providers = await getEnabledProviders();
+    }
+    
+    console.log(`[OneMind] Executing ${providers.length} engines in parallel:`, providers.map(p => p.provider));
+    
+    // Execute all providers in parallel with timeout
+    const results = await Promise.allSettled(
+      providers.map(p => 
+        Promise.race([
+          callProvider(p.provider, p.model, prompt, max_tokens),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), timeout)
+          )
+        ])
+      )
+    );
+    
+    // Process results
+    const responses = results.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        return {
+          provider: providers[index].provider,
+          model: providers[index].model,
+          content: null,
+          error: result.reason?.message || 'Unknown error',
+          latency_ms: timeout,
+          status: 'error'
+        };
+      }
+    });
+    
+    const successful = responses.filter(r => r.status === 'success').length;
+    const failed = responses.filter(r => r.status === 'error').length;
+    const totalLatency = Date.now() - startTime;
+    
+    console.log(`[OneMind] Request ${requestId} completed: ${successful} success, ${failed} failed, ${totalLatency}ms total`);
+    
+    res.json({
+      id: requestId,
+      created: Math.floor(Date.now() / 1000),
+      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+      responses,
+      meta: {
+        total_engines: providers.length,
+        successful,
+        failed,
+        total_latency_ms: totalLatency
+      }
+    });
+    
+  } catch (error) {
+    console.error(`[OneMind] Request ${requestId} error:`, error.message);
+    res.status(500).json({ 
+      error: 'OneMind API error', 
+      message: error.message,
+      id: requestId
+    });
+  }
+});
+
+// GET /api/onemind/providers - List available providers
+app.get('/api/onemind/providers', async (req, res) => {
+  try {
+    const providers = await getEnabledProviders();
+    const availableProviders = {
+      openai: !!process.env.OPENAI_API_KEY,
+      anthropic: !!process.env.ANTHROPIC_API_KEY,
+      gemini: !!process.env.GOOGLE_AI_API_KEY,
+      mistral: !!process.env.MISTRAL_API_KEY,
+      perplexity: !!process.env.PERPLEXITY_API_KEY,
+      deepseek: !!process.env.DEEPSEEK_API_KEY,
+      groq: !!process.env.GROQ_API_KEY,
+      xai: !!process.env.XAI_API_KEY
+    };
+    
+    res.json({
+      enabled: providers,
+      available: availableProviders,
+      total_enabled: providers.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// 404 HANDLER
+// =============================================================================
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
@@ -1665,17 +1980,19 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('║                                                           ║');
   console.log('╠═══════════════════════════════════════════════════════════╣');
   console.log('║   Endpoints:                                              ║');
-  console.log('║   • GET  /health        - Server status                   ║');
-  console.log('║   • POST /api/openai    - OpenAI proxy                    ║');
-  console.log('║   • POST /api/anthropic - Claude proxy                    ║');
-  console.log('║   • POST /api/gemini    - Gemini proxy                    ║');
-  console.log('║   • POST /api/mistral   - Mistral proxy                   ║');
-  console.log('║   • POST /api/perplexity- Perplexity proxy                ║');
-  console.log('║   • POST /api/deepseek  - DeepSeek proxy                  ║');
-  console.log('║   • POST /api/groq      - Groq proxy                      ║');
-  console.log('║   • POST /api/xai       - xAI/Grok proxy                  ║');
-  console.log('║   • POST /api/kimi      - Kimi/Moonshot proxy             ║');
-  console.log('║   • GET  /api/hubspot/* - HubSpot CRM integration         ║');
+  console.log('║   • GET  /health            - Server status               ║');
+  console.log('║   • POST /api/onemind       - 🧠 UNIFIED API (all engines)║');
+  console.log('║   • GET  /api/onemind/providers - List enabled providers  ║');
+  console.log('║   • POST /api/openai        - OpenAI proxy                ║');
+  console.log('║   • POST /api/anthropic     - Claude proxy                ║');
+  console.log('║   • POST /api/gemini        - Gemini proxy                ║');
+  console.log('║   • POST /api/mistral       - Mistral proxy               ║');
+  console.log('║   • POST /api/perplexity    - Perplexity proxy            ║');
+  console.log('║   • POST /api/deepseek      - DeepSeek proxy              ║');
+  console.log('║   • POST /api/groq          - Groq proxy                  ║');
+  console.log('║   • POST /api/xai           - xAI/Grok proxy              ║');
+  console.log('║   • POST /api/kimi          - Kimi/Moonshot proxy         ║');
+  console.log('║   • GET  /api/hubspot/*     - HubSpot CRM integration     ║');
   console.log('║                                                           ║');
   console.log('╚═══════════════════════════════════════════════════════════╝');
   console.log('');
