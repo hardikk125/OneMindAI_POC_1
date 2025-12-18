@@ -1,15 +1,16 @@
 # Railway Configuration for OneMind AI Backend
-# NOTE: If Railway is pointed to root, use this config
-# If Railway is pointed to /server directory, use server/railway.toml
+# This config deploys the backend API server from the /server directory
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install"
+# Install dependencies in the server directory
+buildCommand = "cd server && npm install"
 
 [deploy]
-startCommand = "npm start"
+# Start the API server from the server directory
+startCommand = "cd server && node ai-proxy.cjs"
 healthcheckPath = "/health"
-healthcheckTimeout = 100
+healthcheckTimeout = 300
 numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
