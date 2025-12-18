@@ -51,6 +51,9 @@ console.log('🔥 [PROXY] Starting with GEMINI STREAMING FIX v2 - Dec 4, 2025 9:
 // MIDDLEWARE
 // =============================================================================
 
+// Trust proxy for Railway/Vercel deployments (fixes X-Forwarded-For header issues)
+app.set('trust proxy', true);
+
 // Security headers
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
