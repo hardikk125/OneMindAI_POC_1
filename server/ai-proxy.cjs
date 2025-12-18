@@ -1927,6 +1927,126 @@ app.get('/api/onemind/providers', async (req, res) => {
 });
 
 // =============================================================================
+// SSE STREAMING ENDPOINT - Solves timeout issues for large prompts
+// =============================================================================
+
+// POST /api/onemind/stream - SSE streaming endpoint for Mistral
+app.post('/api/onemind/stream', async (req, res) => {
+  const requestId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const startTime = Date.now();
+  
+  console.log(`[OneMind Stream] Request ${requestId} started`);
+  
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+  res.flushHeaders();
+  
+  try {
+    const { 
+      prompt, 
+      max_tokens = 128000,
+      model = 'mistral-large-latest'
+    } = req.body;
+    
+    if (!prompt) {
+      res.write(`data: ${JSON.stringify({ error: 'prompt is required' })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    console.log(`[OneMind Stream] Calling Mistral with ${prompt.length} chars, max_tokens: ${max_tokens}`);
+    
+    // Call Mistral API with streaming enabled
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: max_tokens,
+        stream: true  // Enable streaming
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[OneMind Stream] Mistral API error: ${response.status}`, errorText);
+      res.write(`data: ${JSON.stringify({ error: `Mistral API error: ${response.status}`, details: errorText })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    console.log(`[OneMind Stream] Mistral response received, streaming chunks...`);
+    
+    // Stream the response chunks to the client
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let totalContent = '';
+    let chunkCount = 0;
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) {
+        console.log(`[OneMind Stream] Stream complete. Total chunks: ${chunkCount}, Content length: ${totalContent.length}`);
+        res.write(`data: ${JSON.stringify({ done: true, totalLength: totalContent.length, requestId })}\n\n`);
+        break;
+      }
+      
+      const chunk = decoder.decode(value, { stream: true });
+      
+      // Parse SSE data from Mistral
+      const lines = chunk.split('\n').filter(line => line.trim() !== '');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6); // Remove 'data: ' prefix
+          
+          if (data === '[DONE]') {
+            continue;
+          }
+          
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            
+            if (content) {
+              totalContent += content;
+              chunkCount++;
+              
+              // Send chunk to client
+              res.write(`data: ${JSON.stringify({ chunk: content, index: chunkCount })}\n\n`);
+              
+              // Log progress every 100 chunks
+              if (chunkCount % 100 === 0) {
+                console.log(`[OneMind Stream] Progress: ${chunkCount} chunks, ${totalContent.length} chars`);
+              }
+            }
+          } catch (parseError) {
+            // Skip unparseable chunks (sometimes Mistral sends partial data)
+          }
+        }
+      }
+    }
+    
+    const totalLatency = Date.now() - startTime;
+    console.log(`[OneMind Stream] Request ${requestId} completed in ${totalLatency}ms`);
+    
+  } catch (error) {
+    console.error(`[OneMind Stream] Request ${requestId} error:`, error.message);
+    res.write(`data: ${JSON.stringify({ error: error.message, requestId })}\n\n`);
+  } finally {
+    res.end();
+  }
+});
+
+// =============================================================================
 // 404 HANDLER
 // =============================================================================
 
