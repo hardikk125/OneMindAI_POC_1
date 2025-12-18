@@ -1,14 +1,8 @@
 # Nixpacks configuration for Railway
-# This ensures proper Node.js version and build process
+# Minimal configuration - let Railway auto-detect everything
 
 [phases.setup]
 nixPkgs = ["nodejs_20"]
-
-[phases.install]
-cmds = ["npm ci --only=production || npm install --only=production"]
-
-[phases.build]
-cmds = []
 
 [start]
 cmd = "node ai-proxy.cjs"
