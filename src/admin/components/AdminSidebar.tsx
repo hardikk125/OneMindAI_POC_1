@@ -19,6 +19,7 @@ import {
   Settings2,
   Zap,
   Cpu,
+  Network,
 } from 'lucide-react';
 import type { AdminPage } from '../types';
 
@@ -54,6 +55,7 @@ export function AdminSidebar({
     { id: 'users', label: 'Users', icon: <Users size={20} /> },
     { id: 'models', label: 'AI Models', icon: <Bot size={20} /> },
     { id: 'ai-models', label: 'Model Config', icon: <Cpu size={20} /> },
+    { id: 'api-config', label: 'API Config', icon: <Network size={20} /> },
     { id: 'pricing', label: 'Pricing', icon: <DollarSign size={20} /> },
     { id: 'ui-config', label: 'UI Config', icon: <Settings2 size={20} /> },
     { id: 'transactions', label: 'Transactions', icon: <Receipt size={20} /> },

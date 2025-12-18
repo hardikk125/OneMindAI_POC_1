@@ -21,8 +21,85 @@ const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
   : null;
 
 let providerCache = null;
+let modelCache = null;
 let cacheTime = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// =============================================================================
+// MODEL & PROVIDER WHITELIST VALIDATION
+// =============================================================================
+
+async function refreshCaches() {
+  if (!supabase) return;
+  if (Date.now() - cacheTime < CACHE_TTL) return;
+  
+  try {
+    const [providerResult, modelResult] = await Promise.all([
+      supabase.from('provider_config').select('*'),
+      supabase.from('ai_models').select('provider, model_id, is_active')
+    ]);
+    
+    if (!providerResult.error && providerResult.data) {
+      providerCache = Object.fromEntries(providerResult.data.map(r => [r.provider, r]));
+    }
+    
+    if (!modelResult.error && modelResult.data) {
+      modelCache = modelResult.data;
+    }
+    
+    cacheTime = Date.now();
+    console.log('[Config] Provider and model config loaded from database');
+  } catch (err) {
+    console.warn('[Config] Failed to refresh caches:', err.message);
+  }
+}
+
+async function isProviderEnabled(provider) {
+  await refreshCaches();
+  if (!providerCache) return true; // Allow if no database
+  const config = providerCache[provider];
+  return config ? config.is_enabled !== false : true;
+}
+
+async function isModelEnabled(provider, modelId) {
+  await refreshCaches();
+  if (!modelCache) return true; // Allow if no database
+  
+  // Find the model in cache
+  const model = modelCache.find(m => 
+    m.provider === provider && m.model_id === modelId
+  );
+  
+  // If model not found in database, allow it (backwards compatibility)
+  if (!model) return true;
+  
+  return model.is_active === true;
+}
+
+async function validateModelAccess(provider, modelId) {
+  // Check provider first
+  const providerEnabled = await isProviderEnabled(provider);
+  if (!providerEnabled) {
+    return { allowed: false, reason: `Provider '${provider}' is disabled` };
+  }
+  
+  // Check model
+  const modelEnabled = await isModelEnabled(provider, modelId);
+  if (!modelEnabled) {
+    return { allowed: false, reason: `Model '${modelId}' is disabled` };
+  }
+  
+  return { allowed: true };
+}
+
+async function getEnabledModelsForProvider(provider) {
+  await refreshCaches();
+  if (!modelCache) return []; // Return empty if no database
+  
+  return modelCache
+    .filter(m => m.provider === provider && m.is_active === true)
+    .map(m => m.model_id);
+}
 
 async function getProviderLimit(provider, field, fallback) {
   if (!supabase) return fallback;
@@ -133,6 +210,176 @@ app.get('/health', (req, res) => {
       hubspot: !!process.env.HUBSPOT_CLIENT_ID
     }
   });
+});
+
+// =============================================================================
+// ADMIN API CONFIG ENDPOINTS
+// =============================================================================
+
+// Test provider connection - sends a minimal request to verify API key works
+app.post('/api/admin/test-provider/:provider', async (req, res) => {
+  const { provider } = req.params;
+  const startTime = Date.now();
+  
+  console.log(`[Admin] Testing provider connection: ${provider}`);
+  
+  try {
+    let success = false;
+    let error = null;
+    
+    // Get API key from environment or database
+    const apiKeys = {
+      openai: process.env.OPENAI_API_KEY,
+      anthropic: process.env.ANTHROPIC_API_KEY,
+      gemini: process.env.GOOGLE_AI_API_KEY,
+      mistral: process.env.MISTRAL_API_KEY,
+      perplexity: process.env.PERPLEXITY_API_KEY,
+      deepseek: process.env.DEEPSEEK_API_KEY,
+      groq: process.env.GROQ_API_KEY,
+      xai: process.env.XAI_API_KEY,
+      kimi: process.env.KIMI_API_KEY,
+    };
+    
+    const apiKey = apiKeys[provider];
+    
+    if (!apiKey) {
+      return res.json({ 
+        success: false, 
+        error: `No API key configured for ${provider}`,
+        latency_ms: Date.now() - startTime
+      });
+    }
+    
+    // Provider-specific test endpoints
+    const testEndpoints = {
+      openai: {
+        url: 'https://api.openai.com/v1/models',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      },
+      anthropic: {
+        url: 'https://api.anthropic.com/v1/messages',
+        method: 'POST',
+        headers: { 
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-haiku-20240307',
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'Hi' }]
+        })
+      },
+      gemini: {
+        url: `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+        headers: {}
+      },
+      mistral: {
+        url: 'https://api.mistral.ai/v1/models',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      },
+      perplexity: {
+        url: 'https://api.perplexity.ai/chat/completions',
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-sonar-small-128k-online',
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'Hi' }]
+        })
+      },
+      deepseek: {
+        url: 'https://api.deepseek.com/v1/models',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      },
+      groq: {
+        url: 'https://api.groq.com/openai/v1/models',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      },
+      xai: {
+        url: 'https://api.x.ai/v1/models',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      },
+      kimi: {
+        url: 'https://api.moonshot.cn/v1/models',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      }
+    };
+    
+    const testConfig = testEndpoints[provider];
+    
+    if (!testConfig) {
+      return res.json({ 
+        success: false, 
+        error: `Unknown provider: ${provider}`,
+        latency_ms: Date.now() - startTime
+      });
+    }
+    
+    const response = await fetch(testConfig.url, {
+      method: testConfig.method || 'GET',
+      headers: testConfig.headers,
+      body: testConfig.body,
+      signal: AbortSignal.timeout(10000) // 10 second timeout
+    });
+    
+    if (response.ok || response.status === 200 || response.status === 201) {
+      success = true;
+    } else {
+      const errorData = await response.text();
+      error = `HTTP ${response.status}: ${errorData.substring(0, 200)}`;
+    }
+    
+    const latency_ms = Date.now() - startTime;
+    console.log(`[Admin] Provider ${provider} test: ${success ? 'SUCCESS' : 'FAILED'} (${latency_ms}ms)`);
+    
+    res.json({ success, error, latency_ms });
+    
+  } catch (err) {
+    const latency_ms = Date.now() - startTime;
+    console.error(`[Admin] Provider ${provider} test error:`, err.message);
+    res.json({ 
+      success: false, 
+      error: err.message,
+      latency_ms
+    });
+  }
+});
+
+// Get provider config from database (for backend use)
+app.get('/api/admin/config', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Database not configured' });
+    }
+    
+    const [providerResult, systemResult] = await Promise.all([
+      supabase.from('provider_config').select('*').order('priority'),
+      supabase.from('system_config').select('*').eq('category', 'api')
+    ]);
+    
+    if (providerResult.error) throw providerResult.error;
+    if (systemResult.error) throw systemResult.error;
+    
+    // Don't expose API keys in response
+    const safeProviders = (providerResult.data || []).map(p => ({
+      ...p,
+      api_key_encrypted: undefined,
+      has_api_key: !!p.api_key_encrypted
+    }));
+    
+    res.json({
+      providers: safeProviders,
+      settings: systemResult.data || []
+    });
+    
+  } catch (err) {
+    console.error('[Admin] Config fetch error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // =============================================================================
@@ -1835,10 +2082,36 @@ app.post('/api/onemind', async (req, res) => {
     // Get enabled providers (from request or database)
     let providers;
     if (engines && Array.isArray(engines) && engines.length > 0) {
-      // Use specified engines
-      providers = engines.map(e => typeof e === 'string' ? { provider: e, model: null } : e);
+      // Use specified engines - validate each one against whitelist
+      const requestedProviders = engines.map(e => typeof e === 'string' ? { provider: e, model: null } : e);
+      
+      // Filter out disabled providers/models
+      const validatedProviders = [];
+      const blockedProviders = [];
+      
+      for (const p of requestedProviders) {
+        const validation = await validateModelAccess(p.provider, p.model);
+        if (validation.allowed) {
+          validatedProviders.push(p);
+        } else {
+          blockedProviders.push({ ...p, reason: validation.reason });
+        }
+      }
+      
+      if (blockedProviders.length > 0) {
+        console.log(`[OneMind] Blocked providers/models:`, blockedProviders);
+      }
+      
+      if (validatedProviders.length === 0) {
+        return res.status(403).json({ 
+          error: 'All requested providers/models are disabled',
+          blocked: blockedProviders
+        });
+      }
+      
+      providers = validatedProviders;
     } else {
-      // Get all enabled from database
+      // Get all enabled from database (already filtered by is_enabled)
       providers = await getEnabledProviders();
     }
     
@@ -1948,7 +2221,8 @@ app.post('/api/onemind/stream', async (req, res) => {
     const { 
       prompt, 
       max_tokens = 128000,
-      model = 'mistral-large-latest'
+      model = 'mistral-large-latest',
+      provider = 'mistral'
     } = req.body;
     
     if (!prompt) {
@@ -1957,7 +2231,16 @@ app.post('/api/onemind/stream', async (req, res) => {
       return;
     }
     
-    console.log(`[OneMind Stream] Calling Mistral with ${prompt.length} chars, max_tokens: ${max_tokens}`);
+    // Validate model access against whitelist
+    const validation = await validateModelAccess(provider, model);
+    if (!validation.allowed) {
+      console.log(`[OneMind Stream] Blocked: ${validation.reason}`);
+      res.write(`data: ${JSON.stringify({ error: validation.reason, blocked: true })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    console.log(`[OneMind Stream] Calling ${provider} with ${prompt.length} chars, max_tokens: ${max_tokens}`);
     
     // Call Mistral API with streaming enabled
     const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
@@ -2141,6 +2424,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('║   • POST /api/xai           - xAI/Grok proxy              ║');
   console.log('║   • POST /api/kimi          - Kimi/Moonshot proxy         ║');
   console.log('║   • GET  /api/hubspot/*     - HubSpot CRM integration     ║');
+  console.log('║   • POST /api/admin/test-provider - Test provider conn    ║');
+  console.log('║   • GET  /api/admin/config  - Get API config from DB      ║');
   console.log('║                                                           ║');
   console.log('╚═══════════════════════════════════════════════════════════╝');
   console.log('');

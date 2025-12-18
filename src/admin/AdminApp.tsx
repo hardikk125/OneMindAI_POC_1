@@ -17,6 +17,7 @@ import { SystemHealth } from './pages/SystemHealth';
 import { UIConfig } from './pages/UIConfig';
 import { ChaosTesting } from './components/ChaosTesting';
 import AIModelsConfig from './pages/AIModelsConfig';
+import ApiConfig from './pages/ApiConfig';
 import type { AdminPage } from './types';
 import { Loader2, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { HelpIcon } from '../components/ui/help-icon';
@@ -88,6 +89,8 @@ export function AdminApp({ onExit }: AdminAppProps) {
         return <Models />; // Pricing is part of Models page
       case 'ai-models':
         return <AIModelsConfig />;
+      case 'api-config':
+        return <ApiConfig />;
       case 'ui-config':
         return <UIConfig />;
       case 'transactions':

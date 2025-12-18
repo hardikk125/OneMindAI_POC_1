@@ -145,12 +145,55 @@ export type AdminPage =
   | 'models' 
   | 'pricing' 
   | 'ai-models'
+  | 'api-config'
   | 'transactions' 
   | 'bugs' 
   | 'errors' 
   | 'system'
   | 'ui-config'
   | 'chaos-testing';
+
+// =============================================================================
+// API Configuration Types
+// =============================================================================
+
+export interface ApiProviderConfig {
+  provider: string;
+  is_enabled: boolean;
+  max_output_cap: number;
+  rate_limit_rpm: number;
+  timeout_seconds: number;
+  retry_count: number;
+  retry_delay_ms: number;
+  api_endpoint: string | null;
+  notes: string | null;
+  last_tested_at: string | null;
+  last_test_status: 'untested' | 'success' | 'failed' | 'timeout';
+  last_test_error: string | null;
+  priority: number;
+  default_model: string | null;
+  has_api_key: boolean;
+  updated_at: string;
+}
+
+export interface ApiProviderConfigFull extends ApiProviderConfig {
+  api_key_encrypted: string | null;
+  custom_headers: Record<string, string> | null;
+}
+
+export interface GlobalApiSettings {
+  global_request_timeout_ms: number;
+  global_stream_timeout_ms: number;
+  global_retry_count: number;
+  global_retry_delay_ms: number;
+  api_rate_limit_enabled: boolean;
+  api_logging_enabled: boolean;
+  api_cache_ttl_seconds: number;
+  sse_heartbeat_interval_ms: number;
+  sse_max_duration_ms: number;
+  fallback_enabled: boolean;
+  fallback_max_attempts: number;
+}
 
 export interface NavItem {
   id: AdminPage;
