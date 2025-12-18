@@ -2015,6 +2015,13 @@ app.post('/api/onemind/stream', async (req, res) => {
           try {
             const parsed = JSON.parse(data);
             const content = parsed.choices?.[0]?.delta?.content;
+            const finishReason = parsed.choices?.[0]?.finish_reason;
+            
+            // Log finish_reason when stream ends to diagnose truncation
+            if (finishReason) {
+              console.log(`[OneMind Stream] Finish reason: ${finishReason}`);
+              res.write(`data: ${JSON.stringify({ finishReason })}\n\n`);
+            }
             
             if (content) {
               totalContent += content;
@@ -2116,11 +2123,13 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('║   🚀 OneMindAI Proxy Server                               ║');
   console.log(`║   📡 Running on port ${PORT}                               ║`);
   console.log('║   🛡️  Crash Protection: ENABLED                           ║');
+  console.log('║   ⏱️  Server Timeout: 10 minutes                          ║');
   console.log('║                                                           ║');
   console.log('╠═══════════════════════════════════════════════════════════╣');
   console.log('║   Endpoints:                                              ║');
   console.log('║   • GET  /health            - Server status               ║');
   console.log('║   • POST /api/onemind       - 🧠 UNIFIED API (all engines)║');
+  console.log('║   • POST /api/onemind/stream - 🌊 SSE Streaming endpoint  ║');
   console.log('║   • GET  /api/onemind/providers - List enabled providers  ║');
   console.log('║   • POST /api/openai        - OpenAI proxy                ║');
   console.log('║   • POST /api/anthropic     - Claude proxy                ║');
@@ -2136,6 +2145,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('╚═══════════════════════════════════════════════════════════╝');
   console.log('');
 });
+
+// Configure server timeouts for Railway - prevents premature connection drops
+server.setTimeout(600000);        // 10 minutes - max request duration
+server.keepAliveTimeout = 610000; // 10 min + 10s - keep connection alive
+server.headersTimeout = 620000;   // 10 min + 20s - headers timeout
 
 // Handle server errors
 server.on('error', (error) => {

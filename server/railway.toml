@@ -1,9 +1,11 @@
 # Railway Configuration for OneMind AI Backend
-# Minimal config - let Railway handle everything
+# Optimized for long-running streaming requests
 
 [build]
 builder = "NIXPACKS"
 
 [deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 10
