@@ -110,8 +110,13 @@ app.use((req, res, next) => {
 });
 
 // =============================================================================
-// HEALTH CHECK
+// HEALTH CHECK (Root path for Railway default healthcheck)
 // =============================================================================
+
+// Root endpoint - Railway checks this by default
+app.get('/', (req, res) => {
+  res.status(200).send('OK');
+});
 
 app.get('/health', (req, res) => {
   res.json({ 
