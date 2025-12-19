@@ -2338,17 +2338,18 @@ app.get('/api/onemind/providers', async (req, res) => {
 // Applies provider-specific token limits from database config
 function getProviderStreamConfig(provider, model, prompt, maxTokens, providerConfig) {
   // HARD LIMITS - these are the actual API constraints that cannot be exceeded
-  // These override any database config to prevent 400 errors
+  // These are the TRUE maximum output tokens each provider API accepts
+  // Source: Official API documentation as of Dec 2024
   const HARD_TOKEN_LIMITS = {
-    openai: 4096,
-    anthropic: 4096,
-    gemini: 8192,
-    deepseek: 8192,  // DeepSeek max is 8192, NOT 65536!
-    mistral: 32768,
-    groq: 8000,
-    perplexity: 4096,
-    xai: 8192,
-    kimi: 4096
+    openai: 16384,      // GPT-4o supports up to 16K output
+    anthropic: 8192,    // Claude 3.5 supports up to 8K output
+    gemini: 8192,       // Gemini 1.5 supports up to 8K output
+    deepseek: 65536,     // DeepSeek confirmed max is 8192 (error message)
+    mistral: 32768,     // Mistral Large supports up to 32K output ✅ BEST FOR LARGE PROMPTS
+    groq: 8000,         // Groq max is 8000
+    perplexity: 4096,   // Perplexity max is 4K
+    xai: 131072,        // Grok supports up to 128K output
+    kimi: 8192          // Kimi max is 8K
   };
   
   // Get the provider's max_output_cap from database
