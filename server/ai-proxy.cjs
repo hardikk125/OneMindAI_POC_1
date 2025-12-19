@@ -2342,11 +2342,11 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
   // Source: Official API documentation as of Dec 2024
   // ⚠️ DeepSeek API confirmed: "the valid range of max_tokens is [1, 8192]"
   const HARD_TOKEN_LIMITS = {
-    openai: 16384,      // GPT-4o supports up to 16K output
+    openai: 128000,     // GPT-5.1 supports up to 128K output (upgraded from 16K)
     anthropic: 8192,    // Claude 3.5 supports up to 8K output
     gemini: 8192,       // Gemini 1.5 supports up to 8K output
     deepseek: 8192,     // DeepSeek API ERROR confirms: max is 8192 (NOT 65536!)
-    mistral: 32768,     // Mistral Large supports up to 32K output ✅ BEST FOR LARGE PROMPTS
+    mistral: 32768,     // Mistral Large supports up to 32K output
     groq: 8000,         // Groq max is 8000
     perplexity: 4096,   // Perplexity max is 4K
     xai: 131072,        // Grok supports up to 128K output
@@ -2372,7 +2372,9 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
         model: model || 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: limitedTokens,
-        stream: true
+        stream: true,
+        // Add reasoning effort for GPT-5.1 models
+        ...(model && model.includes('gpt-5.1') && { reasoning_effort: 'medium' })
       }
     },
     anthropic: {
