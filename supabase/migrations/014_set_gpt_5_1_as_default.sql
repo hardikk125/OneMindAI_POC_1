@@ -5,8 +5,8 @@
 -- Purpose: Update OpenAI provider to use GPT-5.1 as default model
 
 -- Disable triggers to avoid admin_activity_log constraint during migration
-ALTER TABLE provider_config DISABLE TRIGGER log_provider_config_change;
-ALTER TABLE ai_models DISABLE TRIGGER log_ai_models_change;
+ALTER TABLE provider_config DISABLE TRIGGER trigger_log_provider_config_change;
+-- Note: ai_models doesn't have an audit trigger, only provider_config does
 
 -- Update provider_config to use GPT-5.1 as default
 UPDATE provider_config 
@@ -24,8 +24,7 @@ SET is_default = true
 WHERE provider = 'openai' AND model_id = 'gpt-5.1-2025-11-13';
 
 -- Re-enable triggers after migration
-ALTER TABLE provider_config ENABLE TRIGGER log_provider_config_change;
-ALTER TABLE ai_models ENABLE TRIGGER log_ai_models_change;
+ALTER TABLE provider_config ENABLE TRIGGER trigger_log_provider_config_change;
 
 -- Log the change
 DO $$
