@@ -2229,12 +2229,19 @@ app.get('/api/onemind/providers', async (req, res) => {
     }
     
     // Get enabled models from database
+    // IMPORTANT: Only include models whose provider is ALSO enabled
     const enabledModels = [];
     const disabledModels = [];
     
+    // Build set of enabled provider names for quick lookup
+    const enabledProviderNames = new Set(enabledProviders.map(p => p.provider));
+    
     if (modelCache && modelCache.length > 0) {
       for (const model of modelCache) {
-        if (model.is_active) {
+        // Model is truly enabled only if: model.is_active AND provider.is_enabled
+        const providerEnabled = enabledProviderNames.has(model.provider);
+        
+        if (model.is_active && providerEnabled) {
           enabledModels.push({
             provider: model.provider,
             model_id: model.model_id,
@@ -2247,7 +2254,8 @@ app.get('/api/onemind/providers', async (req, res) => {
         } else {
           disabledModels.push({
             provider: model.provider,
-            model_id: model.model_id
+            model_id: model.model_id,
+            reason: !model.is_active ? 'model_disabled' : 'provider_disabled'
           });
         }
       }
