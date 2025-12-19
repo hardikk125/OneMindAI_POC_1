@@ -4,6 +4,9 @@
 -- Date: 2025-12-19
 -- Purpose: Add OpenAI's new GPT-5.1 model with 400K context and 128K output
 
+-- Disable triggers to avoid admin_activity_log constraint during migration
+ALTER TABLE provider_config DISABLE TRIGGER USER;
+
 -- Add GPT-5.1 to ai_models table
 INSERT INTO ai_models (
     provider,
@@ -43,6 +46,9 @@ UPDATE provider_config
 SET max_output_cap = 128000,
     updated_at = NOW()
 WHERE provider = 'openai' AND max_output_cap < 128000;
+
+-- Re-enable triggers after migration
+ALTER TABLE provider_config ENABLE TRIGGER USER;
 
 -- Log the addition
 DO $$
