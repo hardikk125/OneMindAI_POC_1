@@ -42,6 +42,35 @@ const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX) || 60; // 60 request
 const REQUEST_SIZE_LIMIT = process.env.REQUEST_SIZE_LIMIT || '10mb';
 
 // =============================================================================
+// PROVIDER TEMPERATURE CONFIGURATION
+// =============================================================================
+// Default temperatures per provider - can be overridden via environment variables
+// Format: PROVIDER_TEMPERATURE_OPENAI=0.7, PROVIDER_TEMPERATURE_ANTHROPIC=0.8, etc.
+
+const PROVIDER_TEMPERATURES = {
+  openai: parseFloat(process.env.PROVIDER_TEMPERATURE_OPENAI) || 0.7,
+  anthropic: parseFloat(process.env.PROVIDER_TEMPERATURE_ANTHROPIC) || 0.7,
+  gemini: parseFloat(process.env.PROVIDER_TEMPERATURE_GEMINI) || 0.7,
+  mistral: parseFloat(process.env.PROVIDER_TEMPERATURE_MISTRAL) || 0.7,
+  perplexity: parseFloat(process.env.PROVIDER_TEMPERATURE_PERPLEXITY) || 0.7,
+  deepseek: parseFloat(process.env.PROVIDER_TEMPERATURE_DEEPSEEK) || 0.7,
+  groq: parseFloat(process.env.PROVIDER_TEMPERATURE_GROQ) || 0.7,
+  xai: parseFloat(process.env.PROVIDER_TEMPERATURE_XAI) || 0.7,
+  kimi: parseFloat(process.env.PROVIDER_TEMPERATURE_KIMI) || 0.7,
+};
+
+/**
+ * Get temperature for a provider
+ * Priority: request body > environment variable > default (0.7)
+ */
+function getProviderTemperature(provider, requestTemperature) {
+  if (requestTemperature !== undefined && requestTemperature !== null) {
+    return requestTemperature;
+  }
+  return PROVIDER_TEMPERATURES[provider] ?? 0.7;
+}
+
+// =============================================================================
 // MIDDLEWARE
 // =============================================================================
 
@@ -193,7 +222,7 @@ app.post('/api/openai', async (req, res) => {
         model: model || 'gpt-4o',
         messages,
         max_tokens: max_tokens || 8000,
-        temperature: temperature ?? 0.7,
+        temperature: getProviderTemperature('openai', temperature),
         stream: stream ?? true
       })
     });
@@ -238,7 +267,7 @@ app.post('/api/anthropic', async (req, res) => {
       model: model || 'claude-3-5-sonnet-20241022',
       messages,
       max_tokens: max_tokens || 8000,
-      temperature: temperature ?? 0.7,
+      temperature: getProviderTemperature('anthropic', temperature),
       stream: stream ?? true
     };
 
@@ -305,7 +334,7 @@ app.post('/api/gemini', async (req, res) => {
       body: JSON.stringify({
         contents,
         generationConfig: generationConfig || {
-          temperature: 0.7,
+          temperature: getProviderTemperature('gemini', null),
           maxOutputTokens: 4000
         }
       })
@@ -357,7 +386,7 @@ app.post('/api/mistral', async (req, res) => {
         model: model || 'mistral-large-latest',
         messages,
         max_tokens: max_tokens || 8000,
-        temperature: temperature ?? 0.7,
+        temperature: getProviderTemperature('mistral', temperature),
         stream: stream ?? true
       })
     });
@@ -408,7 +437,7 @@ app.post('/api/perplexity', async (req, res) => {
         model: model || 'sonar-pro',
         messages,
         max_tokens: max_tokens || 8000,
-        temperature: temperature ?? 0.7,
+        temperature: getProviderTemperature('perplexity', temperature),
         stream: stream ?? true
       })
     });
@@ -459,7 +488,7 @@ app.post('/api/deepseek', async (req, res) => {
         model: model || 'deepseek-chat',
         messages,
         max_tokens: max_tokens || 8000,
-        temperature: temperature ?? 0.7,
+        temperature: getProviderTemperature('deepseek', temperature),
         stream: stream ?? true
       })
     });
@@ -510,7 +539,7 @@ app.post('/api/groq', async (req, res) => {
         model: model || 'llama-3.3-70b-versatile',
         messages,
         max_tokens: max_tokens || 8000,
-        temperature: temperature ?? 0.7,
+        temperature: getProviderTemperature('groq', temperature),
         stream: stream ?? true
       })
     });
@@ -561,7 +590,7 @@ app.post('/api/xai', async (req, res) => {
         model: model || 'grok-beta',
         messages,
         max_tokens: max_tokens || 8000,
-        temperature: temperature ?? 0.7,
+        temperature: getProviderTemperature('xai', temperature),
         stream: stream ?? true
       })
     });
@@ -612,7 +641,7 @@ app.post('/api/kimi', async (req, res) => {
         model: model || 'moonshot-v1-128k',
         messages,
         max_tokens: max_tokens || 8000,
-        temperature: temperature ?? 0.7,
+        temperature: getProviderTemperature('kimi', temperature),
         stream: stream ?? true
       })
     });

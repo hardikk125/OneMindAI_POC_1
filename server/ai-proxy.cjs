@@ -126,6 +126,28 @@ async function getProviderLimit(provider, field, fallback) {
   }
 }
 
+/**
+ * Get temperature for a provider from database config or environment variable
+ * Priority: database config > environment variable > default (0.7)
+ */
+async function getProviderTemperature(provider) {
+  // Try database first
+  const dbTemp = await getProviderLimit(provider, 'temperature', null);
+  if (dbTemp !== null && dbTemp !== undefined) {
+    return dbTemp;
+  }
+  
+  // Try environment variable
+  const envKey = `PROVIDER_TEMPERATURE_${provider.toUpperCase()}`;
+  const envTemp = parseFloat(process.env[envKey]);
+  if (!isNaN(envTemp)) {
+    return envTemp;
+  }
+  
+  // Default fallback
+  return 0.7;
+}
+
 const app = express();
 const PORT = process.env.PORT || process.env.AI_PROXY_PORT || 3002;
 
@@ -1986,7 +2008,7 @@ async function callProvider(provider, model, prompt, maxTokens) {
             model: model || 'deepseek-chat',
             messages: [{ role: 'user', content: prompt }],
             max_tokens: maxTokens,
-            temperature: 0.7
+            temperature: await getProviderTemperature('deepseek')
           })
         });
         const data = await res.json();
@@ -2284,7 +2306,116 @@ app.get('/api/onemind/providers', async (req, res) => {
 // SSE STREAMING ENDPOINT - Solves timeout issues for large prompts
 // =============================================================================
 
-// POST /api/onemind/stream - SSE streaming endpoint for Mistral
+// Helper function to get provider API config for streaming
+function getProviderStreamConfig(provider, model, prompt, maxTokens) {
+  const configs = {
+    openai: {
+      url: 'https://api.openai.com/v1/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: {
+        model: model || 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        stream: true
+      }
+    },
+    anthropic: {
+      url: 'https://api.anthropic.com/v1/messages',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: {
+        model: model || 'claude-3-5-sonnet-20241022',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        stream: true
+      }
+    },
+    gemini: {
+      url: `https://generativelanguage.googleapis.com/v1beta/models/${model || 'gemini-1.5-flash'}:streamGenerateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
+      headers: { 'Content-Type': 'application/json' },
+      body: {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: maxTokens }
+      },
+      isGemini: true
+    },
+    mistral: {
+      url: 'https://api.mistral.ai/v1/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`
+      },
+      body: {
+        model: model || 'mistral-large-latest',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        stream: true
+      }
+    },
+    deepseek: {
+      url: 'https://api.deepseek.com/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+      },
+      body: {
+        model: model || 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        stream: true
+      }
+    },
+    groq: {
+      url: 'https://api.groq.com/openai/v1/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      body: {
+        model: model || 'llama-3.1-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: Math.min(maxTokens, 8000), // Groq has lower limits
+        stream: true
+      }
+    },
+    perplexity: {
+      url: 'https://api.perplexity.ai/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}`
+      },
+      body: {
+        model: model || 'llama-3.1-sonar-large-128k-online',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        stream: true
+      }
+    },
+    xai: {
+      url: 'https://api.x.ai/v1/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.XAI_API_KEY}`
+      },
+      body: {
+        model: model || 'grok-beta',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        stream: true
+      }
+    }
+  };
+  
+  return configs[provider] || null;
+}
+
+// POST /api/onemind/stream - SSE streaming endpoint for all providers
 app.post('/api/onemind/stream', async (req, res) => {
   const requestId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const startTime = Date.now();
@@ -2302,8 +2433,8 @@ app.post('/api/onemind/stream', async (req, res) => {
     const { 
       prompt, 
       max_tokens = 128000,
-      model = 'mistral-large-latest',
-      provider = 'mistral'
+      model,
+      provider
     } = req.body;
     
     if (!prompt) {
@@ -2312,8 +2443,31 @@ app.post('/api/onemind/stream', async (req, res) => {
       return;
     }
     
+    // If no provider/model specified, get first enabled from database
+    let selectedProvider = provider;
+    let selectedModel = model;
+    
+    if (!selectedProvider || !selectedModel) {
+      await refreshCaches();
+      if (modelCache && modelCache.length > 0) {
+        const enabledModel = modelCache.find(m => m.is_active === true);
+        if (enabledModel) {
+          selectedProvider = enabledModel.provider;
+          selectedModel = enabledModel.model_id;
+          console.log(`[OneMind Stream] Auto-selected enabled model: ${selectedProvider}/${selectedModel}`);
+        }
+      }
+      
+      // Fallback to deepseek if no enabled model found
+      if (!selectedProvider) {
+        selectedProvider = 'deepseek';
+        selectedModel = 'deepseek-chat';
+        console.log(`[OneMind Stream] Fallback to default: ${selectedProvider}/${selectedModel}`);
+      }
+    }
+    
     // Validate model access against whitelist
-    const validation = await validateModelAccess(provider, model);
+    const validation = await validateModelAccess(selectedProvider, selectedModel);
     if (!validation.allowed) {
       console.log(`[OneMind Stream] Blocked: ${validation.reason}`);
       res.write(`data: ${JSON.stringify({ error: validation.reason, blocked: true })}\n\n`);
@@ -2321,32 +2475,32 @@ app.post('/api/onemind/stream', async (req, res) => {
       return;
     }
     
-    console.log(`[OneMind Stream] Calling ${provider} with ${prompt.length} chars, max_tokens: ${max_tokens}`);
+    console.log(`[OneMind Stream] Calling ${selectedProvider}/${selectedModel} with ${prompt.length} chars, max_tokens: ${max_tokens}`);
     
-    // Call Mistral API with streaming enabled
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: max_tokens,
-        stream: true  // Enable streaming
-      })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[OneMind Stream] Mistral API error: ${response.status}`, errorText);
-      res.write(`data: ${JSON.stringify({ error: `Mistral API error: ${response.status}`, details: errorText })}\n\n`);
+    // Get provider-specific config
+    const config = getProviderStreamConfig(selectedProvider, selectedModel, prompt, max_tokens);
+    if (!config) {
+      res.write(`data: ${JSON.stringify({ error: `Unsupported provider: ${selectedProvider}` })}\n\n`);
       res.end();
       return;
     }
     
-    console.log(`[OneMind Stream] Mistral response received, streaming chunks...`);
+    // Call provider API with streaming enabled
+    const response = await fetch(config.url, {
+      method: 'POST',
+      headers: config.headers,
+      body: JSON.stringify(config.body)
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[OneMind Stream] ${selectedProvider} API error: ${response.status}`, errorText);
+      res.write(`data: ${JSON.stringify({ error: `${selectedProvider} API error: ${response.status}`, details: errorText })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    console.log(`[OneMind Stream] ${selectedProvider} response received, streaming chunks...`);
     
     // Stream the response chunks to the client
     const reader = response.body.getReader();

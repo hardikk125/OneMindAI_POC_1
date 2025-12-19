@@ -93,7 +93,7 @@ export class UniversalAIClient {
     const response = await client.messages.create({
       model: this.config.model,
       max_tokens: this.config.maxTokens,
-      temperature: this.config.temperature || 0.7,
+      temperature: this.config.temperature ?? 0.7,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -141,7 +141,7 @@ export class UniversalAIClient {
       model: this.config.model,
       messages: [{ role: 'user', content: prompt }],
       max_tokens: this.config.maxTokens,
-      temperature: this.config.temperature || 0.7,
+      temperature: this.config.temperature ?? 0.7,
     });
 
     const endTime = Date.now();
@@ -181,7 +181,7 @@ export class UniversalAIClient {
     const model = genAI.getGenerativeModel({ 
       model: this.config.model,
       generationConfig: {
-        temperature: this.config.temperature || 0.7,
+        temperature: this.config.temperature ?? 0.7,
         maxOutputTokens: this.config.maxTokens,
       },
     });
@@ -235,7 +235,7 @@ export class UniversalAIClient {
         model: this.config.model,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: this.config.maxTokens,
-        temperature: this.config.temperature || 0.7,
+        temperature: this.config.temperature ?? 0.7,
       }),
     });
 

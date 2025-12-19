@@ -21,6 +21,8 @@ DROP POLICY IF EXISTS "Admins can update models" ON public.ai_models;
 DROP POLICY IF EXISTS "Admins can delete models" ON public.ai_models;
 DROP POLICY IF EXISTS "Public read access for models" ON public.ai_models;
 DROP POLICY IF EXISTS "Authenticated write access for models" ON public.ai_models;
+DROP POLICY IF EXISTS "ai_models_read_all" ON public.ai_models;
+DROP POLICY IF EXISTS "ai_models_write_authenticated" ON public.ai_models;
 
 -- Create clean, simple policies
 -- Everyone can read all models
@@ -41,6 +43,8 @@ DROP POLICY IF EXISTS "Public read access for provider_config" ON provider_confi
 DROP POLICY IF EXISTS "Authenticated write access for provider_config" ON provider_config;
 DROP POLICY IF EXISTS "Public read non-sensitive provider_config" ON provider_config;
 DROP POLICY IF EXISTS "Admin write access for provider_config" ON provider_config;
+DROP POLICY IF EXISTS "provider_config_read_all" ON provider_config;
+DROP POLICY IF EXISTS "provider_config_write_authenticated" ON provider_config;
 
 -- Create clean policies
 -- Everyone can read provider config (excluding sensitive fields via view)
@@ -69,7 +73,46 @@ CREATE POLICY "system_config_write_authenticated" ON system_config
     FOR ALL USING (auth.role() = 'authenticated');
 
 -- =============================================
--- 4. ENSURE RLS IS ENABLED
+-- 4. FIX TRIGGER FOR PROVIDER_CONFIG LOGGING
+-- =============================================
+-- The trigger was trying to insert TEXT (provider name) into UUID column (target_id)
+-- Fix: Change target_id to NULL and store provider name in new_value JSONB
+
+DROP TRIGGER IF EXISTS trigger_log_provider_config_change ON provider_config;
+DROP FUNCTION IF EXISTS log_provider_config_change();
+
+-- Recreate the function with correct types
+CREATE OR REPLACE FUNCTION log_provider_config_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Only log if admin_activity_log table exists
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'admin_activity_log') THEN
+        INSERT INTO admin_activity_log (
+            admin_id,
+            action,
+            target_type,
+            target_id,
+            old_value,
+            new_value
+        ) VALUES (
+            auth.uid(),
+            TG_OP,
+            'provider_config',
+            NULL,  -- target_id is UUID, provider is TEXT, so use NULL
+            CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) ELSE NULL END,
+            jsonb_build_object('provider', NEW.provider, 'data', to_jsonb(NEW))
+        );
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_log_provider_config_change
+    AFTER INSERT OR UPDATE ON provider_config
+    FOR EACH ROW EXECUTE FUNCTION log_provider_config_change();
+
+-- =============================================
+-- 5. ENSURE RLS IS ENABLED
 -- =============================================
 
 ALTER TABLE public.ai_models ENABLE ROW LEVEL SECURITY;

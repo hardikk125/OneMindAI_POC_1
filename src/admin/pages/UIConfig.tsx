@@ -856,6 +856,7 @@ export function UIConfig() {
               <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">Enabled</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Max Output</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Rate Limit (RPM)</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Temperature</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Timeout (s)</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Retries</th>
             </tr>
@@ -949,6 +950,45 @@ export function UIConfig() {
                       className="text-gray-300 hover:text-white font-mono"
                     >
                       {provider.rate_limit_rpm.toLocaleString()}
+                    </button>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {editingProviderKey === provider.provider && editingProviderField === 'temperature' ? (
+                    <div className="flex items-center justify-end gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={editingProviderValue}
+                        onChange={(e) => setEditingProviderValue(e.target.value)}
+                        className="w-20 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white text-sm text-right"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleUpdateProviderConfig(provider.provider, 'temperature', Number(editingProviderValue))}
+                        className="p-1 text-green-400 hover:bg-green-400/20 rounded"
+                      >
+                        <Save size={12} />
+                      </button>
+                      <button
+                        onClick={() => { setEditingProviderKey(null); setEditingProviderField(null); }}
+                        className="p-1 text-gray-400 hover:bg-gray-700 rounded"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setEditingProviderKey(provider.provider);
+                        setEditingProviderField('temperature');
+                        setEditingProviderValue(String(provider.temperature));
+                      }}
+                      className="text-blue-300 hover:text-blue-200 font-mono"
+                    >
+                      {provider.temperature.toFixed(1)}
                     </button>
                   )}
                 </td>

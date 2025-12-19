@@ -46,7 +46,7 @@ export class ClaudeClient {
       const response = await this.client.messages.create({
         model: this.config.model,
         max_tokens: this.config.maxTokens,
-        temperature: this.config.temperature || 0.7,
+        temperature: this.config.temperature ?? 0.7,
         messages: [
           {
             role: 'user',

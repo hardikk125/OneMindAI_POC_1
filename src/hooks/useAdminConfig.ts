@@ -27,6 +27,7 @@ export interface ProviderConfigItem {
   rate_limit_rpm: number;
   timeout_seconds: number;
   retry_count: number;
+  temperature: number;
 }
 
 export interface AdminConfig {
@@ -65,15 +66,15 @@ const DEFAULT_SYSTEM_CONFIG: SystemConfigItem[] = [
 ];
 
 const DEFAULT_PROVIDER_CONFIG: ProviderConfigItem[] = [
-  { provider: 'openai', is_enabled: true, max_output_cap: 16384, rate_limit_rpm: 3500, timeout_seconds: 30, retry_count: 3 },
-  { provider: 'anthropic', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 3500, timeout_seconds: 30, retry_count: 3 },
-  { provider: 'gemini', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 3600, timeout_seconds: 30, retry_count: 3 },
-  { provider: 'deepseek', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 3600, timeout_seconds: 30, retry_count: 3 },
-  { provider: 'mistral', is_enabled: true, max_output_cap: 32768, rate_limit_rpm: 3600, timeout_seconds: 30, retry_count: 3 },
-  { provider: 'perplexity', is_enabled: true, max_output_cap: 4096, rate_limit_rpm: 1800, timeout_seconds: 30, retry_count: 3 },
-  { provider: 'groq', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 1800, timeout_seconds: 30, retry_count: 3 },
-  { provider: 'xai', is_enabled: true, max_output_cap: 16384, rate_limit_rpm: 1800, timeout_seconds: 30, retry_count: 3 },
-  { provider: 'kimi', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 1800, timeout_seconds: 30, retry_count: 3 },
+  { provider: 'openai', is_enabled: true, max_output_cap: 16384, rate_limit_rpm: 3500, timeout_seconds: 30, retry_count: 3, temperature: 0.7 },
+  { provider: 'anthropic', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 3500, timeout_seconds: 30, retry_count: 3, temperature: 0.7 },
+  { provider: 'gemini', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 3600, timeout_seconds: 30, retry_count: 3, temperature: 0.7 },
+  { provider: 'deepseek', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 3600, timeout_seconds: 30, retry_count: 3, temperature: 0.7 },
+  { provider: 'mistral', is_enabled: true, max_output_cap: 32768, rate_limit_rpm: 3600, timeout_seconds: 30, retry_count: 3, temperature: 0.7 },
+  { provider: 'perplexity', is_enabled: true, max_output_cap: 4096, rate_limit_rpm: 1800, timeout_seconds: 30, retry_count: 3, temperature: 0.7 },
+  { provider: 'groq', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 1800, timeout_seconds: 30, retry_count: 3, temperature: 0.7 },
+  { provider: 'xai', is_enabled: true, max_output_cap: 16384, rate_limit_rpm: 1800, timeout_seconds: 30, retry_count: 3, temperature: 0.7 },
+  { provider: 'kimi', is_enabled: true, max_output_cap: 8192, rate_limit_rpm: 1800, timeout_seconds: 30, retry_count: 3, temperature: 0.7 },
 ];
 
 // =============================================================================
@@ -162,7 +163,7 @@ export function useAdminConfig(): AdminConfig {
           .order('key', { ascending: true }),
         supabase
           .from('provider_config')
-          .select('provider, is_enabled, max_output_cap, rate_limit_rpm, timeout_seconds, retry_count')
+          .select('provider, is_enabled, max_output_cap, rate_limit_rpm, timeout_seconds, retry_count, temperature')
           .order('provider', { ascending: true }),
       ]);
 
@@ -347,6 +348,14 @@ export function getEnabledProviders(config: ProviderConfigItem[]): ProviderConfi
 export function getProviderMaxOutput(config: ProviderConfigItem[], provider: string): number {
   const providerConfig = getProviderConfig(config, provider);
   return providerConfig?.max_output_cap ?? 8192; // Default fallback
+}
+
+/**
+ * Get temperature for a provider
+ */
+export function getProviderTemperature(config: ProviderConfigItem[], provider: string): number {
+  const providerConfig = getProviderConfig(config, provider);
+  return providerConfig?.temperature ?? 0.7; // Default fallback
 }
 
 // =============================================================================

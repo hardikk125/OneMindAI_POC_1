@@ -51,7 +51,7 @@ export class StreamingAIClient {
     const stream = await client.messages.create({
       model: this.config.model,
       max_tokens: this.config.maxTokens,
-      temperature: this.config.temperature || 0.7,
+      temperature: this.config.temperature ?? 0.7,
       messages: [{ role: 'user', content: prompt }],
       stream: true,
     });
@@ -73,7 +73,7 @@ export class StreamingAIClient {
       model: this.config.model,
       messages: [{ role: 'user', content: prompt }],
       max_tokens: this.config.maxTokens,
-      temperature: this.config.temperature || 0.7,
+      temperature: this.config.temperature ?? 0.7,
       stream: true,
     });
 
@@ -90,7 +90,7 @@ export class StreamingAIClient {
     const model = genAI.getGenerativeModel({ 
       model: this.config.model,
       generationConfig: {
-        temperature: this.config.temperature || 0.7,
+        temperature: this.config.temperature ?? 0.7,
         maxOutputTokens: this.config.maxTokens,
       },
     });
@@ -117,7 +117,7 @@ export class StreamingAIClient {
         model: this.config.model,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: this.config.maxTokens,
-        temperature: this.config.temperature || 0.7,
+        temperature: this.config.temperature ?? 0.7,
         stream: true,
       }),
     });
