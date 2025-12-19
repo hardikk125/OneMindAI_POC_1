@@ -2335,7 +2335,12 @@ app.get('/api/onemind/providers', async (req, res) => {
 // =============================================================================
 
 // Helper function to get provider API config for streaming
-function getProviderStreamConfig(provider, model, prompt, maxTokens) {
+// Applies provider-specific token limits from database config
+function getProviderStreamConfig(provider, model, prompt, maxTokens, providerConfig) {
+  // Get the provider's max_output_cap from database, default to requested maxTokens
+  const providerLimit = providerConfig?.max_output_cap || maxTokens;
+  const limitedTokens = Math.min(maxTokens, providerLimit);
+  
   const configs = {
     openai: {
       url: 'https://api.openai.com/v1/chat/completions',
@@ -2346,7 +2351,7 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens) {
       body: {
         model: model || 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
+        max_tokens: limitedTokens,
         stream: true
       }
     },
@@ -2360,7 +2365,7 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens) {
       body: {
         model: model || 'claude-3-5-sonnet-20241022',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
+        max_tokens: limitedTokens,
         stream: true
       }
     },
@@ -2369,7 +2374,7 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens) {
       headers: { 'Content-Type': 'application/json' },
       body: {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: maxTokens }
+        generationConfig: { maxOutputTokens: limitedTokens }
       },
       isGemini: true
     },
@@ -2382,7 +2387,7 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens) {
       body: {
         model: model || 'mistral-large-latest',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
+        max_tokens: limitedTokens,
         stream: true
       }
     },
@@ -2395,7 +2400,7 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens) {
       body: {
         model: model || 'deepseek-chat',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
+        max_tokens: limitedTokens,
         stream: true
       }
     },
@@ -2408,7 +2413,7 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens) {
       body: {
         model: model || 'llama-3.1-70b-versatile',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: Math.min(maxTokens, 8000), // Groq has lower limits
+        max_tokens: Math.min(limitedTokens, 8000), // Groq has lower limits
         stream: true
       }
     },
@@ -2421,7 +2426,7 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens) {
       body: {
         model: model || 'llama-3.1-sonar-large-128k-online',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
+        max_tokens: limitedTokens,
         stream: true
       }
     },
@@ -2505,13 +2510,20 @@ app.post('/api/onemind/stream', async (req, res) => {
     
     console.log(`[OneMind Stream] Calling ${selectedProvider}/${selectedModel} with ${prompt.length} chars, max_tokens: ${max_tokens}`);
     
-    // Get provider-specific config
-    const config = getProviderStreamConfig(selectedProvider, selectedModel, prompt, max_tokens);
+    // Get provider config from cache for token limit enforcement
+    const providerConfig = providerCache?.[selectedProvider];
+    
+    // Get provider-specific config with token limits applied
+    const config = getProviderStreamConfig(selectedProvider, selectedModel, prompt, max_tokens, providerConfig);
     if (!config) {
       res.write(`data: ${JSON.stringify({ error: `Unsupported provider: ${selectedProvider}` })}\n\n`);
       res.end();
       return;
     }
+    
+    // Log the actual token limit being used
+    const actualTokenLimit = config.body.max_tokens || config.body.generationConfig?.maxOutputTokens;
+    console.log(`[OneMind Stream] Token limit enforced: ${actualTokenLimit} (provider cap: ${providerConfig?.max_output_cap || 'unlimited'})`);
     
     // Call provider API with streaming enabled
     const response = await fetch(config.url, {
