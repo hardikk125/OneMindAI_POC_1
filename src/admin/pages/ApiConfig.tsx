@@ -240,6 +240,22 @@ export function ApiConfig() {
     }
   };
 
+  const handleUpdateProvider = async (provider: ApiProviderConfig) => {
+    try {
+      const updates: Partial<ApiProviderConfig> = {};
+      if (provider.max_output_cap !== undefined) updates.max_output_cap = provider.max_output_cap;
+      if (provider.timeout_seconds !== undefined) updates.timeout_seconds = provider.timeout_seconds;
+      if (provider.rate_limit_rpm !== undefined) updates.rate_limit_rpm = provider.rate_limit_rpm;
+      
+      if (Object.keys(updates).length === 0) return;
+      
+      await updateApiProviderConfig(provider.provider, updates);
+      showSuccess(`${provider.provider} settings updated`);
+    } catch (err) {
+      showError(`Failed to update ${provider.provider} settings`);
+    }
+  };
+
   const handleBulkToggle = async (provider: string, enable: boolean) => {
     try {
       const supabase = getSupabase();
@@ -529,6 +545,144 @@ export function ApiConfig() {
                       modelCount={modelStats.byProvider[provider.provider] || { total: 0, active: 0 }}
                       onToggle={(enabled) => handleToggleProvider(provider.provider, enabled)}
                     />
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Provider Settings Section - Token Limits & Timeouts */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <button
+          onClick={() => toggleSection('settings')}
+          className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-750 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Zap className="w-5 h-5 text-yellow-400" />
+            <span className="text-lg font-semibold text-white">Provider Settings</span>
+            <span className="text-sm text-gray-500">(Token Limits & Timeouts)</span>
+          </div>
+          {expandedSections.has('settings') ? (
+            <ChevronDown className="w-5 h-5 text-gray-400" />
+          ) : (
+            <ChevronRight className="w-5 h-5 text-gray-400" />
+          )}
+        </button>
+
+        <AnimatePresence>
+          {expandedSections.has('settings') && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="border-t border-gray-700"
+            >
+              <div className="p-4">
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4 flex items-start gap-2">
+                  <Info className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-yellow-300">
+                    Adjust token limits and timeouts for each provider. Token limits prevent 400 errors from exceeding API constraints.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {providers.map(provider => (
+                    <div
+                      key={provider.provider}
+                      className="bg-gray-900 border border-gray-700 rounded-lg p-4"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="text-2xl">{PROVIDER_ICONS[provider.provider] || '🔌'}</span>
+                        <div>
+                          <h3 className="text-white font-semibold capitalize">{provider.provider}</h3>
+                          <p className="text-xs text-gray-500">
+                            {provider.is_enabled ? '✓ Enabled' : '✗ Disabled'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {/* Max Output Cap */}
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2">
+                            <Zap className="w-4 h-4" />
+                            Max Output Tokens
+                          </label>
+                          <input
+                            type="number"
+                            value={provider.max_output_cap || 4096}
+                            onChange={(e) => {
+                              const updated = {
+                                ...provider,
+                                max_output_cap: parseInt(e.target.value) || 4096
+                              };
+                              setProviders(providers.map(p => p.provider === provider.provider ? updated : p));
+                            }}
+                            onBlur={() => handleUpdateProvider(provider)}
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                            min="1"
+                            max="128000"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Current: {provider.max_output_cap || 4096} tokens
+                          </p>
+                        </div>
+
+                        {/* Timeout */}
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2">
+                            <Timer className="w-4 h-4" />
+                            Timeout (seconds)
+                          </label>
+                          <input
+                            type="number"
+                            value={provider.timeout_seconds || 60}
+                            onChange={(e) => {
+                              const updated = {
+                                ...provider,
+                                timeout_seconds: parseInt(e.target.value) || 60
+                              };
+                              setProviders(providers.map(p => p.provider === provider.provider ? updated : p));
+                            }}
+                            onBlur={() => handleUpdateProvider(provider)}
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                            min="1"
+                            max="600"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Current: {provider.timeout_seconds || 60}s
+                          </p>
+                        </div>
+
+                        {/* Rate Limit */}
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2">
+                            <Activity className="w-4 h-4" />
+                            Rate Limit (RPM)
+                          </label>
+                          <input
+                            type="number"
+                            value={provider.rate_limit_rpm || 3500}
+                            onChange={(e) => {
+                              const updated = {
+                                ...provider,
+                                rate_limit_rpm: parseInt(e.target.value) || 3500
+                              };
+                              setProviders(providers.map(p => p.provider === provider.provider ? updated : p));
+                            }}
+                            onBlur={() => handleUpdateProvider(provider)}
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                            min="1"
+                            max="10000"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Current: {provider.rate_limit_rpm || 3500} requests/min
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>

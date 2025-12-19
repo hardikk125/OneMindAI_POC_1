@@ -2534,8 +2534,25 @@ app.post('/api/onemind/stream', async (req, res) => {
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[OneMind Stream] ${selectedProvider} API error: ${response.status}`, errorText);
-      res.write(`data: ${JSON.stringify({ error: `${selectedProvider} API error: ${response.status}`, details: errorText })}\n\n`);
+      console.error(`[OneMind Stream] ${selectedProvider} API error: ${response.status}`);
+      console.error(`[OneMind Stream] Request body:`, JSON.stringify(config.body, null, 2));
+      console.error(`[OneMind Stream] Response:`, errorText);
+      
+      // Try to parse error as JSON for better details
+      let errorDetails = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorDetails = errorJson.message || errorJson.error || errorText;
+        console.error(`[OneMind Stream] Parsed error:`, errorDetails);
+      } catch (e) {
+        // Not JSON, use raw text
+      }
+      
+      res.write(`data: ${JSON.stringify({ 
+        error: `${selectedProvider} API error: ${response.status}`, 
+        details: errorDetails,
+        request: { provider: selectedProvider, model: selectedModel, max_tokens: config.body.max_tokens }
+      })}\n\n`);
       res.end();
       return;
     }
