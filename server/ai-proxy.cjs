@@ -2337,9 +2337,27 @@ app.get('/api/onemind/providers', async (req, res) => {
 // Helper function to get provider API config for streaming
 // Applies provider-specific token limits from database config
 function getProviderStreamConfig(provider, model, prompt, maxTokens, providerConfig) {
-  // Get the provider's max_output_cap from database, default to requested maxTokens
-  const providerLimit = providerConfig?.max_output_cap || maxTokens;
-  const limitedTokens = Math.min(maxTokens, providerLimit);
+  // HARD LIMITS - these are the actual API constraints that cannot be exceeded
+  // These override any database config to prevent 400 errors
+  const HARD_TOKEN_LIMITS = {
+    openai: 4096,
+    anthropic: 4096,
+    gemini: 8192,
+    deepseek: 8192,  // DeepSeek max is 8192, NOT 65536!
+    mistral: 32768,
+    groq: 8000,
+    perplexity: 4096,
+    xai: 8192,
+    kimi: 4096
+  };
+  
+  // Get the provider's max_output_cap from database
+  const dbLimit = providerConfig?.max_output_cap || maxTokens;
+  // Apply hard limit as final safety check
+  const hardLimit = HARD_TOKEN_LIMITS[provider] || 4096;
+  const limitedTokens = Math.min(maxTokens, dbLimit, hardLimit);
+  
+  console.log(`[Token Limit] Provider: ${provider}, Requested: ${maxTokens}, DB: ${dbLimit}, Hard: ${hardLimit}, Final: ${limitedTokens}`);
   
   const configs = {
     openai: {
