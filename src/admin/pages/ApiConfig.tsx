@@ -318,6 +318,7 @@ export function ApiConfig() {
         .from('ai_models')
         .insert({
           ...newModel,
+          capabilities: JSON.stringify(newModel.capabilities),
           is_active: true,
           is_default: false,
           created_at: new Date().toISOString(),

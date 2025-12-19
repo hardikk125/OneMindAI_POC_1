@@ -2356,7 +2356,13 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
   // Get the provider's max_output_cap from database
   const dbLimit = providerConfig?.max_output_cap || maxTokens;
   // Apply hard limit as final safety check
-  const hardLimit = HARD_TOKEN_LIMITS[provider] || 4096;
+  let hardLimit = HARD_TOKEN_LIMITS[provider] || 4096;
+  
+  // Additional limit for OpenAI reasoning models - they often have lower max_completion_tokens
+  if (provider === 'openai' && model && (model.includes('gpt-5') || model.includes('o1') || model.includes('o3'))) {
+    hardLimit = Math.min(hardLimit, 64000); // Conservative limit for reasoning models
+  }
+  
   const limitedTokens = Math.min(maxTokens, dbLimit, hardLimit);
   
   console.log(`[Token Limit] Provider: ${provider}, Requested: ${maxTokens}, DB: ${dbLimit}, Hard: ${hardLimit}, Final: ${limitedTokens}`);
@@ -2371,7 +2377,11 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
       body: {
         model: model || 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: limitedTokens,
+        // Use max_completion_tokens for reasoning models (GPT-5, o1, o3 series)
+        ...(model && (model.includes('gpt-5') || model.includes('o1') || model.includes('o3')) 
+          ? { max_completion_tokens: limitedTokens }
+          : { max_tokens: limitedTokens }
+        ),
         stream: true,
         // Add reasoning effort for GPT-5.1 models
         ...(model && model.includes('gpt-5.1') && { reasoning_effort: 'medium' })
