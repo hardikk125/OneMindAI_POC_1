@@ -116,6 +116,20 @@ export function ApiConfig() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['models', 'providers', 'global'])
   );
+  
+  // Add model form state
+  const [showAddModel, setShowAddModel] = useState(false);
+  const [newModel, setNewModel] = useState({
+    provider: '',
+    model_id: '',
+    display_name: '',
+    max_output_tokens: 4096,
+    context_window: 128000,
+    input_price_per_million: 0,
+    output_price_per_million: 0,
+    description: '',
+    capabilities: [] as string[],
+  });
 
   // ==========================================================================
   // FETCH DATA
@@ -287,6 +301,57 @@ export function ApiConfig() {
       showSuccess(`Updated ${key.replace(/_/g, ' ')}`);
     } catch (err) {
       showError(`Failed to update ${key}`);
+    }
+  };
+
+  const handleAddModel = async () => {
+    if (!newModel.provider || !newModel.model_id || !newModel.display_name) {
+      showError('Provider, Model ID, and Display Name are required');
+      return;
+    }
+
+    try {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('Supabase not available');
+
+      const { error } = await supabase
+        .from('ai_models')
+        .insert({
+          ...newModel,
+          is_active: true,
+          is_default: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+
+      // Refresh models list
+      const { data: modelsData } = await supabase
+        .from('ai_models')
+        .select('*')
+        .order('provider')
+        .order('model_id');
+
+      setModels((modelsData as AIModel[]) || []);
+      
+      // Reset form
+      setNewModel({
+        provider: '',
+        model_id: '',
+        display_name: '',
+        max_output_tokens: 4096,
+        context_window: 128000,
+        input_price_per_million: 0,
+        output_price_per_million: 0,
+        description: '',
+        capabilities: [],
+      });
+      setShowAddModel(false);
+      
+      showSuccess(`Added new model: ${newModel.display_name}`);
+    } catch (err) {
+      showError(`Failed to add model: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -479,21 +544,163 @@ export function ApiConfig() {
                 )}
               </div>
 
-              {/* Bulk Actions */}
-              {providerFilter !== 'all' && (
-                <div className="p-4 bg-gray-850 border-t border-gray-700 flex gap-2">
-                  <button
-                    onClick={() => handleBulkToggle(providerFilter, true)}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm"
-                  >
-                    Enable All {providerFilter}
-                  </button>
-                  <button
-                    onClick={() => handleBulkToggle(providerFilter, false)}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm"
-                  >
-                    Disable All {providerFilter}
-                  </button>
+              {/* Add Model Button & Bulk Actions */}
+              <div className="p-4 bg-gray-850 border-t border-gray-700 flex flex-wrap gap-2 items-center justify-between">
+                <button
+                  onClick={() => setShowAddModel(!showAddModel)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-2"
+                >
+                  <span>+</span> Add New Model
+                </button>
+                
+                {providerFilter !== 'all' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleBulkToggle(providerFilter, true)}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm"
+                    >
+                      Enable All {providerFilter}
+                    </button>
+                    <button
+                      onClick={() => handleBulkToggle(providerFilter, false)}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm"
+                    >
+                      Disable All {providerFilter}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Add Model Form */}
+              {showAddModel && (
+                <div className="p-4 bg-gray-900 border-t border-gray-700">
+                  <h3 className="text-white font-medium mb-4">Add New Model</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Provider */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Provider *</label>
+                      <select
+                        value={newModel.provider}
+                        onChange={(e) => setNewModel({ ...newModel, provider: e.target.value })}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white"
+                      >
+                        <option value="">Select Provider</option>
+                        {Object.keys(PROVIDER_ICONS).map(p => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Model ID */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Model ID *</label>
+                      <input
+                        type="text"
+                        value={newModel.model_id}
+                        onChange={(e) => setNewModel({ ...newModel, model_id: e.target.value })}
+                        placeholder="e.g., gpt-5-turbo"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white"
+                      />
+                    </div>
+
+                    {/* Display Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Display Name *</label>
+                      <input
+                        type="text"
+                        value={newModel.display_name}
+                        onChange={(e) => setNewModel({ ...newModel, display_name: e.target.value })}
+                        placeholder="e.g., GPT-5 Turbo"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white"
+                      />
+                    </div>
+
+                    {/* Max Output Tokens */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Max Output Tokens</label>
+                      <input
+                        type="number"
+                        value={newModel.max_output_tokens}
+                        onChange={(e) => setNewModel({ ...newModel, max_output_tokens: parseInt(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white"
+                      />
+                    </div>
+
+                    {/* Context Window */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Context Window</label>
+                      <input
+                        type="number"
+                        value={newModel.context_window}
+                        onChange={(e) => setNewModel({ ...newModel, context_window: parseInt(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div className="md:col-span-2 lg:col-span-3">
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Description</label>
+                      <input
+                        type="text"
+                        value={newModel.description}
+                        onChange={(e) => setNewModel({ ...newModel, description: e.target.value })}
+                        placeholder="Brief description of the model"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white"
+                      />
+                    </div>
+
+                    {/* Pricing */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Input Price ($/1M tokens)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={newModel.input_price_per_million}
+                        onChange={(e) => setNewModel({ ...newModel, input_price_per_million: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Output Price ($/1M tokens)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={newModel.output_price_per_million}
+                        onChange={(e) => setNewModel({ ...newModel, output_price_per_million: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white"
+                      />
+                    </div>
+
+                    {/* Submit Buttons */}
+                    <div className="flex gap-2 items-end">
+                      <button
+                        onClick={handleAddModel}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm"
+                      >
+                        Add Model
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowAddModel(false);
+                          setNewModel({
+                            provider: '',
+                            model_id: '',
+                            display_name: '',
+                            max_output_tokens: 4096,
+                            context_window: 128000,
+                            input_price_per_million: 0,
+                            output_price_per_million: 0,
+                            description: '',
+                            capabilities: [],
+                          });
+                        }}
+                        className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </motion.div>
