@@ -2236,12 +2236,22 @@ app.get('/api/onemind/providers', async (req, res) => {
     // Build set of enabled provider names for quick lookup
     const enabledProviderNames = new Set(enabledProviders.map(p => p.provider));
     
+    // Build map of provider default models for sorting
+    const providerDefaultModels = {};
+    for (const p of enabledProviders) {
+      if (p.default_model) {
+        providerDefaultModels[p.provider] = p.default_model;
+      }
+    }
+    
     if (modelCache && modelCache.length > 0) {
       for (const model of modelCache) {
         // Model is truly enabled only if: model.is_active AND provider.is_enabled
         const providerEnabled = enabledProviderNames.has(model.provider);
         
         if (model.is_active && providerEnabled) {
+          // Check if this is the provider's default model
+          const isDefault = providerDefaultModels[model.provider] === model.model_id;
           enabledModels.push({
             provider: model.provider,
             model_id: model.model_id,
@@ -2249,7 +2259,8 @@ app.get('/api/onemind/providers', async (req, res) => {
             max_output_tokens: model.max_output_tokens,
             context_window: model.context_window,
             input_price_per_million: model.input_price_per_million,
-            output_price_per_million: model.output_price_per_million
+            output_price_per_million: model.output_price_per_million,
+            is_default: isDefault
           });
         } else {
           disabledModels.push({
@@ -2260,6 +2271,15 @@ app.get('/api/onemind/providers', async (req, res) => {
         }
       }
     }
+    
+    // Sort enabled models: default models first, then by provider priority
+    enabledModels.sort((a, b) => {
+      // Default models come first
+      if (a.is_default && !b.is_default) return -1;
+      if (!a.is_default && b.is_default) return 1;
+      // Then sort by provider name
+      return a.provider.localeCompare(b.provider);
+    });
     
     // Check which providers have API keys configured
     const apiKeyStatus = {
