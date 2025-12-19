@@ -56,14 +56,16 @@ async function refreshCaches() {
 
 async function isProviderEnabled(provider) {
   await refreshCaches();
-  if (!providerCache) return true; // Allow if no database
+  if (!providerCache || Object.keys(providerCache).length === 0) return true; // Allow if no database
   const config = providerCache[provider];
-  return config ? config.is_enabled !== false : true;
+  // If provider not in cache, it's not configured - allow it (backwards compatibility)
+  if (!config) return true;
+  return config.is_enabled !== false;
 }
 
 async function isModelEnabled(provider, modelId) {
   await refreshCaches();
-  if (!modelCache) return true; // Allow if no database
+  if (!modelCache || modelCache.length === 0) return true; // Allow if no database
   
   // Find the model in cache
   const model = modelCache.find(m => 
@@ -77,18 +79,23 @@ async function isModelEnabled(provider, modelId) {
 }
 
 async function validateModelAccess(provider, modelId) {
+  console.log(`[Validate] Checking access for ${provider}/${modelId}`);
+  
   // Check provider first
   const providerEnabled = await isProviderEnabled(provider);
+  console.log(`[Validate] Provider '${provider}' enabled: ${providerEnabled}`);
   if (!providerEnabled) {
     return { allowed: false, reason: `Provider '${provider}' is disabled` };
   }
   
   // Check model
   const modelEnabled = await isModelEnabled(provider, modelId);
+  console.log(`[Validate] Model '${modelId}' enabled: ${modelEnabled}`);
   if (!modelEnabled) {
     return { allowed: false, reason: `Model '${modelId}' is disabled` };
   }
   
+  console.log(`[Validate] Access ALLOWED for ${provider}/${modelId}`);
   return { allowed: true };
 }
 
@@ -2174,11 +2181,58 @@ app.post('/api/onemind', async (req, res) => {
   }
 });
 
-// GET /api/onemind/providers - List available providers
+// GET /api/onemind/providers - List available providers and models from database
 app.get('/api/onemind/providers', async (req, res) => {
   try {
-    const providers = await getEnabledProviders();
-    const availableProviders = {
+    // Refresh caches to get latest from database
+    await refreshCaches();
+    
+    // Get enabled providers from database
+    const enabledProviders = [];
+    const disabledProviders = [];
+    
+    if (providerCache && Object.keys(providerCache).length > 0) {
+      for (const [provider, config] of Object.entries(providerCache)) {
+        if (config.is_enabled) {
+          enabledProviders.push({
+            provider,
+            default_model: config.default_model,
+            max_output_cap: config.max_output_cap,
+            timeout_seconds: config.timeout_seconds
+          });
+        } else {
+          disabledProviders.push(provider);
+        }
+      }
+    }
+    
+    // Get enabled models from database
+    const enabledModels = [];
+    const disabledModels = [];
+    
+    if (modelCache && modelCache.length > 0) {
+      for (const model of modelCache) {
+        if (model.is_active) {
+          enabledModels.push({
+            provider: model.provider,
+            model_id: model.model_id,
+            display_name: model.display_name || model.model_id,
+            max_output_tokens: model.max_output_tokens,
+            context_window: model.context_window,
+            input_price_per_million: model.input_price_per_million,
+            output_price_per_million: model.output_price_per_million
+          });
+        } else {
+          disabledModels.push({
+            provider: model.provider,
+            model_id: model.model_id
+          });
+        }
+      }
+    }
+    
+    // Check which providers have API keys configured
+    const apiKeyStatus = {
       openai: !!process.env.OPENAI_API_KEY,
       anthropic: !!process.env.ANTHROPIC_API_KEY,
       gemini: !!process.env.GOOGLE_AI_API_KEY,
@@ -2186,13 +2240,40 @@ app.get('/api/onemind/providers', async (req, res) => {
       perplexity: !!process.env.PERPLEXITY_API_KEY,
       deepseek: !!process.env.DEEPSEEK_API_KEY,
       groq: !!process.env.GROQ_API_KEY,
-      xai: !!process.env.XAI_API_KEY
+      xai: !!process.env.XAI_API_KEY,
+      kimi: !!process.env.KIMI_API_KEY
     };
     
     res.json({
-      enabled: providers,
-      available: availableProviders,
-      total_enabled: providers.length
+      // Database connection status
+      database_connected: !!supabase && (providerCache !== null || modelCache !== null),
+      cache_age_seconds: Math.floor((Date.now() - cacheTime) / 1000),
+      
+      // Providers from database
+      providers: {
+        enabled: enabledProviders,
+        disabled: disabledProviders,
+        total_enabled: enabledProviders.length,
+        total_disabled: disabledProviders.length
+      },
+      
+      // Models from database
+      models: {
+        enabled: enabledModels,
+        disabled_count: disabledModels.length,
+        total_enabled: enabledModels.length
+      },
+      
+      // API key status (which providers have keys configured)
+      api_keys_configured: apiKeyStatus,
+      
+      // Summary
+      summary: {
+        total_providers: enabledProviders.length + disabledProviders.length,
+        active_providers: enabledProviders.length,
+        total_models: enabledModels.length + disabledModels.length,
+        active_models: enabledModels.length
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
