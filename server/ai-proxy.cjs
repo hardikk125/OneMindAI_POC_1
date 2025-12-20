@@ -2627,12 +2627,36 @@ app.post('/api/onemind/stream', async (req, res) => {
     }
     
     console.log(`[OneMind Stream] Request received with ${attachments.length} attachment(s)`);
+    console.log(`[OneMind Stream] Frontend sent - Model: ${model}, Provider: ${provider}`);
     
     // IMPORTANT: Use the model/provider sent by frontend if provided
-    // Only fall back to database selection if BOTH are missing
     let selectedProvider = provider;
     let selectedModel = model;
     
+    // Helper function to detect provider from model name
+    const detectProviderFromModel = (modelName) => {
+      if (!modelName) return null;
+      if (modelName.includes('mistral')) return 'mistral';
+      if (modelName.includes('gpt') || modelName.includes('o1') || modelName.includes('o3')) return 'openai';
+      if (modelName.includes('claude')) return 'anthropic';
+      if (modelName.includes('gemini')) return 'gemini';
+      if (modelName.includes('deepseek')) return 'deepseek';
+      if (modelName.includes('llama') || modelName.includes('mixtral')) return 'groq';
+      if (modelName.includes('grok')) return 'xai';
+      if (modelName.includes('sonar')) return 'perplexity';
+      return null;
+    };
+    
+    // If model is provided but provider is missing, detect provider from model name
+    if (selectedModel && !selectedProvider) {
+      const detectedProvider = detectProviderFromModel(selectedModel);
+      if (detectedProvider) {
+        selectedProvider = detectedProvider;
+        console.log(`[OneMind Stream] Detected provider from model name: ${selectedProvider}`);
+      }
+    }
+    
+    // If BOTH model and provider are missing, fall back to database selection
     if (!selectedProvider || !selectedModel) {
       console.log(`[OneMind Stream] No model specified by frontend, auto-selecting from database...`);
       await refreshCaches();
