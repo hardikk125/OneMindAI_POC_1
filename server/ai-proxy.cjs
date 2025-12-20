@@ -2892,6 +2892,202 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
+// ============================================================================
+// FEEDBACK SYSTEM ENDPOINTS
+// ============================================================================
+
+// GET /api/feedback/questions - Fetch feedback questions
+app.get('/api/feedback/questions', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const { data, error } = await supabase
+      .from('feedback_questions')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    if (error) throw error;
+
+    res.json({ success: true, questions: data || [] });
+  } catch (err) {
+    console.error('[Feedback] Error fetching questions:', err.message);
+    res.status(500).json({ error: 'Failed to fetch feedback questions' });
+  }
+});
+
+// POST /api/feedback/submit - Submit feedback
+app.post('/api/feedback/submit', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const { rating, reasonForRating, whatLiked, whatImprove, sessionId, aiProvider, aiModel, responseLength } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+
+    // Sanitize text inputs
+    const sanitizeText = (text) => {
+      if (!text) return null;
+      return text.substring(0, 5000).trim();
+    };
+
+    const { data, error } = await supabase
+      .from('feedback_submissions')
+      .insert([
+        {
+          user_id: userId,
+          session_id: sessionId || null,
+          rating,
+          reason_for_rating: sanitizeText(reasonForRating),
+          what_liked: sanitizeText(whatLiked),
+          what_improve: sanitizeText(whatImprove),
+          ai_provider: aiProvider || null,
+          ai_model: aiModel || null,
+          response_length: responseLength || null
+        }
+      ])
+      .select('id');
+
+    if (error) throw error;
+
+    console.log(`[Feedback] Submission saved - User: ${userId}, Rating: ${rating}`);
+    res.json({ success: true, feedbackId: data?.[0]?.id });
+  } catch (err) {
+    console.error('[Feedback] Error submitting feedback:', err.message);
+    res.status(500).json({ error: 'Failed to submit feedback' });
+  }
+});
+
+// GET /api/feedback/list - Get all feedback (admin only)
+app.get('/api/feedback/list', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    // Check if user is admin
+    const isAdmin = req.user?.raw_user_meta_data?.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { ratingFilter, startDate, endDate, limit = 100, offset = 0 } = req.query;
+
+    let query = supabase
+      .from('feedback_submissions')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (ratingFilter) {
+      query = query.eq('rating', parseInt(ratingFilter));
+    }
+
+    if (startDate) {
+      query = query.gte('created_at', startDate);
+    }
+
+    if (endDate) {
+      query = query.lte('created_at', endDate);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+
+    res.json({ success: true, feedback: data || [], total: count || 0 });
+  } catch (err) {
+    console.error('[Feedback] Error fetching feedback list:', err.message);
+    res.status(500).json({ error: 'Failed to fetch feedback' });
+  }
+});
+
+// PUT /api/feedback/questions - Update feedback questions (admin only)
+app.put('/api/feedback/questions', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    // Check if user is admin
+    const isAdmin = req.user?.raw_user_meta_data?.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { questions } = req.body;
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ error: 'Invalid questions format' });
+    }
+
+    // Update each question
+    const updates = questions.map((q) => ({
+      question_number: q.questionNumber,
+      question_text: q.questionText,
+      question_type: q.questionType,
+      is_required: q.isRequired || false,
+      display_order: q.displayOrder,
+      updated_at: new Date().toISOString()
+    }));
+
+    for (const update of updates) {
+      const { error } = await supabase
+        .from('feedback_questions')
+        .update(update)
+        .eq('question_number', update.question_number);
+
+      if (error) throw error;
+    }
+
+    console.log('[Feedback] Questions updated by admin');
+    res.json({ success: true, message: 'Feedback questions updated' });
+  } catch (err) {
+    console.error('[Feedback] Error updating questions:', err.message);
+    res.status(500).json({ error: 'Failed to update feedback questions' });
+  }
+});
+
+// DELETE /api/feedback/:id - Delete feedback (admin only)
+app.delete('/api/feedback/:id', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    // Check if user is admin
+    const isAdmin = req.user?.raw_user_meta_data?.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { id } = req.params;
+
+    const { error } = await supabase
+      .from('feedback_submissions')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    console.log(`[Feedback] Submission deleted - ID: ${id}`);
+    res.json({ success: true, message: 'Feedback deleted' });
+  } catch (err) {
+    console.error('[Feedback] Error deleting feedback:', err.message);
+    res.status(500).json({ error: 'Failed to delete feedback' });
+  }
+});
+
 // =============================================================================
 // START SERVER
 // =============================================================================
@@ -2923,6 +3119,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('║   • GET  /api/hubspot/*     - HubSpot CRM integration     ║');
   console.log('║   • POST /api/admin/test-provider - Test provider conn    ║');
   console.log('║   • GET  /api/admin/config  - Get API config from DB      ║');
+  console.log('║   • GET  /api/feedback/questions - Fetch feedback Qs      ║');
+  console.log('║   • POST /api/feedback/submit - Submit user feedback      ║');
+  console.log('║   • GET  /api/feedback/list - Get all feedback (admin)    ║');
+  console.log('║   • PUT  /api/feedback/questions - Edit Qs (admin)        ║');
+  console.log('║   • DELETE /api/feedback/:id - Delete feedback (admin)    ║');
   console.log('║                                                           ║');
   console.log('╚═══════════════════════════════════════════════════════════╝');
   console.log('');
