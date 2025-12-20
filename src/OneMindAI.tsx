@@ -7,7 +7,10 @@ import EnhancedMarkdownRenderer from './components/EnhancedMarkdownRenderer';
 import { SelectableMarkdownRenderer } from './components/SelectableMarkdownRenderer';
 import { TableChartRenderer } from './components/TableChartRenderer';
 import { ErrorRecoveryPanel } from './components/ErrorRecoveryPanel';
-import { ExportDropdown } from './components/ExportButton';
+import { ExportDropdown } from './components/ExportDropdown';
+import { ErrorPanel } from './components/ErrorPanel';
+import { BalanceTracker } from './components/BalanceTracker';
+import { FeedbackModal } from './components/FeedbackModal';
 import { HyperText } from './components/ui/hyper-text';
 import { TextDotsLoader } from './components/ui/loader';
 import { UploadedFile } from "./lib/file-utils";
@@ -598,6 +601,13 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [apiBalances, setApiBalances] = useState<Record<string, { balance: string; loading: boolean; error?: string }>>({});
   const [localBalances, setLocalBalances] = useState<BalanceRecord[]>([]);
+  
+  // ===== Feedback System State =====
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [feedbackSessionId, setFeedbackSessionId] = useState<string | undefined>();
+  const [feedbackAiProvider, setFeedbackAiProvider] = useState<string | undefined>();
+  const [feedbackAiModel, setFeedbackAiModel] = useState<string | undefined>();
+  const [feedbackResponseLength, setFeedbackResponseLength] = useState<number | undefined>();
 
   // ===== Engine Info Text (from Supabase - admin editable) =====
   const [engineInfoText] = useState<Record<string, {
@@ -7049,18 +7059,33 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                         </span>
                       )}
                       {content && !streaming && (
-                        <ExportDropdown
-                          data={{
-                            title: `${engine.name} Response`,
-                            provider: engine.provider,
-                            model: engine.selectedVersion,
-                            prompt: prompt,
-                            response: content,
-                            timestamp: new Date(),
-                            tokensUsed: result?.tokensOut,
-                            cost: result?.costUSD,
-                          }}
-                        />
+                        <>
+                          <button
+                            onClick={() => {
+                              setFeedbackSessionId(`session-${Date.now()}`);
+                              setFeedbackAiProvider(engine.provider);
+                              setFeedbackAiModel(engine.selectedVersion);
+                              setFeedbackResponseLength(content.length);
+                              setFeedbackModalOpen(true);
+                            }}
+                            className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                            title="Share feedback about this response"
+                          >
+                            💬 Feedback
+                          </button>
+                          <ExportDropdown
+                            data={{
+                              title: `${engine.name} Response`,
+                              provider: engine.provider,
+                              model: engine.selectedVersion,
+                              prompt: prompt,
+                              response: content,
+                              timestamp: new Date(),
+                              tokensUsed: result?.tokensOut,
+                              cost: result?.costUSD,
+                            }}
+                          />
+                        </>
                       )}
                     </div>
                   </div>
@@ -10820,6 +10845,16 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           </div>
         </>
       )}
+      
+      {/* Feedback Modal */}
+      <FeedbackModal
+        isOpen={feedbackModalOpen}
+        onClose={() => setFeedbackModalOpen(false)}
+        sessionId={feedbackSessionId}
+        aiProvider={feedbackAiProvider}
+        aiModel={feedbackAiModel}
+        responseLength={feedbackResponseLength}
+      />
       
       {/* Super Debug Panel */}
       <SuperDebugPanel 
