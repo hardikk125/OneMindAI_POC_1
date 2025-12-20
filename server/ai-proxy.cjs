@@ -2664,12 +2664,31 @@ app.post('/api/onemind/stream', async (req, res) => {
       console.log(`[OneMind Stream] No model specified by frontend, auto-selecting from database...`);
       await refreshCaches();
       if (modelCache && modelCache.length > 0) {
-        // Find first ENABLED model
-        const enabledModel = modelCache.find(m => m.is_active === true);
+        // Find first ENABLED model where BOTH model is active AND provider is enabled
+        let skippedCount = 0;
+        const enabledModel = modelCache.find(m => {
+          if (m.is_active !== true) {
+            skippedCount++;
+            return false;
+          }
+          
+          // Check if provider is also enabled
+          const providerConfig = providerCache?.[m.provider];
+          if (providerConfig && providerConfig.is_enabled === false) {
+            console.log(`[OneMind Stream] Skipping ${m.provider}/${m.model_id} - provider disabled`);
+            skippedCount++;
+            return false; // Skip this model if provider is disabled
+          }
+          
+          return true;
+        });
+        
         if (enabledModel) {
           selectedProvider = enabledModel.provider;
           selectedModel = enabledModel.model_id;
-          console.log(`[OneMind Stream] Auto-selected enabled model: ${selectedProvider}/${selectedModel}`);
+          console.log(`[OneMind Stream] Auto-selected enabled model: ${selectedProvider}/${selectedModel} (skipped ${skippedCount} models)`);
+        } else {
+          console.log(`[OneMind Stream] No enabled models found (checked ${modelCache.length} models, skipped ${skippedCount})`);
         }
       }
       
