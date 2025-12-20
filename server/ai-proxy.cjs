@@ -63,7 +63,9 @@ async function isProviderEnabled(provider) {
   const config = providerCache[provider];
   // If provider not in cache, it's not configured - allow it (backwards compatibility)
   if (!config) return true;
-  return config.is_enabled !== false;
+  // IMPORTANT: Must match the check in /api/onemind/providers endpoint
+  // Only return true if explicitly enabled (not just "not false")
+  return config.is_enabled === true;
 }
 
 async function isModelEnabled(provider, modelId) {
