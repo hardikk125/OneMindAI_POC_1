@@ -36,7 +36,7 @@ async function refreshCaches() {
   try {
     const [providerResult, modelResult] = await Promise.all([
       supabase.from('provider_config').select('*'),
-      supabase.from('ai_models').select('provider, model_id, is_active')
+      supabase.from('ai_models').select('provider, model_id, is_active').order('provider').order('model_id')
     ]);
     
     if (!providerResult.error && providerResult.data) {
@@ -45,6 +45,9 @@ async function refreshCaches() {
     
     if (!modelResult.error && modelResult.data) {
       modelCache = modelResult.data;
+      console.log(`[Config] Loaded ${modelResult.data.length} models from database`);
+      const enabledModels = modelResult.data.filter(m => m.is_active === true);
+      console.log(`[Config] ${enabledModels.length} models are enabled:`, enabledModels.map(m => `${m.provider}/${m.model_id}`).join(', '));
     }
     
     cacheTime = Date.now();
