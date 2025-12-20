@@ -2336,7 +2336,7 @@ app.get('/api/onemind/providers', async (req, res) => {
 
 // Helper function to get provider API config for streaming
 // Applies provider-specific token limits from database config
-function getProviderStreamConfig(provider, model, prompt, maxTokens, providerConfig) {
+function getProviderStreamConfig(provider, model, prompt, maxTokens, providerConfig, attachments = []) {
   // HARD LIMITS - these are the actual API constraints that cannot be exceeded
   // These are the TRUE maximum output tokens each provider API accepts
   // Source: Official API documentation as of Dec 2024
@@ -2367,6 +2367,86 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
   
   console.log(`[Token Limit] Provider: ${provider}, Requested: ${maxTokens}, DB: ${dbLimit}, Hard: ${hardLimit}, Final: ${limitedTokens}`);
   
+  // Helper function to format attachments for OpenAI/Mistral/Groq (vision models)
+  const formatOpenAIAttachments = (attachments) => {
+    if (!attachments || attachments.length === 0) return [];
+    
+    return attachments.map(att => {
+      const isImage = att.type.startsWith('image/');
+      const isPdf = att.type === 'application/pdf';
+      
+      if (isImage) {
+        return {
+          type: 'image_url',
+          image_url: {
+            url: att.content, // Already in data:image/... format from base64
+            detail: 'high'
+          }
+        };
+      } else if (isPdf || att.type.startsWith('text/')) {
+        // For PDFs and text files, include as text content
+        return {
+          type: 'text',
+          text: `[Attachment: ${att.name}]\n${att.content.substring(0, 5000)}...`
+        };
+      }
+      return null;
+    }).filter(Boolean);
+  };
+  
+  // Helper function to format attachments for Anthropic (Claude)
+  const formatAnthropicAttachments = (attachments) => {
+    if (!attachments || attachments.length === 0) return [];
+    
+    return attachments.map(att => {
+      const isImage = att.type.startsWith('image/');
+      
+      if (isImage) {
+        // Extract base64 from data URL
+        const base64Data = att.content.split(',')[1] || att.content;
+        const mediaType = att.type;
+        
+        return {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mediaType,
+            data: base64Data
+          }
+        };
+      } else {
+        // For non-image files, include as text
+        return {
+          type: 'text',
+          text: `[Attachment: ${att.name} (${att.type})]\n${att.content.substring(0, 5000)}...`
+        };
+      }
+    }).filter(Boolean);
+  };
+  
+  // Helper function to format attachments for Gemini
+  const formatGeminiAttachments = (attachments) => {
+    if (!attachments || attachments.length === 0) return [];
+    
+    return attachments.map(att => {
+      const isImage = att.type.startsWith('image/');
+      
+      if (isImage) {
+        const base64Data = att.content.split(',')[1] || att.content;
+        return {
+          inlineData: {
+            mimeType: att.type,
+            data: base64Data
+          }
+        };
+      } else {
+        return {
+          text: `[Attachment: ${att.name}]\n${att.content.substring(0, 5000)}...`
+        };
+      }
+    }).filter(Boolean);
+  };
+  
   const configs = {
     openai: {
       url: 'https://api.openai.com/v1/chat/completions',
@@ -2376,7 +2456,13 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
       },
       body: {
         model: model || 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            ...formatOpenAIAttachments(attachments)
+          ]
+        }],
         // Use max_completion_tokens for reasoning models (GPT-5, o1, o3 series)
         ...(model && (model.includes('gpt-5') || model.includes('o1') || model.includes('o3')) 
           ? { max_completion_tokens: limitedTokens }
@@ -2396,7 +2482,13 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
       },
       body: {
         model: model || 'claude-3-5-sonnet-20241022',
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            ...formatAnthropicAttachments(attachments)
+          ]
+        }],
         max_tokens: limitedTokens,
         stream: true
       }
@@ -2405,7 +2497,12 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
       url: `https://generativelanguage.googleapis.com/v1beta/models/${model || 'gemini-1.5-flash'}:streamGenerateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
       headers: { 'Content-Type': 'application/json' },
       body: {
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{
+          parts: [
+            { text: prompt },
+            ...formatGeminiAttachments(attachments)
+          ]
+        }],
         generationConfig: { maxOutputTokens: limitedTokens }
       },
       isGemini: true
@@ -2418,7 +2515,13 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
       },
       body: {
         model: model || 'mistral-large-latest',
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            ...formatOpenAIAttachments(attachments)
+          ]
+        }],
         max_tokens: limitedTokens,
         stream: true
       }
@@ -2434,6 +2537,7 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
         messages: [{ role: 'user', content: prompt }],
         max_tokens: limitedTokens,
         stream: true
+        // Note: DeepSeek doesn't support vision/attachments yet
       }
     },
     groq: {
@@ -2444,7 +2548,13 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
       },
       body: {
         model: model || 'llama-3.1-70b-versatile',
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            ...formatOpenAIAttachments(attachments)
+          ]
+        }],
         max_tokens: Math.min(limitedTokens, 8000), // Groq has lower limits
         stream: true
       }
@@ -2460,6 +2570,7 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
         messages: [{ role: 'user', content: prompt }],
         max_tokens: limitedTokens,
         stream: true
+        // Note: Perplexity doesn't support attachments in the same way
       }
     },
     xai: {
@@ -2470,7 +2581,13 @@ function getProviderStreamConfig(provider, model, prompt, maxTokens, providerCon
       },
       body: {
         model: model || 'grok-beta',
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            ...formatOpenAIAttachments(attachments)
+          ]
+        }],
         max_tokens: maxTokens,
         stream: true
       }
@@ -2499,7 +2616,8 @@ app.post('/api/onemind/stream', async (req, res) => {
       prompt, 
       max_tokens = 128000,
       model,
-      provider
+      provider,
+      attachments = []
     } = req.body;
     
     if (!prompt) {
@@ -2508,13 +2626,18 @@ app.post('/api/onemind/stream', async (req, res) => {
       return;
     }
     
-    // If no provider/model specified, get first enabled from database
+    console.log(`[OneMind Stream] Request received with ${attachments.length} attachment(s)`);
+    
+    // IMPORTANT: Use the model/provider sent by frontend if provided
+    // Only fall back to database selection if BOTH are missing
     let selectedProvider = provider;
     let selectedModel = model;
     
     if (!selectedProvider || !selectedModel) {
+      console.log(`[OneMind Stream] No model specified by frontend, auto-selecting from database...`);
       await refreshCaches();
       if (modelCache && modelCache.length > 0) {
+        // Find first ENABLED model
         const enabledModel = modelCache.find(m => m.is_active === true);
         if (enabledModel) {
           selectedProvider = enabledModel.provider;
@@ -2529,6 +2652,8 @@ app.post('/api/onemind/stream', async (req, res) => {
         selectedModel = 'deepseek-chat';
         console.log(`[OneMind Stream] Fallback to default: ${selectedProvider}/${selectedModel}`);
       }
+    } else {
+      console.log(`[OneMind Stream] Using frontend-specified model: ${selectedProvider}/${selectedModel}`);
     }
     
     // Validate model access against whitelist
@@ -2540,13 +2665,13 @@ app.post('/api/onemind/stream', async (req, res) => {
       return;
     }
     
-    console.log(`[OneMind Stream] Calling ${selectedProvider}/${selectedModel} with ${prompt.length} chars, max_tokens: ${max_tokens}`);
+    console.log(`[OneMind Stream] Calling ${selectedProvider}/${selectedModel} with ${prompt.length} chars, max_tokens: ${max_tokens}, attachments: ${attachments.length}`);
     
     // Get provider config from cache for token limit enforcement
     const providerConfig = providerCache?.[selectedProvider];
     
-    // Get provider-specific config with token limits applied
-    const config = getProviderStreamConfig(selectedProvider, selectedModel, prompt, max_tokens, providerConfig);
+    // Get provider-specific config with token limits applied (including attachments)
+    const config = getProviderStreamConfig(selectedProvider, selectedModel, prompt, max_tokens, providerConfig, attachments);
     if (!config) {
       res.write(`data: ${JSON.stringify({ error: `Unsupported provider: ${selectedProvider}` })}\n\n`);
       res.end();

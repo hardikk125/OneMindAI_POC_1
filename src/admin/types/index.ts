@@ -151,7 +151,8 @@ export type AdminPage =
   | 'errors' 
   | 'system'
   | 'ui-config'
-  | 'chaos-testing';
+  | 'chaos-testing'
+  | 'feedback';
 
 // =============================================================================
 // API Configuration Types

@@ -15,6 +15,7 @@ import { ErrorLogs } from './pages/ErrorLogs';
 import { Transactions } from './pages/Transactions';
 import { SystemHealth } from './pages/SystemHealth';
 import { UIConfig } from './pages/UIConfig';
+import { Feedback } from './pages/Feedback';
 import { ChaosTesting } from './components/ChaosTesting';
 import AIModelsConfig from './pages/AIModelsConfig';
 import ApiConfig from './pages/ApiConfig';
@@ -95,6 +96,8 @@ export function AdminApp({ onExit }: AdminAppProps) {
         return <UIConfig />;
       case 'transactions':
         return <Transactions />;
+      case 'feedback':
+        return <Feedback />;
       case 'bugs':
         return <BugReports />;
       case 'errors':

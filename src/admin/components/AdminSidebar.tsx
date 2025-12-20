@@ -20,6 +20,7 @@ import {
   Zap,
   Cpu,
   Network,
+  MessageSquare,
 } from 'lucide-react';
 import type { AdminPage } from '../types';
 
@@ -59,6 +60,7 @@ export function AdminSidebar({
     { id: 'pricing', label: 'Pricing', icon: <DollarSign size={20} /> },
     { id: 'ui-config', label: 'UI Config', icon: <Settings2 size={20} /> },
     { id: 'transactions', label: 'Transactions', icon: <Receipt size={20} /> },
+    { id: 'feedback', label: 'Feedback', icon: <MessageSquare size={20} /> },
     { id: 'bugs', label: 'Bug Reports', icon: <Bug size={20} />, badge: stats?.openBugs },
     { id: 'errors', label: 'Error Logs', icon: <AlertTriangle size={20} />, badge: stats?.criticalErrors },
     { id: 'system', label: 'System Health', icon: <Activity size={20} /> },
