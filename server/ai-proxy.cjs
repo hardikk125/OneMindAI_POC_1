@@ -19,11 +19,22 @@ require('dotenv').config();
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
+// Debug logging to verify env vars
+console.log('[Supabase] SUPABASE_URL:', SUPABASE_URL ? `${SUPABASE_URL.substring(0, 30)}...` : 'MISSING');
+console.log('[Supabase] SUPABASE_SERVICE_KEY:', SUPABASE_SERVICE_KEY ? `${SUPABASE_SERVICE_KEY.substring(0, 50)}...` : 'MISSING');
+console.log('[Supabase] Key length:', SUPABASE_SERVICE_KEY ? SUPABASE_SERVICE_KEY.length : 0);
+
 const supabase = SUPABASE_URL && SUPABASE_SERVICE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
   : null;
 
 if (supabase) {
+  console.log('[Supabase] Client created successfully');
   console.log('[Supabase] Connected to:', SUPABASE_URL);
 } else {
   console.error('[Supabase] NOT CONNECTED - Missing URL or SERVICE_KEY');
