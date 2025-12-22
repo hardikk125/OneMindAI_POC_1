@@ -7,9 +7,7 @@ import EnhancedMarkdownRenderer from './components/EnhancedMarkdownRenderer';
 import { SelectableMarkdownRenderer } from './components/SelectableMarkdownRenderer';
 import { TableChartRenderer } from './components/TableChartRenderer';
 import { ErrorRecoveryPanel } from './components/ErrorRecoveryPanel';
-import { ExportDropdown } from './components/ExportDropdown';
-import { ErrorPanel } from './components/ErrorPanel';
-import { BalanceTracker } from './components/BalanceTracker';
+import { ExportDropdown } from './components/ExportButton';
 import { FeedbackModal } from './components/FeedbackModal';
 import { HyperText } from './components/ui/hyper-text';
 import { TextDotsLoader } from './components/ui/loader';
@@ -2057,7 +2055,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           return await client.messages.create({
             model: e.selectedVersion,
             max_tokens: adjustedOutCap,
-            temperature: null,
+            temperature: undefined,
             messages: [{ role: 'user', content: messageContent }],
             stream: true,
           });
@@ -2205,7 +2203,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         logger.data('API Request', {
           model: e.selectedVersion,
           max_tokens: outCap,
-          temperature: null,
+          temperature: undefined,
           stream: true,
           hasImages: images.length > 0
         });
@@ -2235,7 +2233,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
             model: e.selectedVersion,
             messages: [{ role: 'user', content: messageContent }],
             max_tokens: adjustedOutCap,
-            temperature: null,
+            temperature: undefined,
             stream: true,
           });
         };
@@ -2277,7 +2275,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         terminalLogger.streamStart(e.name);
         terminalLogger.apiCallStart('OpenAI', e.selectedVersion, {
           maxTokens: outCap,
-          temperature: null,
+          temperature: undefined,
           stream: true
         });
         
@@ -2332,7 +2330,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: null,
+              temperature: undefined,
               stream: true,
             }),
           });
@@ -2489,7 +2487,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           const model = genAI.getGenerativeModel({ 
             model: e.selectedVersion,
             generationConfig: {
-              temperature: null,
+              temperature: undefined,
               maxOutputTokens: outCap,
             },
           });
@@ -2579,7 +2577,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: null,
+              temperature: undefined,
               stream: true,
             }),
           });
@@ -2720,7 +2718,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: null,
+              temperature: undefined,
               stream: true,
             }),
           });
@@ -2873,7 +2871,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: null,
+              temperature: undefined,
               stream: true,
             }),
           });
@@ -3012,7 +3010,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: null,
+              temperature: undefined,
               stream: true,
             }),
           });
@@ -3133,7 +3131,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           model: e.selectedVersion,
           messages: [{ role: 'user', content: enhancedPrompt }],
           max_tokens: outCap,
-          temperature: null,
+          temperature: undefined,
           stream: true,
         });
 
@@ -3174,7 +3172,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
           model: e.selectedVersion,
           messages: [{ role: 'user', content: enhancedPrompt }],
           max_tokens: outCap,
-          temperature: null,
+          temperature: undefined,
           stream: true,
         });
 
@@ -3215,7 +3213,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               inputs: enhancedPrompt,
               parameters: {
                 max_new_tokens: Math.max(outCap, 8000),
-                temperature: null,
+                temperature: undefined,
                 return_full_text: false,
                 stream: true,
               },
@@ -3289,7 +3287,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
               model: e.selectedVersion,
               messages: [{ role: 'user', content: enhancedPrompt }],
               max_tokens: outCap,
-              temperature: null,
+              temperature: undefined,
               stream: true,
             }),
           });
