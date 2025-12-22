@@ -242,15 +242,36 @@ export function ApiConfig() {
     }
   };
 
+  // NOTE: Provider toggle in API Config now uses handleBulkToggle to toggle ALL models
+  // for that provider in ai_models table. This does NOT affect provider_config.is_enabled
+  // which controls main app engine visibility (managed in Provider Config page).
   const handleToggleProvider = async (provider: string, isEnabled: boolean) => {
     try {
-      await updateApiProviderConfig(provider, { is_enabled: isEnabled });
+      // Toggle all models for this provider in ai_models table
+      // This controls API access, NOT main app visibility
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('Supabase not available');
+
+      const { error: updateError } = await supabase
+        .from('ai_models')
+        .update({ is_active: isEnabled, updated_at: new Date().toISOString() })
+        .eq('provider', provider);
+
+      if (updateError) throw updateError;
+
+      // Update local models state
+      setModels(prev => prev.map(m => 
+        m.provider === provider ? { ...m, is_active: isEnabled } : m
+      ));
+      
+      // Update provider state to reflect model status (for UI display only)
       setProviders(prev => prev.map(p => 
         p.provider === provider ? { ...p, is_enabled: isEnabled } : p
       ));
-      showSuccess(`${provider} ${isEnabled ? 'enabled' : 'disabled'}`);
+      
+      showSuccess(`All ${provider} models ${isEnabled ? 'enabled' : 'disabled'} for API access`);
     } catch (err) {
-      showError(`Failed to update ${provider}`);
+      showError(`Failed to update ${provider} models`);
     }
   };
 
@@ -741,7 +762,8 @@ export function ApiConfig() {
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4 flex items-start gap-2">
                   <Info className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-blue-300">
-                    Disabling a provider will block ALL models from that provider, even if individual models are enabled above.
+                    <strong>API Access Control:</strong> Toggling a provider here enables/disables ALL its models for API access. 
+                    This does NOT affect main app engine visibility (use Provider Config for that).
                   </p>
                 </div>
                 
