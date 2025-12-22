@@ -68,13 +68,22 @@ async function refreshCaches() {
 
 async function isProviderEnabled(provider) {
   await refreshCaches();
-  if (!providerCache || Object.keys(providerCache).length === 0) return true; // Allow if no database
-  const config = providerCache[provider];
-  // If provider not in cache, it's not configured - allow it (backwards compatibility)
-  if (!config) return true;
-  // IMPORTANT: Must match the check in /api/onemind/providers endpoint
-  // Only return true if explicitly enabled (not just "not false")
-  return config.is_enabled === true;
+  
+  // API access is controlled by ai_models.is_active, NOT provider_config.is_enabled
+  // provider_config.is_enabled controls main app visibility only
+  // A provider is "enabled" for API if ANY of its models are active
+  if (!modelCache || modelCache.length === 0) return true; // Allow if no database
+  
+  // Check if any model for this provider is active
+  const hasActiveModel = modelCache.some(m => 
+    m.provider === provider && m.is_active === true
+  );
+  
+  // If no models found for this provider, allow it (backwards compatibility)
+  const providerModels = modelCache.filter(m => m.provider === provider);
+  if (providerModels.length === 0) return true;
+  
+  return hasActiveModel;
 }
 
 async function isModelEnabled(provider, modelId) {
@@ -1912,6 +1921,7 @@ app.use((err, req, res, next) => {
 // =============================================================================
 
 // Helper: Get all enabled providers from database
+// API access is controlled by ai_models.is_active, NOT provider_config.is_enabled
 async function getEnabledProviders() {
   if (!supabase) {
     console.warn('[OneMind] Supabase not configured, using default providers');
@@ -1922,13 +1932,33 @@ async function getEnabledProviders() {
   }
   
   try {
-    const { data, error } = await supabase
-      .from('provider_config')
-      .select('provider, is_enabled, default_model')
-      .eq('is_enabled', true);
+    // Get active models from ai_models table (controls API access)
+    const { data: activeModels, error: modelsError } = await supabase
+      .from('ai_models')
+      .select('provider, model_id, is_active')
+      .eq('is_active', true);
     
-    if (error) throw error;
-    return data.map(p => ({ provider: p.provider, model: p.default_model }));
+    if (modelsError) throw modelsError;
+    
+    // Get provider settings (for default_model)
+    const { data: providerSettings, error: providerError } = await supabase
+      .from('provider_config')
+      .select('provider, default_model');
+    
+    if (providerError) throw providerError;
+    
+    // Build map of provider -> default_model
+    const providerDefaults = Object.fromEntries(
+      (providerSettings || []).map(p => [p.provider, p.default_model])
+    );
+    
+    // Get unique providers that have at least one active model
+    const enabledProviders = [...new Set(activeModels.map(m => m.provider))];
+    
+    return enabledProviders.map(provider => ({
+      provider,
+      model: providerDefaults[provider] || activeModels.find(m => m.provider === provider)?.model_id
+    }));
   } catch (err) {
     console.error('[OneMind] Failed to fetch enabled providers:', err.message);
     return [
@@ -2241,13 +2271,27 @@ app.get('/api/onemind/providers', async (req, res) => {
     // Refresh caches to get latest from database
     await refreshCaches();
     
-    // Get enabled providers from database
+    // API access is controlled by ai_models.is_active, NOT provider_config.is_enabled
+    // provider_config.is_enabled controls main app visibility only
+    
+    // First, determine which providers have at least one active model
+    const providersWithActiveModels = new Set();
+    if (modelCache && modelCache.length > 0) {
+      for (const model of modelCache) {
+        if (model.is_active) {
+          providersWithActiveModels.add(model.provider);
+        }
+      }
+    }
+    
+    // Get enabled providers (those with at least one active model)
     const enabledProviders = [];
     const disabledProviders = [];
     
     if (providerCache && Object.keys(providerCache).length > 0) {
       for (const [provider, config] of Object.entries(providerCache)) {
-        if (config.is_enabled) {
+        // Provider is enabled for API if it has at least one active model
+        if (providersWithActiveModels.has(provider)) {
           enabledProviders.push({
             provider,
             default_model: config.default_model,
@@ -2261,7 +2305,7 @@ app.get('/api/onemind/providers', async (req, res) => {
     }
     
     // Get enabled models from database
-    // IMPORTANT: Only include models whose provider is ALSO enabled
+    // Model is enabled if: model.is_active === true
     const enabledModels = [];
     const disabledModels = [];
     
@@ -2278,7 +2322,7 @@ app.get('/api/onemind/providers', async (req, res) => {
     
     if (modelCache && modelCache.length > 0) {
       for (const model of modelCache) {
-        // Model is truly enabled only if: model.is_active AND provider.is_enabled
+        // Model is enabled if is_active is true (provider check already done above)
         const providerEnabled = enabledProviderNames.has(model.provider);
         
         if (model.is_active && providerEnabled) {
@@ -2701,13 +2745,9 @@ app.post('/api/onemind/stream', async (req, res) => {
             return false;
           }
           
-          // Check if provider is also enabled
-          const providerConfig = providerCache?.[m.provider];
-          if (providerConfig && providerConfig.is_enabled === false) {
-            console.log(`[OneMind Stream] Skipping ${m.provider}/${m.model_id} - provider disabled`);
-            skippedCount++;
-            return false; // Skip this model if provider is disabled
-          }
+          // API access is controlled by ai_models.is_active only
+          // provider_config.is_enabled controls main app visibility, not API access
+          // Since we already checked m.is_active above, no additional provider check needed
           
           return true;
         });
