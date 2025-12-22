@@ -43,7 +43,15 @@ async function refreshCaches() {
     console.warn('[Config] Supabase not initialized, skipping cache refresh');
     return;
   }
-  if (Date.now() - cacheTime < CACHE_TTL && providerCache !== null) return;
+  // Only skip refresh if cache is valid (not empty) and within TTL
+  const cacheIsValid = providerCache !== null && 
+                       Object.keys(providerCache).length > 0 && 
+                       modelCache !== null && 
+                       modelCache.length > 0;
+  if (cacheIsValid && Date.now() - cacheTime < CACHE_TTL) {
+    console.log('[Config] Using cached data (age:', Math.floor((Date.now() - cacheTime) / 1000), 'seconds)');
+    return;
+  }
   
   try {
     console.log('[Config] Refreshing caches from database...');
