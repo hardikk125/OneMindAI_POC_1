@@ -49,7 +49,7 @@ async function refreshCaches() {
     console.log('[Config] Refreshing caches from database...');
     const [providerResult, modelResult] = await Promise.all([
       supabase.from('provider_config').select('*'),
-      supabase.from('ai_models').select('provider, model_id, is_active').order('provider').order('model_id')
+      supabase.from('ai_models').select('*').order('provider').order('model_id')
     ]);
     
     // Log any errors but still initialize caches
