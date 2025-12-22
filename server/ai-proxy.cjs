@@ -2286,6 +2286,14 @@ app.get('/api/onemind/providers', async (req, res) => {
     // Refresh caches to get latest from database
     await refreshCaches();
     
+    // Debug logging
+    console.log('[Providers API] providerCache keys:', providerCache ? Object.keys(providerCache) : 'null');
+    console.log('[Providers API] modelCache length:', modelCache ? modelCache.length : 'null');
+    if (modelCache && modelCache.length > 0) {
+      console.log('[Providers API] First model:', JSON.stringify(modelCache[0]));
+      console.log('[Providers API] Active models:', modelCache.filter(m => m.is_active === true).length);
+    }
+    
     // API access is controlled by ai_models.is_active, NOT provider_config.is_enabled
     // provider_config.is_enabled controls main app visibility only
     
@@ -2298,6 +2306,7 @@ app.get('/api/onemind/providers', async (req, res) => {
         }
       }
     }
+    console.log('[Providers API] Providers with active models:', [...providersWithActiveModels]);
     
     // Get enabled providers (those with at least one active model)
     const enabledProviders = [];
