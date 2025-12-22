@@ -36,6 +36,23 @@ const supabase = SUPABASE_URL && SUPABASE_SERVICE_KEY
 if (supabase) {
   console.log('[Supabase] Client created successfully');
   console.log('[Supabase] Connected to:', SUPABASE_URL);
+  
+  // Test the connection immediately
+  (async () => {
+    try {
+      console.log('[Supabase] Testing connection with provider_config query...');
+      const { data, error } = await supabase.from('provider_config').select('provider').limit(1);
+      if (error) {
+        console.error('[Supabase] TEST FAILED:', error.message);
+        console.error('[Supabase] Error code:', error.code);
+        console.error('[Supabase] Error details:', JSON.stringify(error));
+      } else {
+        console.log('[Supabase] TEST SUCCESS - Found', data?.length || 0, 'provider(s)');
+      }
+    } catch (err) {
+      console.error('[Supabase] TEST EXCEPTION:', err.message);
+    }
+  })();
 } else {
   console.error('[Supabase] NOT CONNECTED - Missing URL or SERVICE_KEY');
 }
@@ -215,7 +232,8 @@ console.log('🔥 [PROXY] Starting with GEMINI STREAMING FIX v2 - Dec 4, 2025 9:
 // =============================================================================
 
 // Trust proxy for Railway/Vercel deployments (fixes X-Forwarded-For header issues)
-app.set('trust proxy', true);
+// Set to 1 to only trust the first proxy (Railway/Vercel)
+app.set('trust proxy', 1);
 
 // Security headers
 app.use(helmet({
