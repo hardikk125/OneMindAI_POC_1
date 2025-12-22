@@ -20,9 +20,12 @@ const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 // Debug logging to verify env vars
+console.log('[Supabase] ========== STARTUP ==========');
 console.log('[Supabase] SUPABASE_URL:', SUPABASE_URL ? `${SUPABASE_URL.substring(0, 30)}...` : 'MISSING');
-console.log('[Supabase] SUPABASE_SERVICE_KEY:', SUPABASE_SERVICE_KEY ? `${SUPABASE_SERVICE_KEY.substring(0, 50)}...` : 'MISSING');
+console.log('[Supabase] SUPABASE_SERVICE_KEY exists:', !!SUPABASE_SERVICE_KEY);
 console.log('[Supabase] Key length:', SUPABASE_SERVICE_KEY ? SUPABASE_SERVICE_KEY.length : 0);
+console.log('[Supabase] Key starts with:', SUPABASE_SERVICE_KEY ? SUPABASE_SERVICE_KEY.substring(0, 20) : 'N/A');
+console.log('[Supabase] ========== END STARTUP ==========');
 
 const supabase = SUPABASE_URL && SUPABASE_SERVICE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
@@ -83,14 +86,20 @@ async function refreshCaches() {
   
   try {
     console.log('[Config] Refreshing caches from database...');
+    console.log('[Config] Supabase client:', supabase ? 'exists' : 'null');
+    
     const [providerResult, modelResult] = await Promise.all([
       supabase.from('provider_config').select('*'),
       supabase.from('ai_models').select('*').order('provider').order('model_id')
     ]);
     
-    // Log any errors but still initialize caches
+    // Log detailed error info
     if (providerResult.error) {
-      console.error('[Config] Error fetching provider_config:', providerResult.error.message);
+      console.error('[Config] Error fetching provider_config:');
+      console.error('  - Message:', providerResult.error.message);
+      console.error('  - Code:', providerResult.error.code);
+      console.error('  - Status:', providerResult.error.status);
+      console.error('  - Details:', JSON.stringify(providerResult.error));
       providerCache = {}; // Initialize as empty object instead of null
     } else {
       providerCache = Object.fromEntries((providerResult.data || []).map(r => [r.provider, r]));
@@ -98,7 +107,11 @@ async function refreshCaches() {
     }
     
     if (modelResult.error) {
-      console.error('[Config] Error fetching ai_models:', modelResult.error.message);
+      console.error('[Config] Error fetching ai_models:');
+      console.error('  - Message:', modelResult.error.message);
+      console.error('  - Code:', modelResult.error.code);
+      console.error('  - Status:', modelResult.error.status);
+      console.error('  - Details:', JSON.stringify(modelResult.error));
       modelCache = []; // Initialize as empty array instead of null
     } else {
       modelCache = modelResult.data || [];
