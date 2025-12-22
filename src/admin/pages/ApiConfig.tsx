@@ -152,8 +152,29 @@ export function ApiConfig() {
 
       if (modelsResult.error) throw modelsResult.error;
 
-      setModels((modelsResult.data as AIModel[]) || []);
-      setProviders(providersData);
+      const fetchedModels = (modelsResult.data as AIModel[]) || [];
+      setModels(fetchedModels);
+      
+      // IMPORTANT: Compute provider "enabled" status from ai_models.is_active
+      // NOT from provider_config.is_enabled (which controls main app visibility)
+      // A provider is "enabled" for API if ANY of its models are active
+      const providerActiveStatus: Record<string, boolean> = {};
+      fetchedModels.forEach(m => {
+        if (!providerActiveStatus[m.provider]) {
+          providerActiveStatus[m.provider] = false;
+        }
+        if (m.is_active) {
+          providerActiveStatus[m.provider] = true;
+        }
+      });
+      
+      // Override provider is_enabled with computed status from ai_models
+      const adjustedProviders = providersData.map(p => ({
+        ...p,
+        is_enabled: providerActiveStatus[p.provider] ?? false
+      }));
+      
+      setProviders(adjustedProviders);
       setGlobalSettings(settingsData);
     } catch (err) {
       console.error('[ApiConfig] Error fetching data:', err);
