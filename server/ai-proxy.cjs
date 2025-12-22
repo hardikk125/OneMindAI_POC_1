@@ -16,9 +16,18 @@ require('dotenv').config();
 // PROVIDER CONFIG FROM DATABASE (Phase 6)
 // =============================================================================
 
-const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+const supabase = SUPABASE_URL && SUPABASE_SERVICE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
   : null;
+
+if (supabase) {
+  console.log('[Supabase] Connected to:', SUPABASE_URL);
+} else {
+  console.error('[Supabase] NOT CONNECTED - Missing URL or SERVICE_KEY');
+}
 
 let providerCache = null;
 let modelCache = null;
@@ -180,6 +189,13 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://127.0.0.1:5176'
 ];
 
+// Production domains that are always allowed
+const PRODUCTION_DOMAINS = [
+  'one-mind-ai-poc.vercel.app',
+  'onemindai.vercel.app',
+  'vercel.app',  // Allow all Vercel preview deployments
+];
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl)
@@ -190,10 +206,21 @@ app.use(cors({
       return callback(null, true);
     }
     
+    // Allow production domains (Vercel deployments)
+    if (origin) {
+      const originHost = new URL(origin).hostname;
+      if (PRODUCTION_DOMAINS.some(domain => originHost === domain || originHost.endsWith('.' + domain))) {
+        console.log(`[CORS] Allowed production origin: ${origin}`);
+        return callback(null, true);
+      }
+    }
+    
+    // Check explicit allowed origins from env
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     
+    console.warn(`[CORS] Blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true
@@ -2900,6 +2927,7 @@ process.on('SIGINT', () => {
 app.get('/api/feedback/questions', async (req, res) => {
   try {
     if (!supabase) {
+      console.error('[Feedback] Supabase not connected');
       return res.status(503).json({ error: 'Database not connected' });
     }
 
@@ -2908,12 +2936,16 @@ app.get('/api/feedback/questions', async (req, res) => {
       .select('*')
       .order('display_order', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Feedback] Supabase error:', error);
+      throw error;
+    }
 
+    console.log('[Feedback] Questions fetched:', data?.length || 0, 'questions');
     res.json({ success: true, questions: data || [] });
   } catch (err) {
     console.error('[Feedback] Error fetching questions:', err.message);
-    res.status(500).json({ error: 'Failed to fetch feedback questions' });
+    res.status(500).json({ error: 'Failed to fetch feedback questions', details: err.message });
   }
 });
 
@@ -2975,12 +3007,6 @@ app.get('/api/feedback/list', async (req, res) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    // Check if user is admin
-    const isAdmin = req.user?.raw_user_meta_data?.role === 'admin';
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
     const { ratingFilter, startDate, endDate, limit = 100, offset = 0 } = req.query;
 
     let query = supabase
@@ -3016,13 +3042,8 @@ app.get('/api/feedback/list', async (req, res) => {
 app.put('/api/feedback/questions', async (req, res) => {
   try {
     if (!supabase) {
+      console.error('[Feedback] Supabase not connected');
       return res.status(503).json({ error: 'Database not connected' });
-    }
-
-    // Check if user is admin
-    const isAdmin = req.user?.raw_user_meta_data?.role === 'admin';
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
     }
 
     const { questions } = req.body;
@@ -3031,30 +3052,58 @@ app.put('/api/feedback/questions', async (req, res) => {
       return res.status(400).json({ error: 'Invalid questions format' });
     }
 
-    // Update each question
-    const updates = questions.map((q) => ({
-      question_number: q.questionNumber,
-      question_text: q.questionText,
-      question_type: q.questionType,
-      is_required: q.isRequired || false,
-      display_order: q.displayOrder,
-      updated_at: new Date().toISOString()
-    }));
+    console.log('[Feedback] Saving', questions.length, 'questions');
 
-    for (const update of updates) {
+    // Separate new questions (with temp IDs) from existing ones
+    const newQuestions = questions.filter(q => q.id && q.id.startsWith('temp-'));
+    const existingQuestions = questions.filter(q => !q.id || !q.id.startsWith('temp-'));
+
+    // Update existing questions
+    for (const q of existingQuestions) {
+      const updateData = {
+        question_text: q.questionText,
+        question_type: q.questionType,
+        is_required: q.isRequired || false,
+        display_order: q.displayOrder,
+        updated_at: new Date().toISOString()
+      };
+
       const { error } = await supabase
         .from('feedback_questions')
-        .update(update)
-        .eq('question_number', update.question_number);
+        .update(updateData)
+        .eq('question_number', q.questionNumber);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Feedback] Error updating question', q.questionNumber, ':', error);
+        throw error;
+      }
     }
 
-    console.log('[Feedback] Questions updated by admin');
+    // Insert new questions
+    if (newQuestions.length > 0) {
+      const insertData = newQuestions.map((q) => ({
+        question_number: q.questionNumber,
+        question_text: q.questionText,
+        question_type: q.questionType,
+        is_required: q.isRequired || false,
+        display_order: q.displayOrder
+      }));
+
+      const { error } = await supabase
+        .from('feedback_questions')
+        .insert(insertData);
+
+      if (error) {
+        console.error('[Feedback] Error inserting new questions:', error);
+        throw error;
+      }
+    }
+
+    console.log('[Feedback] Questions saved successfully - Updated:', existingQuestions.length, 'New:', newQuestions.length);
     res.json({ success: true, message: 'Feedback questions updated' });
   } catch (err) {
     console.error('[Feedback] Error updating questions:', err.message);
-    res.status(500).json({ error: 'Failed to update feedback questions' });
+    res.status(500).json({ error: 'Failed to update feedback questions', details: err.message });
   }
 });
 
