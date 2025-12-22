@@ -39,30 +39,45 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // =============================================================================
 
 async function refreshCaches() {
-  if (!supabase) return;
-  if (Date.now() - cacheTime < CACHE_TTL) return;
+  if (!supabase) {
+    console.warn('[Config] Supabase not initialized, skipping cache refresh');
+    return;
+  }
+  if (Date.now() - cacheTime < CACHE_TTL && providerCache !== null) return;
   
   try {
+    console.log('[Config] Refreshing caches from database...');
     const [providerResult, modelResult] = await Promise.all([
       supabase.from('provider_config').select('*'),
       supabase.from('ai_models').select('provider, model_id, is_active').order('provider').order('model_id')
     ]);
     
-    if (!providerResult.error && providerResult.data) {
-      providerCache = Object.fromEntries(providerResult.data.map(r => [r.provider, r]));
+    // Log any errors but still initialize caches
+    if (providerResult.error) {
+      console.error('[Config] Error fetching provider_config:', providerResult.error.message);
+      providerCache = {}; // Initialize as empty object instead of null
+    } else {
+      providerCache = Object.fromEntries((providerResult.data || []).map(r => [r.provider, r]));
+      console.log(`[Config] Loaded ${Object.keys(providerCache).length} providers from database`);
     }
     
-    if (!modelResult.error && modelResult.data) {
-      modelCache = modelResult.data;
-      console.log(`[Config] Loaded ${modelResult.data.length} models from database`);
-      const enabledModels = modelResult.data.filter(m => m.is_active === true);
+    if (modelResult.error) {
+      console.error('[Config] Error fetching ai_models:', modelResult.error.message);
+      modelCache = []; // Initialize as empty array instead of null
+    } else {
+      modelCache = modelResult.data || [];
+      console.log(`[Config] Loaded ${modelCache.length} models from database`);
+      const enabledModels = modelCache.filter(m => m.is_active === true);
       console.log(`[Config] ${enabledModels.length} models are enabled:`, enabledModels.map(m => `${m.provider}/${m.model_id}`).join(', '));
     }
     
     cacheTime = Date.now();
-    console.log('[Config] Provider and model config loaded from database');
+    console.log('[Config] Cache refresh complete');
   } catch (err) {
-    console.warn('[Config] Failed to refresh caches:', err.message);
+    console.error('[Config] Failed to refresh caches:', err.message);
+    // Initialize caches as empty to indicate we tried but failed
+    if (providerCache === null) providerCache = {};
+    if (modelCache === null) modelCache = [];
   }
 }
 
@@ -2371,8 +2386,8 @@ app.get('/api/onemind/providers', async (req, res) => {
     };
     
     res.json({
-      // Database connection status
-      database_connected: !!supabase && (providerCache !== null || modelCache !== null),
+      // Database connection status - true if supabase is initialized and caches have been populated
+      database_connected: !!supabase && providerCache !== null && modelCache !== null,
       cache_age_seconds: Math.floor((Date.now() - cacheTime) / 1000),
       
       // Providers from database
