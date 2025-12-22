@@ -1521,6 +1521,13 @@ app.post('/api/mistral', async (req, res) => {
       return res.status(400).json({ error: 'Messages array required' });
     }
 
+    // Add timeout controller to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.error('[Mistral] Request timeout after 5 minutes');
+      controller.abort();
+    }, 300000); // 5 minute timeout
+
     const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -1534,7 +1541,8 @@ app.post('/api/mistral', async (req, res) => {
         ...(max_tokens && { max_tokens: Math.min(max_tokens, await getProviderLimit('mistral', 'max_output_cap', 32768)) }),
         temperature: temperature ?? null,
         stream: stream ?? true
-      })
+      }),
+      signal: controller.signal
     });
 
     if (!response.ok) {
@@ -1555,27 +1563,60 @@ app.post('/api/mistral', async (req, res) => {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
+      // Detect client disconnection
+      req.on('close', () => {
+        console.log('[Mistral] Client disconnected, cancelling stream');
+        clearTimeout(timeoutId);
+        reader.cancel();
+      });
+
       try {
+        let chunkCount = 0;
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log(`[Mistral] Stream completed successfully (${chunkCount} chunks)`);
+            break;
+          }
+          
+          // Check if client is still connected
+          if (res.writableEnded) {
+            console.log('[Mistral] Response already ended, stopping stream');
+            break;
+          }
+          
           const chunk = decoder.decode(value, { stream: true });
+          chunkCount++;
           res.write(chunk);
           if (res.flush) res.flush();
         }
+        clearTimeout(timeoutId);
       } catch (streamError) {
+        clearTimeout(timeoutId);
         console.error('[Mistral Stream Error]', streamError.message);
-        if (!res.headersSent) res.status(500).json({ error: 'Stream interrupted' });
+        console.error('[Mistral Stream Error] Stack:', streamError.stack);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Stream interrupted' });
+        } else if (!res.writableEnded) {
+          res.write(`data: {"error": "Stream interrupted: ${streamError.message}"}\n\n`);
+        }
       } finally {
         if (!res.writableEnded) res.end();
       }
     } else {
       const data = await response.json();
+      clearTimeout(timeoutId);
       res.json(data);
     }
   } catch (error) {
     console.error('[Mistral Error]', error.message);
-    if (!res.headersSent) {
+    console.error('[Mistral Error] Stack:', error.stack);
+    if (error.name === 'AbortError') {
+      console.error('[Mistral] Request aborted due to timeout');
+      if (!res.headersSent) {
+        res.status(504).json({ error: 'Request timeout after 5 minutes' });
+      }
+    } else if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to process Mistral request' });
     } else if (!res.writableEnded) {
       res.end();
