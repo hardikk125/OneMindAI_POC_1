@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
+import { supabase } from '../lib/supabase/client';
 import { FeedbackQuestion, FeedbackFormData, FeedbackResponse, FeedbackQuestionsResponse } from '../types/Feedback';
-
-const ONEMIND_API_URL = process.env.REACT_APP_ONEMIND_API_URL || 'http://localhost:3001';
 
 export function useFeedback() {
   const [questions, setQuestions] = useState<FeedbackQuestion[]>([]);
@@ -10,28 +9,27 @@ export function useFeedback() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  // Fetch feedback questions from backend
+  // Fetch feedback questions directly from Supabase
   const fetchQuestions = useCallback(async () => {
     try {
       setIsLoadingQuestions(true);
       setSubmitError(null);
 
-      const response = await fetch(`${ONEMIND_API_URL}/api/feedback/questions`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch questions: ${response.statusText}`);
+      if (!supabase) {
+        throw new Error('Supabase not configured');
       }
 
-      const data: FeedbackQuestionsResponse = await response.json();
+      const { data, error } = await supabase
+        .from('feedback_questions')
+        .select('*')
+        .order('display_order', { ascending: true });
 
-      if (data.success && data.questions) {
-        // Convert snake_case from backend to camelCase for frontend
-        const convertedQuestions = data.questions.map((q: any) => ({
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        const convertedQuestions = data.map((q: any) => ({
           id: q.id,
           questionNumber: q.question_number,
           questionText: q.question_text,
@@ -51,14 +49,15 @@ export function useFeedback() {
     }
   }, []);
 
-  // Submit feedback to backend
+  // Submit feedback directly to Supabase
   const submitFeedback = useCallback(
     async (
       formData: FeedbackFormData,
       sessionId?: string,
       aiProvider?: string,
       aiModel?: string,
-      responseLength?: number
+      responseLength?: number,
+      interestData?: { name: string; email: string }
     ): Promise<boolean> => {
       try {
         setIsSubmitting(true);
@@ -70,37 +69,75 @@ export function useFeedback() {
           throw new Error('Rating is required and must be between 1 and 5');
         }
 
-        const response = await fetch(`${ONEMIND_API_URL}/api/feedback/submit`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            rating: formData.rating,
-            reasonForRating: formData.reasonForRating || null,
-            whatLiked: formData.whatLiked || null,
-            whatImprove: formData.whatImprove || null,
-            sessionId: sessionId || null,
-            aiProvider: aiProvider || null,
-            aiModel: aiModel || null,
-            responseLength: responseLength || null,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Failed to submit feedback: ${response.statusText}`);
+        if (!supabase) {
+          throw new Error('Supabase not configured');
         }
 
-        const data: FeedbackResponse = await response.json();
-
-        if (data.success) {
-          setSubmitSuccess(true);
-          console.log('[Feedback Hook] Feedback submitted successfully:', data.feedbackId);
-          return true;
-        } else {
-          throw new Error(data.error || 'Failed to submit feedback');
+        // Get current user
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          console.error('[Feedback Hook] Auth error:', authError);
+          throw new Error('User not authenticated');
         }
+
+        console.log('[Feedback Hook] User ID:', user.id);
+        console.log('[Feedback Hook] User email:', user.email);
+
+        // Insert feedback directly to Supabase
+        const insertData = {
+          user_id: user.id,
+          session_id: sessionId || null,
+          rating: formData.rating,
+          reason_for_rating: formData.reasonForRating || null,
+          what_liked: formData.whatLiked || null,
+          what_improve: formData.whatImprove || null,
+          ai_provider: aiProvider || null,
+          ai_model: aiModel || null,
+          response_length: responseLength || null,
+        };
+
+        console.log('[Feedback Hook] Inserting data:', insertData);
+
+        const { data, error } = await supabase
+          .from('feedback_submissions')
+          .insert(insertData as any)
+          .select('id');
+
+        if (error) {
+          console.error('[Feedback Hook] Supabase error details:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+          });
+          throw new Error(`Failed to submit feedback: ${error.message}`);
+        }
+
+        const feedbackId = data?.[0]?.id;
+
+        // If user opted to register interest, insert into interest_registrations
+        if (interestData && feedbackId) {
+          const { error: interestError } = await supabase
+            .from('interest_registrations')
+            .insert({
+              name: interestData.name,
+              email: interestData.email,
+              feedback_id: feedbackId,
+              source: 'feedback_form',
+              subscribed_to_updates: true,
+            } as any);
+
+          if (interestError) {
+            console.warn('[Feedback Hook] Failed to register interest:', interestError.message);
+            // Don't fail the whole submission if interest registration fails
+          } else {
+            console.log('[Feedback Hook] Interest registered successfully');
+          }
+        }
+
+        setSubmitSuccess(true);
+        console.log('[Feedback Hook] Feedback submitted successfully:', feedbackId);
+        return true;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to submit feedback';
         console.error('[Feedback Hook] Error submitting feedback:', errorMessage);

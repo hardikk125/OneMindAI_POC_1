@@ -29,6 +29,9 @@ export function FeedbackModal({
     whatImprove: '',
   });
   const [hoveredRating, setHoveredRating] = useState<number | null>(null);
+  const [registerInterest, setRegisterInterest] = useState(false);
+  const [interestName, setInterestName] = useState('');
+  const [interestEmail, setInterestEmail] = useState('');
 
   // Reset form when modal closes
   useEffect(() => {
@@ -40,6 +43,9 @@ export function FeedbackModal({
         whatImprove: '',
       });
       setHoveredRating(null);
+      setRegisterInterest(false);
+      setInterestName('');
+      setInterestEmail('');
     }
   }, [isOpen]);
 
@@ -64,7 +70,12 @@ export function FeedbackModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const success = await submitFeedback(formData, sessionId, aiProvider, aiModel, responseLength);
+    // Prepare interest data if user opted in
+    const interestData = registerInterest && interestName && interestEmail
+      ? { name: interestName, email: interestEmail }
+      : undefined;
+
+    const success = await submitFeedback(formData, sessionId, aiProvider, aiModel, responseLength, interestData);
 
     if (success) {
       console.log('[Feedback Modal] Feedback submitted successfully');
@@ -194,6 +205,65 @@ export function FeedbackModal({
                 ))}
               </div>
             )}
+
+            {/* Interest Registration Section */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="registerInterest"
+                  checked={registerInterest}
+                  onChange={(e) => setRegisterInterest(e.target.checked)}
+                  className="mt-1 h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <div className="flex-1">
+                  <label htmlFor="registerInterest" className="block text-sm font-semibold text-gray-900 cursor-pointer">
+                    Register Your Interest
+                  </label>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Get notified about new features and updates from OneMind AI
+                  </p>
+                </div>
+              </div>
+
+              {registerInterest && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-4 space-y-3"
+                >
+                  <div>
+                    <label htmlFor="interestName" className="block text-sm font-medium text-gray-700 mb-1">
+                      Your Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="interestName"
+                      value={interestName}
+                      onChange={(e) => setInterestName(e.target.value)}
+                      placeholder="Enter your name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      required={registerInterest}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="interestEmail" className="block text-sm font-medium text-gray-700 mb-1">
+                      Your Email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      id="interestEmail"
+                      value={interestEmail}
+                      onChange={(e) => setInterestEmail(e.target.value)}
+                      placeholder="Enter your email"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      required={registerInterest}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </div>
 
             {/* Footer */}
             <div className="flex gap-3 pt-4 border-t">
