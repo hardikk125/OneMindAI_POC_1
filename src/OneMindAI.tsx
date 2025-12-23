@@ -37,6 +37,9 @@ import { INDUSTRY_STANDARDS } from './config/constants';
 import { HubSpotSendButton } from './components/HubSpotSendButton';
 import { trackChange, trackStateChange, trackError, trackComponent, trackApiCall } from './lib/change-tracker';
 import { HelpIcon } from './components/ui/help-icon';
+import { ChatHistorySidebar } from './components/chat/ChatHistorySidebar';
+import { ChatInterface } from './components/chat/ChatInterface';
+import { useChatHistory } from './hooks/useChatHistory';
 
 /**
  * OneMindAI — v14 (Mobile-First Preview, patched again)
@@ -853,6 +856,26 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [showCompanySearch, setShowCompanySearch] = useState(false);
   const [companySearchQuery, setCompanySearchQuery] = useState('');
   const [showPerspective, setShowPerspective] = useState(false);
+  
+  // ===== Chat History State =====
+  const [showChatHistory, setShowChatHistory] = useState(false);
+  const chatHistory = useChatHistory();
+  
+  // ===== Conversation Thread State (for displaying all messages in current session) =====
+  interface ConversationTurn {
+    id: string;
+    userMessage: string;
+    responses: Array<{
+      engineId: string;
+      engineName: string;
+      provider: string;
+      version: string;
+      content: string;
+    }>;
+    timestamp: Date;
+  }
+  const [conversationThread, setConversationThread] = useState<ConversationTurn[]>([]);
+  const [expandedResponses, setExpandedResponses] = useState<Set<string>>(new Set()); // Track which responses are expanded
 
   // ===== Focus Areas Data (Role-specific) =====
   const ROLE_FOCUS_AREAS: Record<string, Array<{id: string, title: string, prompts: Array<{id: string, title: string, template: string}>}>> = {
@@ -1021,6 +1044,13 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
       }
     }
   }, [storyMode, storyStep, engines, selected, activeEngineTab]);
+
+  // Auto-open chat history sidebar after first conversation turn - DISABLED per user request
+  // useEffect(() => {
+  //   if (conversationThread.length === 1 && !showChatHistory) {
+  //     setShowChatHistory(true);
+  //   }
+  // }, [conversationThread.length, showChatHistory]);
 
   // ===== Helper to highlight [placeholder] text in prompts =====
   const highlightPlaceholders = (text: string, variant: 'default' | 'light' = 'default') => {
@@ -3678,6 +3708,24 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
       return;
     }
     
+    // ===== CHAT HISTORY: Build context from preferred blocks for follow-ups =====
+    let contextualPrompt = prompt;
+    if (chatHistory.currentConversation && chatHistory.messages.length > 0) {
+      try {
+        const contextMessages = await chatHistory.getContext();
+        if (contextMessages.length > 0) {
+          // Prepend context to prompt
+          const contextText = contextMessages
+            .map((msg: any) => `[Previous ${msg.role}]: ${msg.content}`)
+            .join('\n\n');
+          contextualPrompt = `${contextText}\n\n[Current Question]: ${prompt}`;
+          logger.info(`[Chat History] Using context from ${contextMessages.length} previous messages`);
+        }
+      } catch (error: any) {
+        logger.warning('[Chat History] Failed to build context, proceeding without:', error?.message || error);
+      }
+    }
+    
     // ===== Super Debug: Pipeline Start =====
     superDebugBus.emit('PIPELINE_START', 'User clicked "Run Live" - Starting execution pipeline', {
       details: {
@@ -3720,7 +3768,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     const runs = selectedEngines.map(async (e) => {
       logger.separator();
       logger.step(3, `Processing engine: ${e.name}`);
-      const { nowIn, outCap, minSpend, maxSpend } = computePreview(e, prompt);
+      const { nowIn, outCap, minSpend, maxSpend } = computePreview(e, contextualPrompt);
       logger.data('Token Calculation', {
         inputTokens: nowIn,
         maxOutputTokens: outCap,
@@ -3742,7 +3790,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
         const UPDATE_INTERVAL = getSystemConfig<number>(systemConfig, 'update_interval_ms', 15); // ~67fps for smooth rendering
         const STREAM_TIMEOUT = getSystemConfig<number>(systemConfig, 'stream_timeout_ms', 30000); // 30 seconds without chunks = timeout
         
-        const streamIterator = streamFromProvider(e, prompt, outCap);
+        const streamIterator = streamFromProvider(e, contextualPrompt, outCap);
         
         for await (const chunk of streamIterator) {
           fullContent += chunk;
@@ -4037,6 +4085,73 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
 
     const out = await Promise.all(runs);
     setResults(out);
+    
+    // ===== CHAT HISTORY: Save conversation and responses =====
+    if (user?.id && storyMode && storyStep === 4) {
+      try {
+        // Create or get current conversation
+        if (!chatHistory.currentConversation) {
+          const title = prompt.slice(0, 50) + (prompt.length > 50 ? '...' : '');
+          const engines = selectedEngines.map(e => ({
+            engine: e.name,
+            provider: e.provider
+          }));
+          await chatHistory.createConversation(title, engines);
+          logger.info('[Chat History] Created new conversation');
+        }
+        
+        if (chatHistory.currentConversation) {
+          // Send user message
+          const userMsg = await chatHistory.sendMessage(prompt);
+          logger.info('[Chat History] Saved user message');
+          
+          // Save each engine response
+          for (const result of out.filter(r => r.success)) {
+            const engine = selectedEngines.find(e => e.id === result.engineId);
+            if (engine && result.responsePreview) {
+              await chatHistory.storeEngineResponse(
+                userMsg.id,
+                engine.name,
+                engine.provider,
+                result.responsePreview,
+                {
+                  response_time_ms: result.responseTime || 0,
+                  input_tokens: result.tokensIn || 0,
+                  output_tokens: result.tokensOut || 0,
+                  cost_usd: result.costUSD || 0
+                }
+              );
+              logger.info(`[Chat History] Saved response from ${engine.name}`);
+            }
+          }
+          
+          // Refresh conversations list in sidebar
+          await chatHistory.fetchConversations();
+          logger.info('[Chat History] Refreshed conversations list');
+        }
+      } catch (error) {
+        logger.error('[Chat History] Failed to save:', error);
+      }
+    }
+    
+    // ===== ADD TO CONVERSATION THREAD =====
+    // Save this turn to the conversation thread for display
+    const newTurn: ConversationTurn = {
+      id: `turn-${Date.now()}`,
+      userMessage: prompt,
+      responses: out.filter(r => r.success).map(r => ({
+        engineId: r.engineId,
+        engineName: r.engineName,
+        provider: selectedEngines.find(e => e.id === r.engineId)?.provider || 'unknown',
+        version: r.version,
+        content: r.responsePreview || ''
+      })),
+      timestamp: new Date()
+    };
+    setConversationThread(prev => [...prev, newTurn]);
+    
+    // Clear prompt for next follow-up (but keep conversation thread)
+    // Don't clear prompt here - let user see what they asked
     
     // Auto-select first engine tab when results are available
     if (out.length > 0 && !activeEngineTab) {
@@ -6926,9 +7041,259 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         </div>
       )}
 
-      {/* Story Mode Step 4: Results & Merging - Modern Horizontal Tabs */}
+      {/* Story Mode Step 4: Results & Merging - ChatGPT-Style Layout */}
       {storyMode && storyStep === 4 && (
-        <div className={`${panel} p-4 sm:p-6 border-t-4 border-purple-600`}>
+        <div className="flex h-[calc(100vh-180px)] bg-slate-50 rounded-2xl overflow-hidden border border-slate-200">
+          {/* Left Sidebar - Chat History */}
+          <div className={`${showChatHistory ? 'w-72' : 'w-0'} transition-all duration-300 overflow-hidden border-r border-slate-200 bg-white flex flex-col`}>
+            {/* Sidebar Header */}
+            <div className="p-3 border-b border-slate-200">
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search chats..."
+                  className="w-full pl-9 pr-3 py-2 text-sm bg-slate-100 border-0 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  // Stay on Step 4, just reset the conversation
+                  setPrompt("");
+                  setResults([]);
+                  setStreamingStates({});
+                  setActiveEngineTab("");
+                  setConversationThread([]); // Clear conversation thread
+                  setIsRunning(false); // Stop any "Processing request" state
+                  chatHistory.setCurrentConversation(null); // Reset chat history
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 transition font-medium text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Chat
+              </button>
+            </div>
+            
+            {/* Conversation List */}
+            <div className="flex-1 overflow-y-auto p-2">
+              <div className="mb-3">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-2 mb-1">Today</h3>
+                <div className="space-y-1">
+                  {/* Current conversation */}
+                  <div className="w-full text-left p-2.5 rounded-lg bg-purple-100 border border-purple-300">
+                    <div className="flex items-start gap-2">
+                      <svg className="w-4 h-4 mt-0.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate text-purple-900">
+                          {prompt.slice(0, 30)}{prompt.length > 30 ? '...' : ''} 
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-0.5">
+                            {engines.filter(e => selected[e.id]).slice(0, 3).map((engine) => (
+                              <span 
+                                key={engine.id}
+                                className={`w-2 h-2 rounded-full ${providerStyles[engine.provider] || 'bg-slate-500'}`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-xs text-slate-500">Just now</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Placeholder for more conversations */}
+              <p className="text-xs text-slate-400 text-center py-4">
+                Previous conversations will appear here
+              </p>
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Chat Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowChatHistory(!showChatHistory)}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition"
+                  title={showChatHistory ? 'Hide sidebar' : 'Show sidebar'}
+                >
+                  <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <div>
+                  <h2 className="font-semibold text-slate-900">
+                    {prompt.slice(0, 50)}{prompt.length > 50 ? '...' : ''}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    {engines.filter(e => selected[e.id]).map(e => e.name).join(', ')} • {results.length} responses
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <FeedbackModal
+                  isOpen={feedbackModalOpen}
+                  onClose={() => setFeedbackModalOpen(false)}
+                  sessionId={feedbackSessionId}
+                  aiProvider={feedbackAiProvider}
+                  aiModel={feedbackAiModel}
+                  responseLength={feedbackResponseLength}
+                />
+                <button 
+                  onClick={() => setFeedbackModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 transition"
+                >
+                  <span>💬</span> Feedback
+                </button>
+                <ExportDropdown
+                  data={{
+                    title: 'AI Response',
+                    provider: engines.filter(e => selected[e.id]).map(e => e.provider).join(', '),
+                    model: engines.filter(e => selected[e.id]).map(e => e.selectedVersion).join(', '),
+                    prompt: prompt,
+                    response: engines.filter(e => selected[e.id]).map(e => {
+                      const state = streamingStates[e.id];
+                      return `## ${e.name}\n\n${state?.content || '(No response)'}`;
+                    }).join('\n\n---\n\n'),
+                    timestamp: new Date(),
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Previous Conversation Turns */}
+              {conversationThread.map((turn, turnIndex) => (
+                <div key={turn.id} className="border-b border-slate-200">
+                  {/* User Message */}
+                  <div className="p-4 bg-slate-50">
+                    <div className="max-w-4xl mx-auto">
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                          {user?.email?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-slate-900 text-sm mb-1">You</p>
+                          <p className="text-slate-700 whitespace-pre-wrap">{turn.userMessage}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* AI Responses for this turn - Full Engine Tabs UI */}
+                  <div className="p-4 bg-white">
+                    <div className="max-w-4xl mx-auto">
+                      {/* Engine Tabs */}
+                      <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 border-b-2 border-slate-200">
+                        {turn.responses.map((resp) => {
+                          const isActive = expandedResponses.has(`${turn.id}-active`) 
+                            ? expandedResponses.has(`${turn.id}-${resp.engineId}`)
+                            : turn.responses.indexOf(resp) === 0;
+                          const brandColor = providerStyles[resp.provider] || 'bg-slate-700';
+                          
+                          return (
+                            <button
+                              key={resp.engineId}
+                              onClick={() => {
+                                setExpandedResponses(prev => {
+                                  const newSet = new Set(prev);
+                                  newSet.add(`${turn.id}-active`);
+                                  newSet.add(`${turn.id}-${resp.engineId}`);
+                                  // Remove other engine selections for this turn
+                                  turn.responses.forEach(r => {
+                                    if (r.engineId !== resp.engineId) {
+                                      newSet.delete(`${turn.id}-${r.engineId}`);
+                                    }
+                                  });
+                                  return newSet;
+                                });
+                              }}
+                              className={`relative flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm font-medium transition-all whitespace-nowrap ${
+                                isActive
+                                  ? 'bg-white text-purple-700 shadow-md border-2 border-b-0 border-purple-300 -mb-[2px]'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
+                              }`}
+                            >
+                              <div className={`w-2 h-2 rounded-full ${brandColor}`}></div>
+                              <span>{resp.engineName}</span>
+                              {isActive && (
+                                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Tab Content */}
+                      <div className="bg-white border-2 border-slate-200 rounded-xl p-6 min-h-[200px] max-h-[500px] overflow-auto">
+                        {turn.responses.map((resp) => {
+                          const isActive = expandedResponses.has(`${turn.id}-active`) 
+                            ? expandedResponses.has(`${turn.id}-${resp.engineId}`)
+                            : turn.responses.indexOf(resp) === 0;
+                          
+                          if (!isActive) return null;
+                          
+                          const brandColor = providerStyles[resp.provider] || 'bg-slate-700';
+                          
+                          return (
+                            <div key={resp.engineId} className="space-y-4">
+                              {/* Engine Header */}
+                              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                                <div className="flex items-center gap-3">
+                                  <span className={`px-3 py-1 rounded-lg text-white text-xs font-semibold ${brandColor}`}>
+                                    {resp.engineName}
+                                  </span>
+                                  <div>
+                                    <h3 className="font-semibold text-slate-900">{resp.version}</h3>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Response Content */}
+                              <div className="prose prose-slate max-w-none">
+                                <EnhancedMarkdownRenderer content={resp.content} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Current Turn - Only show if actively streaming or results not yet saved to thread */}
+              {(isRunning || (results.length > 0 && conversationThread.length === 0) || 
+                (results.length > 0 && conversationThread[conversationThread.length - 1]?.userMessage !== prompt)) && (
+                <>
+                  {/* Current User Message */}
+                  <div className="p-4 border-b border-slate-100 bg-slate-50">
+                    <div className="max-w-4xl mx-auto">
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                          {user?.email?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-slate-900 text-sm mb-1">You</p>
+                          <p className="text-slate-700 whitespace-pre-wrap">{prompt}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* AI Responses Section - Current streaming/results */}
+              <div className={`p-4 sm:p-6`}>
           {/* Header */}
           <div className="space-y-3 mb-6">
             <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 4 · Results</p>
@@ -7590,6 +7955,51 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     <p className="text-xs text-purple-600 mt-1 ml-7">
                       Switch to the "Final Answer" tab to see the merged response.
                     </p>
+                  </div>
+                )}
+
+                {/* Preferred Selection CTA - Chat History Feature */}
+                {!isRunning && results.length > 0 && results.some(r => r.success) && chatHistory.currentConversation && (
+                  <div className="mt-6 p-5 bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-300 rounded-xl shadow-sm">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-2xl">
+                        ⭐
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-lg text-slate-900 mb-1">
+                          Select Your Preferred Response Blocks
+                        </h3>
+                        <p className="text-sm text-slate-600 mb-3">
+                          Click on individual paragraphs, code blocks, or sections in any response above to select them. 
+                          Your selections will be used as context for follow-up questions.
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-blue-200">
+                            <span className="text-xs font-medium text-slate-700">
+                              {(() => {
+                                const lastMsg = chatHistory.messages[chatHistory.messages.length - 1];
+                                return lastMsg?.preferred_blocks?.length || 0;
+                              })()} blocks selected
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              // This will be implemented when SelectableMarkdownRenderer is integrated
+                              alert('Block selection will be available when you click on response sections above');
+                            }}
+                            className="text-xs px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition font-medium"
+                          >
+                            View Selected
+                          </button>
+                        </div>
+                        <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span>Tip: Click on response sections to select them for context in follow-up questions</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -8368,17 +8778,99 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               </button>
               <button
                 onClick={() => {
-                  setStoryStep(1);
-                  setSelectedRole("");
+                  // Reset conversation but stay on Step 4
                   setPrompt("");
                   setResults([]);
                   setStreamingStates({});
                   setActiveEngineTab("");
+                  setConversationThread([]); // Clear conversation thread
+                  setIsRunning(false); // Stop any "Processing request" state
+                  chatHistory.setCurrentConversation(null); // Reset chat history
                 }}
                 className="px-6 py-2 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium shadow-sm hover:from-purple-700 hover:to-blue-700 transition"
               >
-                Start Over
+                New Chat
               </button>
+            </div>
+          </div>
+              </div>
+            </div>
+
+            {/* Follow-up Prompt Box - ChatGPT Style */}
+            <div className="border-t border-slate-200 bg-white p-4">
+              <div className="max-w-4xl mx-auto">
+                {/* Engine Selection Pills */}
+                <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-2">
+                  <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Engines:</span>
+                  {engines.slice(0, 8).map(engine => {
+                    const isSelected = selected[engine.id];
+                    const brandColor = providerStyles[engine.provider] || 'bg-slate-500';
+                    return (
+                      <button
+                        key={engine.id}
+                        onClick={() => setSelected(prev => ({ ...prev, [engine.id]: !prev[engine.id] }))}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition border ${
+                          isSelected
+                            ? 'bg-slate-900 text-white border-transparent'
+                            : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${brandColor}`} />
+                        {engine.name}
+                        {isSelected && (
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Input Box */}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 relative">
+                    <textarea
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && prompt.trim() && !isRunning) {
+                          e.preventDefault();
+                          runAll();
+                        }
+                      }}
+                      placeholder="Ask a follow-up question..."
+                      rows={1}
+                      className="w-full px-4 py-3 pr-24 bg-slate-100 border-0 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                      style={{ minHeight: '48px', maxHeight: '200px' }}
+                    />
+                    <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                      <button className="p-1.5 hover:bg-slate-200 rounded-lg transition" title="Attach file">
+                        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (prompt.trim() && !isRunning) {
+                        runAll();
+                      }
+                    }}
+                    disabled={!prompt.trim() || isRunning}
+                    className={`p-3 rounded-xl transition ${
+                      prompt.trim() && !isRunning
+                        ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90'
+                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
