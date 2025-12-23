@@ -206,7 +206,7 @@ const MODEL_TOKEN_LIMITS: Record<string, Record<string, number>> = {
     "gpt-4o-2024-05-13": 16384,     // GPT-4o May 2024
     "gpt-4.1-mini": 16384,          // GPT-4 Mini supports 16K output
     "gpt-4o-mini": 16384,            // GPT-4o Mini supports 16K output
-    "o4-mini-2025-04-16": 16384,     // O4 Mini supports 16K output
+    "o4-mini-2025-04-16": 100000,    // O4 Mini supports 100K output
   },
   anthropic: {
     "claude-3.5-sonnet": 8192,       // Claude 3.5 Sonnet - 8K output
