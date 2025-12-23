@@ -176,7 +176,7 @@ function unicodeBtoa(str: string): string {
 
 // ===== Engines Registry =====
 const seededEngines: Engine[] = [
-  { id: "openai", name: "ChatGPT", provider: "openai", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["gpt-5.1", "gpt-5-2025-08-07", "gpt-4.1", "gpt-4o", "gpt-4o-2024-11-20", "gpt-4o-2024-08-06", "gpt-4o-2024-05-13", "gpt-4.1-mini", "gpt-4o-mini"], selectedVersion: "gpt-4.1", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["chatgpt"] },
+  { id: "openai", name: "ChatGPT", provider: "openai", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["gpt-5.1", "gpt-5-2025-08-07", "gpt-4.1", "gpt-4o", "gpt-4o-2024-11-20", "gpt-4o-2024-08-06", "gpt-4o-2024-05-13", "gpt-4.1-mini", "gpt-4o-mini", "o4-mini-2025-04-16"], selectedVersion: "gpt-4.1", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["chatgpt"] },
   { id: "claude", name: "Claude", provider: "anthropic", tokenizer: "sentencepiece", contextLimit: 200_000, versions: ["claude-3.5-sonnet", "claude-3-5-sonnet-20241022", "claude-3-haiku", "claude-3-haiku-20240307"], selectedVersion: "claude-3-haiku-20240307", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["claude"] },
   { id: "gemini", name: "Gemini", provider: "gemini", tokenizer: "sentencepiece", contextLimit: 1_000_000, versions: ["gemini-2.0-flash-exp", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite"], selectedVersion: "gemini-2.5-flash-lite", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["gemini"] },
   { id: "deepseek", name: "DeepSeek", provider: "deepseek", tokenizer: "tiktoken", contextLimit: 128_000, versions: ["deepseek-chat", "deepseek-coder"], selectedVersion: "deepseek-chat", outPolicy: { mode: "auto" }, apiKey: DEFAULT_API_KEYS["deepseek"] },
@@ -206,6 +206,7 @@ const MODEL_TOKEN_LIMITS: Record<string, Record<string, number>> = {
     "gpt-4o-2024-05-13": 16384,     // GPT-4o May 2024
     "gpt-4.1-mini": 16384,          // GPT-4 Mini supports 16K output
     "gpt-4o-mini": 16384,            // GPT-4o Mini supports 16K output
+    "o4-mini-2025-04-16": 16384,     // O4 Mini supports 16K output
   },
   anthropic: {
     "claude-3.5-sonnet": 8192,       // Claude 3.5 Sonnet - 8K output
@@ -719,6 +720,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     'gpt-4o-2024-05-13': 'GPT-4o May release',
     'gpt-4.1-mini': 'Compact GPT-4.1 for cost efficiency',
     'gpt-4o-mini': 'Smallest GPT-4o for high-volume tasks',
+    'o4-mini-2025-04-16': 'O4 Mini - Fast and economical reasoning model',
     
     // Claude Models
     'claude-3.5-sonnet': 'Most capable Claude with 200K context',
