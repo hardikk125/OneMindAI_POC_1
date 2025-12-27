@@ -238,7 +238,7 @@ async function getProviderTemperature(provider) {
 const app = express();
 const PORT = process.env.PORT || process.env.AI_PROXY_PORT || 3002;
 
-console.log('🔥 [PROXY] Starting with GEMINI STREAMING FIX v2 - Dec 4, 2025 9:30pm');
+console.log('🔥 [PROXY] Starting with CORS FIX v3 - Dec 27, 2025');
 
 // =============================================================================
 // MIDDLEWARE
@@ -248,13 +248,7 @@ console.log('🔥 [PROXY] Starting with GEMINI STREAMING FIX v2 - Dec 4, 2025 9:
 // Set to 1 to only trust the first proxy (Railway/Vercel)
 app.set('trust proxy', 1);
 
-// Security headers
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: false // Allow streaming responses
-}));
-
-// CORS configuration
+// CORS configuration - trim whitespace from env var origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS
       .split(',')
@@ -272,42 +266,89 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 const PRODUCTION_DOMAINS = [
   'one-mind-ai-poc.vercel.app',
   'onemindai.vercel.app',
-  'vercel.app',  // Allow all Vercel preview deployments
+  'vercel.app',
   'formula2gx.com',
 ];
 
+console.log('[CORS] Allowed origins from env:', allowedOrigins);
+console.log('[CORS] Production domains:', PRODUCTION_DOMAINS);
+
+// Helper function to check if origin is allowed
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  
+  // Allow localhost
+  if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+    return true;
+  }
+  
+  // Check production domains
+  try {
+    const originHost = new URL(origin).hostname;
+    if (PRODUCTION_DOMAINS.some(domain => originHost === domain || originHost.endsWith('.' + domain))) {
+      return true;
+    }
+  } catch (e) {
+    // Invalid URL
+  }
+  
+  // Check explicit allowed origins
+  if (allowedOrigins.includes(origin.trim())) {
+    return true;
+  }
+  
+  return false;
+}
+
+// CRITICAL: Handle OPTIONS preflight BEFORE any other middleware
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  console.log(`[CORS] OPTIONS preflight from: ${origin}`);
+  
+  if (isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    console.log(`[CORS] Preflight ALLOWED for: ${origin}`);
+    return res.status(204).end();
+  } else {
+    console.warn(`[CORS] Preflight BLOCKED for: ${origin}`);
+    return res.status(403).json({ error: 'CORS not allowed' });
+  }
+});
+
+// Set CORS headers for ALL requests (before other middleware)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  if (isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  next();
+});
+
+// Security headers (AFTER CORS)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false
+}));
+
+// CORS middleware (backup, but headers already set above)
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    
-    // Allow any localhost or 127.0.0.1 origin (for development)
-    if (origin && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) {
+    if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
-    
-    // Allow production domains (Vercel deployments)
-    if (origin) {
-      try {
-        const originHost = new URL(origin).hostname;
-        if (PRODUCTION_DOMAINS.some(domain => originHost === domain || originHost.endsWith('.' + domain))) {
-          console.log(`[CORS] Allowed production origin: ${origin}`);
-          return callback(null, true);
-        }
-      } catch {
-        // Fall through to explicit allowedOrigins check
-      }
-    }
-    
-    // Check explicit allowed origins from env
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    
     console.warn(`[CORS] Blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Body parsing with size limit
