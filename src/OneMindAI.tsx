@@ -7468,7 +7468,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           </div>
 
           {/* Tab Content */}
-          <div className="bg-white border-2 border-slate-200 rounded-xl p-6 min-h-[400px] max-h-[600px] overflow-auto">
+          <div className="bg-white border-2 border-slate-200 rounded-xl p-6 min-h-[400px] max-h-[calc(100vh-400px)] overflow-auto">
             {/* Engine Response Content */}
             {engines.filter(e => selected[e.id]).map((engine) => {
               if (activeEngineTab !== engine.id) return null;
