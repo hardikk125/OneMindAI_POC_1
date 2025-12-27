@@ -238,7 +238,7 @@ async function getProviderTemperature(provider) {
 const app = express();
 const PORT = process.env.PORT || process.env.AI_PROXY_PORT || 3002;
 
-console.log('🔥 [PROXY] Starting with CORS FIX v6 - Dec 27, 2025 - ECHO HEADERS FOR RAILWAY EDGE');
+console.log('🔥 [PROXY] Starting with CORS FIX v7 - Dec 27, 2025 - EXPLICIT OPTIONS HANDLER');
 
 // =============================================================================
 // MIDDLEWARE
@@ -249,29 +249,35 @@ console.log('🔥 [PROXY] Starting with CORS FIX v6 - Dec 27, 2025 - ECHO HEADER
 app.set('trust proxy', 1);
 
 // =============================================================================
-// UNIVERSAL CORS HANDLER - ECHO REQUESTED HEADERS FOR RAILWAY EDGE
-// This MUST be the first middleware to handle OPTIONS before anything else
+// GLOBAL OPTIONS HANDLER - MUST BE FIRST, BEFORE ANY MIDDLEWARE
+// This runs before any other middleware to handle preflight requests
 // =============================================================================
-app.use((req, res, next) => {
+app.options('*', (req, res) => {
   const origin = req.headers.origin;
-  const reqMethod = req.headers['access-control-request-method'];
   const reqHeaders = req.headers['access-control-request-headers'];
 
   res.setHeader('Access-Control-Allow-Origin', origin || '*');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  
-  // 🔥 KEY: Echo back headers the browser requested
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', reqHeaders || 'Content-Type, Authorization');
-
-  // 🔥 KEY: Tell intermediary to forward request based on origin
   res.setHeader('Vary', 'Origin');
 
-  // 🔥 KEY: Respond to OPTIONS immediately
-  if (req.method === 'OPTIONS') {
-    console.log(`[CORS] OPTIONS preflight from: ${origin} - ALLOWED with headers: ${reqHeaders}`);
-    return res.sendStatus(200);
-  }
+  console.log(`[CORS] OPTIONS preflight from: ${origin} - ALLOWED with headers: ${reqHeaders}`);
+  return res.sendStatus(200);
+});
+
+// =============================================================================
+// CORS HEADERS FOR ALL NON-OPTIONS REQUESTS
+// =============================================================================
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const reqHeaders = req.headers['access-control-request-headers'];
+
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', reqHeaders || 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
 
   next();
 });

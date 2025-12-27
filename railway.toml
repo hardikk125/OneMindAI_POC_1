@@ -14,3 +14,7 @@ healthcheckTimeout = 300
 numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+
+[experimental]
+# Allow Railway Edge to forward OPTIONS requests (required for CORS preflight)
+allow_cors = true
