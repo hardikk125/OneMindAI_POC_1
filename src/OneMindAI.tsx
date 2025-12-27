@@ -7118,8 +7118,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
       {/* Story Mode Step 4: Results & Merging - ChatGPT-Style Layout */}
       {storyMode && storyStep === 4 && (
         <div className="flex h-[calc(100vh-180px)] bg-slate-50 rounded-2xl overflow-hidden border border-slate-200">
-          {/* Left Sidebar - Chat History - HIDDEN per user request */}
-          <div className="w-0 transition-all duration-300 overflow-hidden border-r border-slate-200 bg-white flex flex-col">
+          {/* Left Sidebar - Chat History */}
+          <div className={`${showChatHistory ? 'w-72' : 'w-0'} transition-all duration-300 overflow-hidden border-r border-slate-200 bg-white flex flex-col`}>
             {/* Sidebar Header */}
             <div className="p-3 border-b border-slate-200">
               <div className="relative mb-3">
@@ -7194,6 +7194,15 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             {/* Chat Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowChatHistory(!showChatHistory)}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition"
+                  title={showChatHistory ? 'Hide sidebar' : 'Show sidebar'}
+                >
+                  <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
                 <div>
                   <h2 className="font-semibold text-slate-900">
                     {prompt.slice(0, 50)}{prompt.length > 50 ? '...' : ''}
@@ -7479,60 +7488,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               const brandColor = providerStyles[engine.provider] || 'bg-slate-700';
 
               return (
-                <div key={engine.id} className="space-y-4">
-                  {/* Engine Header */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                    <div className="flex items-center gap-3">
-                      <span className={`px-3 py-1 rounded-lg text-white text-xs font-semibold ${brandColor}`}>
-                        {engine.name}
-                      </span>
-                      <div>
-                        <h3 className="font-semibold text-slate-900">{engine.selectedVersion}</h3>
-                        <p className="text-xs text-slate-500">Context: {(engine.contextLimit / 1000).toFixed(0)}k tokens</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {streaming && (
-                        <span className="flex items-center gap-2 text-sm text-blue-600 font-medium">
-                          <span className="relative flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-                          </span>
-                          Streaming...
-                        </span>
-                      )}
-                      {content && !streaming && (
-                        <>
-                          <button
-                            onClick={() => {
-                              setFeedbackSessionId(`session-${Date.now()}`);
-                              setFeedbackAiProvider(engine.provider);
-                              setFeedbackAiModel(engine.selectedVersion);
-                              setFeedbackResponseLength(content.length);
-                              setFeedbackModalOpen(true);
-                            }}
-                            className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                            title="Share feedback about this response"
-                          >
-                            💬 Feedback
-                          </button>
-                          <ExportDropdown
-                            data={{
-                              title: `${engine.name} Response`,
-                              provider: engine.provider,
-                              model: engine.selectedVersion,
-                              prompt: prompt,
-                              response: content,
-                              timestamp: new Date(),
-                              tokensUsed: result?.tokensOut,
-                              cost: result?.costUSD,
-                            }}
-                          />
-                        </>
-                      )}
-                    </div>
-                  </div>
-
+                <div key={engine.id}>
                   {/* Response Content */}
                   <div>
                     {hasError ? (
