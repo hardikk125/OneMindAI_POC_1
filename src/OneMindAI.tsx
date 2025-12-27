@@ -849,7 +849,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [showExecutiveRoles, setShowExecutiveRoles] = useState(false);
   const [showOtherRoles, setShowOtherRoles] = useState(false);
-  const [step1Tab, setStep1Tab] = useState<'curated' | 'custom'>('curated'); // Tab for Step 1: curated prompts or custom prompt
+  const [step1Tab, setStep1Tab] = useState<'custom' | 'persona'>('persona'); // Tab for Step 1: Ask OneMind AI (custom) or OneMind Persona (role selection)
   const [selectedRoleDetails, setSelectedRoleDetails] = useState<{name: string, category: string} | null>(null);
   const [roleResponsibilities, setRoleResponsibilities] = useState<string>("");
   const [activeCategory, setActiveCategory] = useState<string>("");
@@ -5986,19 +5986,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           {/* Tab Navigation */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 border-b-2 border-slate-200">
             <button
-              onClick={() => setStep1Tab('curated')}
-              className={`relative flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm md:text-lg font-semibold transition-all whitespace-nowrap ${
-                step1Tab === 'curated'
-                  ? 'bg-white text-purple-700 shadow-md border-2 border-b-0 border-purple-300 -mb-[2px]'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
-              }`}
-            >
-              <span>Review And Customize Your Prompt</span>
-              {step1Tab === 'curated' && (
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
-              )}
-            </button>
-            <button
               onClick={() => setStep1Tab('custom')}
               className={`relative flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm md:text-lg font-semibold transition-all whitespace-nowrap ${
                 step1Tab === 'custom'
@@ -6006,15 +5993,53 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
               }`}
             >
-              <span>Add Outside-In Perspective</span>
+              <span>Ask OneMind AI</span>
               {step1Tab === 'custom' && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
+              )}
+            </button>
+            <button
+              onClick={() => setStep1Tab('persona')}
+              className={`relative flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm md:text-lg font-semibold transition-all whitespace-nowrap ${
+                step1Tab === 'persona'
+                  ? 'bg-white text-purple-700 shadow-md border-2 border-b-0 border-purple-300 -mb-[2px]'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
+              }`}
+            >
+              <span>OneMind Persona</span>
+              {step1Tab === 'persona' && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
               )}
             </button>
           </div>
 
-          {/* Tab Content: Curated Prompts (Role Selection) */}
-          {step1Tab === 'curated' && (
+          {/* Tab Content: Ask OneMind AI (Custom Prompt - Goes to Step 2) */}
+          {step1Tab === 'custom' && (
+            <div className="mb-6 animate-fade-in">
+              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200 p-6">
+                <h3 className="text-xl font-bold text-purple-900 mb-3">Ask OneMind AI</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Start with a custom prompt and let OneMind AI help you with your task.
+                </p>
+                <button
+                  onClick={() => {
+                    setPrompt("");
+                    setSelectedRole("");
+                    setSelectedRoleDetails(null);
+                    setSelectedFocusArea(null);
+                    setSelectedPromptPreview(null);
+                    setStoryStep(2);
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                >
+                  Continue to Custom Prompt →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Tab Content: OneMind Persona (Role Selection) */}
+          {step1Tab === 'persona' && (
           <div className="mb-6 relative animate-fade-in">
             {/* Scroll Left Button - Always visible */}
             <button
@@ -6144,33 +6169,9 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           </div>
           )}
 
-          {/* Tab Content: Custom Prompt (Outside-In Perspective) */}
-          {step1Tab === 'custom' && (
-            <div className="mb-6 animate-fade-in">
-              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200 p-6">
-                <h3 className="text-xl font-bold text-purple-900 mb-3">Start with a Custom Prompt</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Create your own prompt from scratch without using role-based templates.
-                </p>
-                <button
-                  onClick={() => {
-                    setPrompt("");
-                    setSelectedRole("");
-                    setSelectedRoleDetails(null);
-                    setSelectedFocusArea(null);
-                    setSelectedPromptPreview(null);
-                    setStoryStep(2);
-                  }}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-                >
-                  Continue with Custom Prompt →
-                </button>
-              </div>
-            </div>
-          )}
 
-          {/* Selected Role Details - Only show in curated tab */}
-          {step1Tab === 'curated' && selectedRole && (
+          {/* Selected Role Details - Only show in persona tab */}
+          {step1Tab === 'persona' && selectedRole && (
             <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200 p-4 animate-fade-in">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0">
@@ -6315,8 +6316,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </div>
           )}
 
-          {/* Footer - Selected role info - Only in curated tab */}
-          {step1Tab === 'curated' && selectedRole && (
+          {/* Footer - Selected role info - Only in persona tab */}
+          {step1Tab === 'persona' && selectedRole && (
             <div className="mt-6 text-sm text-gray-500">
               <span>Selected: <span className="font-medium text-purple-700">{selectedRole}</span></span>
             </div>
