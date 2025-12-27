@@ -10,11 +10,7 @@ buildCommand = "cd server && npm install"
 # Start the API server from the server directory
 startCommand = "cd server && node ai-proxy.cjs"
 healthcheckPath = "/health"
-healthcheckTimeout = 300
+healthcheckTimeout = 60
 numReplicas = 1
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
-
-[experimental]
-# Allow Railway Edge to forward OPTIONS requests (required for CORS preflight)
-allow_cors = true
+restartPolicyMaxRetries = 10

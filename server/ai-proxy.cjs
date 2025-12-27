@@ -2005,11 +2005,6 @@ app.post('/api/kimi', async (req, res) => {
 app.use((err, req, res, next) => {
   console.error(`[ERROR] ${err.message}`);
   
-  // CORS error
-  if (err.message === 'Not allowed by CORS') {
-    return res.status(403).json({ error: 'Origin not allowed' });
-  }
-  
   // Generic error - never expose internals
   res.status(err.status || 500).json({ 
     error: 'Internal server error'
