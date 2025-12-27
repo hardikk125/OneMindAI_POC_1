@@ -5993,7 +5993,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
               }`}
             >
-              <span>Ask OneMind AI</span>
+              <span>Ask Anything</span>
               {step1Tab === 'custom' && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
               )}
@@ -6006,7 +6006,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
               }`}
             >
-              <span>OneMind Persona</span>
+              <span>Ask Role/Company specific</span>
               {step1Tab === 'persona' && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
               )}
