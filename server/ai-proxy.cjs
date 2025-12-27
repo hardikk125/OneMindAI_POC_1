@@ -238,7 +238,7 @@ async function getProviderTemperature(provider) {
 const app = express();
 const PORT = process.env.PORT || process.env.AI_PROXY_PORT || 3002;
 
-console.log('🔥 [PROXY] Starting with CORS FIX v4 - Dec 27, 2025 - UNCONDITIONAL CORS');
+console.log('🔥 [PROXY] Starting with CORS FIX v5 - Dec 27, 2025 - UNIVERSAL HANDLER');
 
 // =============================================================================
 // MIDDLEWARE
@@ -248,99 +248,32 @@ console.log('🔥 [PROXY] Starting with CORS FIX v4 - Dec 27, 2025 - UNCONDITION
 // Set to 1 to only trust the first proxy (Railway/Vercel)
 app.set('trust proxy', 1);
 
-// CORS configuration - trim whitespace from env var origins
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS
-      .split(',')
-      .map(origin => origin.trim())
-      .filter(Boolean)
-  : [
-      'http://localhost:5173',
-      'http://localhost:5176',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:5176'
-    ];
-
-// Production domains that are always allowed
-const PRODUCTION_DOMAINS = [
-  'one-mind-ai-poc.vercel.app',
-  'onemindai.vercel.app',
-  'vercel.app',
-  'formula2gx.com',
-];
-
-console.log('[CORS] Allowed origins from env:', allowedOrigins);
-console.log('[CORS] Production domains:', PRODUCTION_DOMAINS);
-
-// Helper function to check if origin is allowed
-function isOriginAllowed(origin) {
-  if (!origin) return true;
-  
-  // Allow localhost
-  if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
-    return true;
-  }
-  
-  // Check production domains
-  try {
-    const originHost = new URL(origin).hostname;
-    if (PRODUCTION_DOMAINS.some(domain => originHost === domain || originHost.endsWith('.' + domain))) {
-      return true;
-    }
-  } catch (e) {
-    // Invalid URL
-  }
-  
-  // Check explicit allowed origins
-  if (allowedOrigins.includes(origin.trim())) {
-    return true;
-  }
-  
-  return false;
-}
-
-// CRITICAL: Handle OPTIONS preflight FIRST - before ANY other middleware
-// This is the ROOT FIX for CORS preflight issues
-app.options('*', (req, res) => {
-  const origin = req.headers.origin || '*';
-  console.log(`[CORS] OPTIONS preflight from: ${origin}`);
-  
-  // Always allow preflight - set headers unconditionally
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Max-Age', '86400');
-  console.log(`[CORS] Preflight ALLOWED for: ${origin}`);
-  return res.status(204).end();
-});
-
-// Set CORS headers for ALL requests UNCONDITIONALLY (before other middleware)
+// =============================================================================
+// UNIVERSAL CORS HANDLER - ABSOLUTE TOP PRIORITY
+// This MUST be the first middleware to handle OPTIONS before anything else
+// =============================================================================
 app.use((req, res, next) => {
-  const origin = req.headers.origin || '*';
-  
-  // Always set CORS headers - this ensures they're present even if other middleware fails
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  
+  const origin = req.headers.origin;
+
+  // Set CORS headers for ALL requests
+  res.header('Access-Control-Allow-Origin', origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+
+  // 💥 KEY FIX: Short-circuit OPTIONS preflight immediately
+  if (req.method === 'OPTIONS') {
+    console.log(`[CORS] OPTIONS preflight from: ${origin} - SHORT-CIRCUITED`);
+    return res.sendStatus(200);
+  }
+
   next();
 });
 
-// Security headers (AFTER CORS headers are set)
+// Security headers (AFTER CORS)
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: false
-}));
-
-// CORS middleware (backup - headers already set above)
-app.use(cors({
-  origin: true, // Allow all origins - headers already set above
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 // Body parsing with size limit
