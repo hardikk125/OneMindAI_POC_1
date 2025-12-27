@@ -6491,16 +6491,22 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             <div className="space-y-3">
               <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 3 · Engines</p>
               <div className="flex-1">
-                <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
-                  <span 
-                    className={`cursor-pointer transition-all hover:text-purple-600 ${!showRecommendedDropdown ? 'text-purple-700 underline decoration-purple-400 decoration-2 underline-offset-4' : ''}`}
+                {/* Tab Navigation */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 border-b-2 border-slate-200">
+                  <button
                     onClick={() => setShowRecommendedDropdown(false)}
+                    className={`relative flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm md:text-lg font-semibold transition-all whitespace-nowrap ${
+                      !showRecommendedDropdown
+                        ? 'bg-white text-purple-700 shadow-md border-2 border-b-0 border-purple-300 -mb-[2px]'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
+                    }`}
                   >
-                    Choose your AI engines
-                  </span>
-                  <span className="text-slate-400 mx-2">or</span>
-                  <span 
-                    className={`cursor-pointer transition-all hover:text-purple-600 ${showRecommendedDropdown ? 'text-purple-700 underline decoration-purple-400 decoration-2 underline-offset-4' : ''}`}
+                    <span>Choose your AI engines</span>
+                    {!showRecommendedDropdown && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
+                    )}
+                  </button>
+                  <button
                     onClick={() => {
                       setShowRecommendedDropdown(true);
                       // Auto-select recommended engines: ChatGPT, DeepSeek, Mistral, Perplexity, Gemini, Claude
@@ -6509,11 +6515,19 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                       engines.forEach(e => { newSelected[e.id] = recommendedIds.includes(e.id); });
                       setSelected(newSelected);
                     }}
+                    className={`relative flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm md:text-lg font-semibold transition-all whitespace-nowrap ${
+                      showRecommendedDropdown
+                        ? 'bg-white text-purple-700 shadow-md border-2 border-b-0 border-purple-300 -mb-[2px]'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
+                    }`}
                   >
-                    Run recommended engines
-                  </span>
-                </h2>
-                <p className="text-sm text-slate-600 mt-1">
+                    <span>Run recommended engines</span>
+                    {showRecommendedDropdown && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
+                    )}
+                  </button>
+                </div>
+                <p className="text-sm text-slate-600">
                   {showRecommendedDropdown 
                     ? "We've selected the top 5 engines for balanced, high-quality responses."
                     : "Select multiple engines to get diverse perspectives. OneMind will run them in parallel."
