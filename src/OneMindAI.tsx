@@ -583,6 +583,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
     });
     return initialSelected;
   });
+  const [pendingEngineSelection, setPendingEngineSelection] = useState<Record<string, boolean> | null>(null); // Pending engine changes for next query
   
   // ===== Visible Engines (filtered by admin-disabled providers) =====
   const visibleEngines = useMemo(() => {
@@ -3688,6 +3689,12 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   };
 
   async function runAll() {
+    // Apply pending engine selection changes before running
+    if (pendingEngineSelection) {
+      setSelected(pendingEngineSelection);
+      setPendingEngineSelection(null);
+    }
+    
     superDebugBus.emitUserClick('Run Live', {
       file: 'OneMindAI.tsx',
       handler: 'runAll'
@@ -7111,8 +7118,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
       {/* Story Mode Step 4: Results & Merging - ChatGPT-Style Layout */}
       {storyMode && storyStep === 4 && (
         <div className="flex h-[calc(100vh-180px)] bg-slate-50 rounded-2xl overflow-hidden border border-slate-200">
-          {/* Left Sidebar - Chat History */}
-          <div className={`${showChatHistory ? 'w-72' : 'w-0'} transition-all duration-300 overflow-hidden border-r border-slate-200 bg-white flex flex-col`}>
+          {/* Left Sidebar - Chat History - HIDDEN per user request */}
+          <div className="w-0 transition-all duration-300 overflow-hidden border-r border-slate-200 bg-white flex flex-col">
             {/* Sidebar Header */}
             <div className="p-3 border-b border-slate-200">
               <div className="relative mb-3">
@@ -7187,15 +7194,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             {/* Chat Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowChatHistory(!showChatHistory)}
-                  className="p-2 hover:bg-slate-100 rounded-lg transition"
-                  title={showChatHistory ? 'Hide sidebar' : 'Show sidebar'}
-                >
-                  <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
                 <div>
                   <h2 className="font-semibold text-slate-900">
                     {prompt.slice(0, 50)}{prompt.length > 50 ? '...' : ''}
@@ -8870,12 +8868,16 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-2">
                   <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Engines:</span>
                   {engines.slice(0, 8).map(engine => {
-                    const isSelected = selected[engine.id];
+                    const currentSelection = pendingEngineSelection || selected;
+                    const isSelected = currentSelection[engine.id];
                     const brandColor = providerStyles[engine.provider] || 'bg-slate-500';
                     return (
                       <button
                         key={engine.id}
-                        onClick={() => setSelected(prev => ({ ...prev, [engine.id]: !prev[engine.id] }))}
+                        onClick={() => {
+                          const newSelection = { ...(pendingEngineSelection || selected), [engine.id]: !isSelected };
+                          setPendingEngineSelection(newSelection);
+                        }}
                         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition border ${
                           isSelected
                             ? 'bg-slate-900 text-white border-transparent'
