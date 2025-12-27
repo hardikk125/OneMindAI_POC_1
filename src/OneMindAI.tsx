@@ -849,6 +849,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [showExecutiveRoles, setShowExecutiveRoles] = useState(false);
   const [showOtherRoles, setShowOtherRoles] = useState(false);
+  const [step1Tab, setStep1Tab] = useState<'curated' | 'custom'>('curated'); // Tab for Step 1: curated prompts or custom prompt
   const [selectedRoleDetails, setSelectedRoleDetails] = useState<{name: string, category: string} | null>(null);
   const [roleResponsibilities, setRoleResponsibilities] = useState<string>("");
   const [activeCategory, setActiveCategory] = useState<string>("");
@@ -5829,23 +5830,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </span>
           </div>
           <div className="flex items-center gap-3">
-            {/* Back to Company Selection Button - Show on steps 0 and 1 */}
-            {storyStep <= 1 && (
-              <button
-                onClick={() => {
-                  setStoryStep(0);
-                  setSelectedCompany(null);
-                  setSelectedRole("");
-                  setSelectedRoleDetails(null);
-                  setSelectedFocusArea(null);
-                  setSelectedPromptPreview(null);
-                }}
-                className="text-xs px-3 py-1 bg-white/20 text-white rounded-lg hover:bg-white/30 transition font-medium"
-              >
-                ← Company Selection
-              </button>
-            )}
-            
             <div className="flex gap-1">
               {[1, 2, 3, 4].map((s) => (
                 <div
@@ -5999,13 +5983,39 @@ My specific issue: [describe - losing clients after first project, can't grow ac
           </div>
           */}
 
-          {/* Option 1: Role Selection */}
+          {/* Tab Navigation */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 border-b-2 border-slate-200">
+            <button
+              onClick={() => setStep1Tab('curated')}
+              className={`relative flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm md:text-lg font-semibold transition-all whitespace-nowrap ${
+                step1Tab === 'curated'
+                  ? 'bg-white text-purple-700 shadow-md border-2 border-b-0 border-purple-300 -mb-[2px]'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
+              }`}
+            >
+              <span>Review And Customize Your Prompt</span>
+              {step1Tab === 'curated' && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
+              )}
+            </button>
+            <button
+              onClick={() => setStep1Tab('custom')}
+              className={`relative flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm md:text-lg font-semibold transition-all whitespace-nowrap ${
+                step1Tab === 'custom'
+                  ? 'bg-white text-purple-700 shadow-md border-2 border-b-0 border-purple-300 -mb-[2px]'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
+              }`}
+            >
+              <span>Add Outside-In Perspective</span>
+              {step1Tab === 'custom' && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
+              )}
+            </button>
+          </div>
+
+          {/* Tab Content: Curated Prompts (Role Selection) */}
+          {step1Tab === 'curated' && (
           <div className="mb-6 relative animate-fade-in">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm font-semibold text-purple-700">
-                Option 1 - Select your role {selectedCompany ? `for ${selectedCompany.name}` : ''} to get curated prompts
-              </span>
-            </div>
             {/* Scroll Left Button - Always visible */}
             <button
               onClick={() => {
@@ -6131,25 +6141,36 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 />
               ))}
             </div>
-            
-            {/* Option 2: Custom Prompt - Show here when NO role is selected */}
-            {!selectedRole && (
-              <div className="mt-4 animate-fade-in">
+          </div>
+          )}
+
+          {/* Tab Content: Custom Prompt (Outside-In Perspective) */}
+          {step1Tab === 'custom' && (
+            <div className="mb-6 animate-fade-in">
+              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200 p-6">
+                <h3 className="text-xl font-bold text-purple-900 mb-3">Start with a Custom Prompt</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Create your own prompt from scratch without using role-based templates.
+                </p>
                 <button
                   onClick={() => {
                     setPrompt("");
+                    setSelectedRole("");
+                    setSelectedRoleDetails(null);
+                    setSelectedFocusArea(null);
+                    setSelectedPromptPreview(null);
                     setStoryStep(2);
                   }}
-                  className="flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-900 transition-colors cursor-pointer"
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
                 >
-                  Option 2 - Start with a fresh, custom prompt
+                  Continue with Custom Prompt →
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Selected Role Details */}
-          {selectedRole && (
+          {/* Selected Role Details - Only show in curated tab */}
+          {step1Tab === 'curated' && selectedRole && (
             <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200 p-4 animate-fade-in">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0">
@@ -6294,30 +6315,10 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </div>
           )}
 
-          {/* Footer - Selected role info */}
-          {selectedRole && (
+          {/* Footer - Selected role info - Only in curated tab */}
+          {step1Tab === 'curated' && selectedRole && (
             <div className="mt-6 text-sm text-gray-500">
               <span>Selected: <span className="font-medium text-purple-700">{selectedRole}</span></span>
-            </div>
-          )}
-
-          {/* Option 2: Custom Prompt - Only shown when role is selected, at the very end */}
-          {selectedRole && (
-            <div className="mt-4 animate-fade-in">
-              <button
-                onClick={() => {
-                  // Clear any selected role and focus area, set empty prompt
-                  setSelectedRole("");
-                  setSelectedRoleDetails(null);
-                  setSelectedFocusArea(null);
-                  setSelectedPromptPreview(null);
-                  setPrompt("");
-                  setStoryStep(2);
-                }}
-                className="flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-900 transition-colors cursor-pointer"
-              >
-                Option 2 - Start with a fresh, custom prompt
-              </button>
             </div>
           )}
         </div>
