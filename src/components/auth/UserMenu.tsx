@@ -56,7 +56,7 @@ export function UserMenu({ onOpenSettings, onOpenCredits, onOpenHistory, onOpenP
     return null;
   }
 
-  const displayName = profile?.full_name || user.email?.split('@')[0] || 'User';
+  const displayName = profile?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'User';
   const avatarUrl = profile?.avatar_url;
   const creditBalance = credits?.balance ?? 0;
 
