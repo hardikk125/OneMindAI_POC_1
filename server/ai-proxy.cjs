@@ -238,7 +238,8 @@ async function getProviderTemperature(provider) {
 const app = express();
 const PORT = process.env.PORT || process.env.AI_PROXY_PORT || 3002;
 
-console.log('🔥 [PROXY] Starting with CORS FIX v7 - Dec 27, 2025 - EXPLICIT OPTIONS HANDLER');
+const PROXY_VERSION = 'v8-FINAL-Dec27-2025';
+console.log(`🔥 [PROXY] Starting with CORS FIX ${PROXY_VERSION} - EXPLICIT OPTIONS HANDLER`);
 
 // =============================================================================
 // MIDDLEWARE
@@ -324,7 +325,8 @@ app.use('/api/chat', chatHistoryRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ 
-    status: 'ok', 
+    status: 'ok',
+    version: PROXY_VERSION,
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     providers: {
