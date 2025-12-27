@@ -238,7 +238,7 @@ async function getProviderTemperature(provider) {
 const app = express();
 const PORT = process.env.PORT || process.env.AI_PROXY_PORT || 3002;
 
-console.log('🔥 [PROXY] Starting with CORS FIX v5 - Dec 27, 2025 - UNIVERSAL HANDLER');
+console.log('🔥 [PROXY] Starting with CORS FIX v6 - Dec 27, 2025 - ECHO HEADERS FOR RAILWAY EDGE');
 
 // =============================================================================
 // MIDDLEWARE
@@ -249,21 +249,27 @@ console.log('🔥 [PROXY] Starting with CORS FIX v5 - Dec 27, 2025 - UNIVERSAL H
 app.set('trust proxy', 1);
 
 // =============================================================================
-// UNIVERSAL CORS HANDLER - ABSOLUTE TOP PRIORITY
+// UNIVERSAL CORS HANDLER - ECHO REQUESTED HEADERS FOR RAILWAY EDGE
 // This MUST be the first middleware to handle OPTIONS before anything else
 // =============================================================================
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+  const reqMethod = req.headers['access-control-request-method'];
+  const reqHeaders = req.headers['access-control-request-headers'];
 
-  // Set CORS headers for ALL requests
-  res.header('Access-Control-Allow-Origin', origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  
+  // 🔥 KEY: Echo back headers the browser requested
+  res.setHeader('Access-Control-Allow-Headers', reqHeaders || 'Content-Type, Authorization');
 
-  // 💥 KEY FIX: Short-circuit OPTIONS preflight immediately
+  // 🔥 KEY: Tell intermediary to forward request based on origin
+  res.setHeader('Vary', 'Origin');
+
+  // 🔥 KEY: Respond to OPTIONS immediately
   if (req.method === 'OPTIONS') {
-    console.log(`[CORS] OPTIONS preflight from: ${origin} - SHORT-CIRCUITED`);
+    console.log(`[CORS] OPTIONS preflight from: ${origin} - ALLOWED with headers: ${reqHeaders}`);
     return res.sendStatus(200);
   }
 
