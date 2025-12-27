@@ -5,6 +5,7 @@ import { CompanyBanner, COMPANIES, type Company } from './components/CompanyBann
 import { Grid3X3, Layers, LayoutList, Search } from 'lucide-react';
 import EnhancedMarkdownRenderer from './components/EnhancedMarkdownRenderer';
 import { SelectableMarkdownRenderer } from './components/SelectableMarkdownRenderer';
+import { InteractiveTravelCard } from './components/ui/3d-card';
 import { TableChartRenderer } from './components/TableChartRenderer';
 import { ErrorRecoveryPanel } from './components/ErrorRecoveryPanel';
 import { ExportDropdown } from './components/ExportButton';
@@ -862,6 +863,7 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [showCompanySearch, setShowCompanySearch] = useState(false);
   const [companySearchQuery, setCompanySearchQuery] = useState('');
   const [showPerspective, setShowPerspective] = useState(false);
+  const [engineStrategy, setEngineStrategy] = useState<'cost' | 'business' | 'recommended' | null>(null);
   
   // ===== Chat History State =====
   const [showChatHistory, setShowChatHistory] = useState(false);
@@ -6494,6 +6496,72 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         </div>
       )}
 
+      {/* Story Mode Step 2.5: Engine Strategy Selection - COMMENTED OUT FOR NOW */}
+      {/* {storyMode && storyStep === 3 && !engineStrategy && (
+        <div className="space-y-6">
+          <div className={`${panel} p-6 sm:p-8 border-t-4 border-purple-600`}>
+            <div className="space-y-4 mb-8">
+              <p className="text-xs font-semibold tracking-wide text-purple-600 uppercase">Step 3 · Choose Your Strategy</p>
+              <h2 className="text-2xl md:text-3xl font-bold text-slate-900">Choose the method that works best for you</h2>
+              <p className="text-sm text-slate-600">All options ensure your data remains private and secure.</p>
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-8" style={{ perspective: "1000px" }}>
+              <InteractiveTravelCard
+                title="Cost Efficient"
+                subtitle="For rapid digital transformation"
+                imageUrl="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop"
+                actionText="Select Strategy"
+                href="#"
+                onActionClick={() => {
+                  const costEfficientEngines = ['openai', 'deepseek', 'groq'];
+                  const newSelected: Record<string, boolean> = {};
+                  engines.forEach(e => { newSelected[e.id] = costEfficientEngines.includes(e.id); });
+                  setSelected(newSelected);
+                  setEngineStrategy('cost');
+                  setShowRecommendedDropdown(true);
+                }}
+                className="transform transition-all hover:scale-105"
+              />
+
+              <InteractiveTravelCard
+                title="Business Reasoning"
+                subtitle="For high-stakes reasoning"
+                imageUrl="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=2070&auto=format&fit=crop"
+                actionText="Select Strategy"
+                href="#"
+                onActionClick={() => {
+                  const businessEngines = ['openai', 'anthropic', 'gemini', 'deepseek'];
+                  const newSelected: Record<string, boolean> = {};
+                  engines.forEach(e => { newSelected[e.id] = businessEngines.includes(e.id); });
+                  setSelected(newSelected);
+                  setEngineStrategy('business');
+                  setShowRecommendedDropdown(true);
+                }}
+                className="transform transition-all hover:scale-105"
+              />
+
+              <InteractiveTravelCard
+                title="Our Recommended"
+                subtitle="Enterprise-Elite validation"
+                imageUrl="https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop"
+                actionText="Select Strategy"
+                href="#"
+                onActionClick={() => {
+                  const recommendedIds = ['openai', 'deepseek', 'mistral', 'perplexity', 'gemini', 'anthropic'];
+                  const newSelected: Record<string, boolean> = {};
+                  engines.forEach(e => { newSelected[e.id] = recommendedIds.includes(e.id); });
+                  setSelected(newSelected);
+                  setEngineStrategy('recommended');
+                  setShowRecommendedDropdown(true);
+                }}
+                className="transform transition-all hover:scale-105"
+              />
+            </div>
+          </div>
+        </div>
+      )} */}
+
       {/* Story Mode Step 3: Engine Selection */}
       {storyMode && storyStep === 3 && (
         <div className="space-y-4">
@@ -6843,129 +6911,10 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                       </div>
                     )}
                     
-                    {/* API Key Field */}
-                    <div className="w-full mt-2">
-                      <label className="text-xs text-slate-600 block mb-1">API Key</label>
-                      <div className="flex items-center gap-2">
-                        <input 
-                          className="flex-1 text-xs border rounded px-2 py-1.5 bg-white" 
-                          type={showApiKey[engine.id] ? "text" : "password"} 
-                          placeholder="Enter API key..." 
-                          value={engine.apiKey || ""} 
-                          onChange={(ev) => {
-                            ev.stopPropagation();
-                            updateApiKey(engine.id, ev.target.value);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowApiKey(prev => ({ ...prev, [engine.id]: !prev[engine.id] }));
-                          }}
-                          className="px-2 py-1 text-xs border rounded hover:bg-slate-50"
-                          title={showApiKey[engine.id] ? "Hide" : "Show"}
-                        >
-                          {showApiKey[engine.id] ? "👁️" : "👁️‍🗨️"}
-                        </button>
-                        {/* Fetch Balance Button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fetchBalance(engine);
-                          }}
-                          className="px-2 py-1 text-xs border rounded hover:bg-blue-50 text-blue-600 border-blue-300"
-                          title="Check balance/validate key"
-                        >
-                          {apiBalances[engine.id]?.loading ? '⏳' : '💰'}
-                        </button>
-                      </div>
-                      {/* Balance Display */}
-                      {apiBalances[engine.id] && !apiBalances[engine.id].loading && (
-                        <div className="mt-1">
-                          <span className={`text-xs px-2 py-0.5 rounded ${
-                            apiBalances[engine.id].error ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
-                          }`}>
-                            {apiBalances[engine.id].balance}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Output Policy */}
-                    <div className="w-full mt-2">
-                      <label className="text-xs text-slate-600 block mb-1">Output</label>
-                      <div className="flex items-center gap-2">
-                        <select 
-                          className="flex-1 text-xs border rounded px-2 py-1.5 bg-white" 
-                          value={engine.outPolicy?.mode || "auto"} 
-                          onChange={(ev) => {
-                            ev.stopPropagation();
-                            updateOutPolicy(engine.id, ev.target.value as any);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <option value="auto">Auto (recommended)</option>
-                          <option value="fixed">Fixed</option>
-                        </select>
-                        {engine.outPolicy?.mode === "fixed" && (
-                          <>
-                            <input 
-                              type="number" 
-                              min={256} 
-                              step={128} 
-                              value={engine.outPolicy?.fixedTokens || 2000} 
-                              onChange={(ev) => {
-                                ev.stopPropagation();
-                                updateOutPolicy(engine.id, "fixed", Math.max(256, Number(ev.target.value)||2000));
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-20 text-xs border rounded px-2 py-1.5" 
-                            />
-                            <span className="text-xs text-slate-500">tokens</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Pricing Override */}
-                    <div className="w-full mt-2">
-                      <div className="flex items-center gap-2 text-xs">
-                        <div className="flex-1">
-                          <label className="text-slate-600 block mb-1">Price in:</label>
-                          <input 
-                            className="w-full border rounded px-2 py-1.5" 
-                            type="number" 
-                            step="0.000001" 
-                            value={(pr?.in ?? 0).toString()} 
-                            onChange={(ev) => {
-                              ev.stopPropagation();
-                              overridePrice(engine.provider, engine.selectedVersion, "in", Number(ev.target.value));
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <label className="text-slate-600 block mb-1">Price out:</label>
-                          <input 
-                            className="w-full border rounded px-2 py-1.5" 
-                            type="number" 
-                            step="0.000001" 
-                            value={(pr?.out ?? 0).toString()} 
-                            onChange={(ev) => {
-                              ev.stopPropagation();
-                              overridePrice(engine.provider, engine.selectedVersion, "out", Number(ev.target.value));
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        {((BASE_PRICING as any)[engine.provider]?.[engine.selectedVersion]?.note || engine.selectedVersion)}
-                      </p>
-                    </div>
+                    {/* Model Description */}
+                    <p className="text-[10px] text-slate-400 mt-2">
+                      {((BASE_PRICING as any)[engine.provider]?.[engine.selectedVersion]?.note || engine.selectedVersion)}
+                    </p>
                     
                     <span className="text-xs text-slate-400 mt-2 block">
                       Context {engine.contextLimit.toLocaleString()} • {engine.tokenizer}
@@ -7245,7 +7194,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
 
             {/* Scrollable Content Area */}
             <div className="flex-1 overflow-y-auto">
-              {/* Previous Conversation Turns */}
+              {/* Previous Conversation Turns - Show ALL turns in the thread */}
               {conversationThread.map((turn, turnIndex) => (
                 <div key={turn.id} className="border-b border-slate-200">
                   {/* User Message */}
@@ -7282,7 +7231,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                                   const newSet = new Set(prev);
                                   newSet.add(`${turn.id}-active`);
                                   newSet.add(`${turn.id}-${resp.engineId}`);
-                                  // Remove other engine selections for this turn
                                   turn.responses.forEach(r => {
                                     if (r.engineId !== resp.engineId) {
                                       newSet.delete(`${turn.id}-${r.engineId}`);
@@ -7316,23 +7264,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                           
                           if (!isActive) return null;
                           
-                          const brandColor = providerStyles[resp.provider] || 'bg-slate-700';
-                          
                           return (
-                            <div key={resp.engineId} className="space-y-4">
-                              {/* Engine Header */}
-                              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                                <div className="flex items-center gap-3">
-                                  <span className={`px-3 py-1 rounded-lg text-white text-xs font-semibold ${brandColor}`}>
-                                    {resp.engineName}
-                                  </span>
-                                  <div>
-                                    <h3 className="font-semibold text-slate-900">{resp.version}</h3>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Response Content */}
+                            <div key={resp.engineId}>
                               <div className="prose prose-slate max-w-none">
                                 <EnhancedMarkdownRenderer content={resp.content} />
                               </div>
@@ -7345,28 +7278,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                 </div>
               ))}
 
-              {/* Current Turn - Only show if actively streaming or results not yet saved to thread */}
-              {(isRunning || (results.length > 0 && conversationThread.length === 0) || 
-                (results.length > 0 && conversationThread[conversationThread.length - 1]?.userMessage !== prompt)) && (
-                <>
-                  {/* Current User Message */}
-                  <div className="p-4 border-b border-slate-100 bg-slate-50">
-                    <div className="max-w-4xl mx-auto">
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-                          {user?.email?.charAt(0).toUpperCase() || 'U'}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-slate-900 text-sm mb-1">You</p>
-                          <p className="text-slate-700 whitespace-pre-wrap">{prompt}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* AI Responses Section - Current streaming/results */}
+              {/* AI Responses Section - Only show when streaming OR when current prompt is NOT yet in thread */}
+              {(isRunning || !conversationThread.some(turn => turn.userMessage === prompt)) && (
               <div className={`p-4 sm:p-6`}>
           {/* Header */}
           <div className="space-y-3 mb-6">
@@ -8815,6 +8728,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </div>
           </div>
               </div>
+              )}
             </div>
 
             {/* Follow-up Prompt Box - ChatGPT Style */}
@@ -10033,129 +9947,10 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                   </select>
                 </div>
                 
-                {/* API Key Field */}
-                <div className="w-full mt-2">
-                  <label className="text-xs text-slate-600 block mb-1">API Key</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      className="flex-1 text-xs border rounded px-2 py-1.5 bg-white" 
-                      type={showApiKey[e.id] ? "text" : "password"} 
-                      placeholder="Enter API key..." 
-                      value={e.apiKey || ""} 
-                      onChange={(ev) => {
-                        ev.stopPropagation();
-                        updateApiKey(e.id, ev.target.value);
-                      }}
-                      onClick={(ev) => ev.stopPropagation()}
-                    />
-                    <button
-                      type="button"
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        setShowApiKey(prev => ({ ...prev, [e.id]: !prev[e.id] }));
-                      }}
-                      className="px-2 py-1 text-xs border rounded hover:bg-slate-50"
-                      title={showApiKey[e.id] ? "Hide" : "Show"}
-                    >
-                      {showApiKey[e.id] ? "👁️" : "👁️‍🗨️"}
-                    </button>
-                    {/* Fetch Balance Button */}
-                    <button
-                      type="button"
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        fetchBalance(e);
-                      }}
-                      className="px-2 py-1 text-xs border rounded hover:bg-blue-50 text-blue-600 border-blue-300"
-                      title="Check balance/validate key"
-                    >
-                      {apiBalances[e.id]?.loading ? '⏳' : '💰'}
-                    </button>
-                  </div>
-                  {/* Balance Display */}
-                  {apiBalances[e.id] && !apiBalances[e.id].loading && (
-                    <div className="mt-1">
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        apiBalances[e.id].error ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
-                      }`}>
-                        {apiBalances[e.id].balance}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Output Policy */}
-                <div className="w-full mt-2">
-                  <label className="text-xs text-slate-600 block mb-1">Output</label>
-                  <div className="flex items-center gap-2">
-                    <select 
-                      className="flex-1 text-xs border rounded px-2 py-1.5 bg-white" 
-                      value={e.outPolicy?.mode || "auto"} 
-                      onChange={(ev) => {
-                        ev.stopPropagation();
-                        updateOutPolicy(e.id, ev.target.value as any);
-                      }}
-                      onClick={(ev) => ev.stopPropagation()}
-                    >
-                      <option value="auto">Auto (recommended)</option>
-                      <option value="fixed">Fixed</option>
-                    </select>
-                    {e.outPolicy?.mode === "fixed" && (
-                      <>
-                        <input 
-                          type="number" 
-                          min={256} 
-                          step={128} 
-                          value={e.outPolicy?.fixedTokens || 2000} 
-                          onChange={(ev) => {
-                            ev.stopPropagation();
-                            updateOutPolicy(e.id, "fixed", Math.max(256, Number(ev.target.value)||2000));
-                          }}
-                          onClick={(ev) => ev.stopPropagation()}
-                          className="w-20 text-xs border rounded px-2 py-1.5" 
-                        />
-                        <span className="text-xs text-slate-500">tokens</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Pricing Override */}
-                <div className="w-full mt-2">
-                  <div className="flex items-center gap-2 text-xs">
-                    <div className="flex-1">
-                      <label className="text-slate-600 block mb-1">Price in:</label>
-                      <input 
-                        className="w-full border rounded px-2 py-1.5" 
-                        type="number" 
-                        step="0.000001" 
-                        value={(pr?.in ?? 0).toString()} 
-                        onChange={(ev) => {
-                          ev.stopPropagation();
-                          overridePrice(e.provider, e.selectedVersion, "in", Number(ev.target.value));
-                        }}
-                        onClick={(ev) => ev.stopPropagation()}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-slate-600 block mb-1">Price out:</label>
-                      <input 
-                        className="w-full border rounded px-2 py-1.5" 
-                        type="number" 
-                        step="0.000001" 
-                        value={(pr?.out ?? 0).toString()} 
-                        onChange={(ev) => {
-                          ev.stopPropagation();
-                          overridePrice(e.provider, e.selectedVersion, "out", Number(ev.target.value));
-                        }}
-                        onClick={(ev) => ev.stopPropagation()}
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    {((BASE_PRICING as any)[e.provider]?.[e.selectedVersion]?.note || e.selectedVersion)}
-                  </p>
-                </div>
+                {/* Model Description */}
+                <p className="text-[10px] text-slate-400 mt-2">
+                  {((BASE_PRICING as any)[e.provider]?.[e.selectedVersion]?.note || e.selectedVersion)}
+                </p>
                 
                 <span className="text-xs text-slate-400 mt-2 block">
                   Context {e.contextLimit.toLocaleString()} • {e.tokenizer}

@@ -1,9 +1,9 @@
 provider,engine,initial_balance,current_balance,total_spent,tokens_in,tokens_out,last_updated,currency,notes
-openai,gpt-4.1,3.96,2.54,1.5957,43805,38587,2025-12-23T11:53:41.304Z,USD,Enter your balance
+openai,gpt-4.1,3.96,2.53,1.6259,43828,39584,2025-12-27T14:50:37.216Z,USD,Enter your balance
 anthropic,claude-3.5-sonnet,1.54,1.54,0.0000,0,0,2025-11-27T12:18:34.331Z,USD,Enter your balance
 gemini,gemini-2.0-flash-exp,0.00,0.00,0.0000,0,0,2025-11-27T12:15:00.000Z,USD,Free tier
-deepseek,deepseek-chat,1.69,1.69,0.0248,43814,68336,2025-12-23T10:52:25.219Z,USD,Enter your balance
-mistral,mistral-large-latest,0.00,0.00,3.0924,36032,116836,2025-12-23T11:52:56.021Z,USD,Enter your balance
+deepseek,deepseek-chat,1.69,1.69,0.0249,43820,68882,2025-12-27T14:33:22.770Z,USD,Enter your balance
+mistral,mistral-large-latest,0.00,0.00,3.1322,36039,118490,2025-12-27T14:50:37.220Z,USD,Enter your balance
 groq,llama-3.3-70b-versatile,0.00,0.00,0.0000,0,0,2025-11-27T12:15:00.000Z,USD,Free tier
 perplexity,sonar-pro,0.00,0.00,0.4538,2076,21653,2025-12-11T09:18:21.876Z,USD,Enter your balance
 kimi,moonshot-v1-128k,0.00,0.00,0.0000,0,0,2025-11-27T12:15:00.000Z,USD,Enter your balance
