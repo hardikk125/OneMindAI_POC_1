@@ -6013,27 +6013,68 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </button>
           </div>
 
-          {/* Tab Content: Ask OneMind AI (Custom Prompt - Goes to Step 2) */}
+          {/* Tab Content: Ask OneMind AI (Inline Prompt Editor) */}
           {step1Tab === 'custom' && (
             <div className="mb-6 animate-fade-in">
-              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200 p-6">
-                <h3 className="text-xl font-bold text-purple-900 mb-3">Ask OneMind AI</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Start with a custom prompt and let OneMind AI help you with your task.
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  Edit the prompt below, fill in placeholders, and attach any relevant files.
                 </p>
-                <button
-                  onClick={() => {
-                    setPrompt("");
-                    setSelectedRole("");
-                    setSelectedRoleDetails(null);
-                    setSelectedFocusArea(null);
-                    setSelectedPromptPreview(null);
-                    setStoryStep(2);
-                  }}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-                >
-                  Continue to Custom Prompt →
-                </button>
+                
+                {/* Prompt Editor */}
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-2 block">Your prompt</label>
+                  <textarea
+                    rows={10}
+                    value={prompt}
+                    onChange={(e) => handlePromptChange(e.target.value)}
+                    placeholder="e.g., 'Summarise the top three strategic options I should put in my board pack next week.'"
+                    className="w-full rounded-2xl border-2 border-slate-300 bg-slate-50 focus:bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                  />
+                  {/* Placeholder hint */}
+                  {prompt.includes('[') && prompt.includes(']') && (
+                    <div className="mt-2 p-3 bg-purple-50/50 rounded-lg border border-purple-100">
+                      <p className="text-[11px] text-purple-600 mb-1 font-medium">📝 Tip: Replace the [bracketed placeholders] with your specific details</p>
+                      <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
+                        {highlightPlaceholders(prompt, 'light')}
+                      </p>
+                    </div>
+                  )}
+                  {/* Character counter and warning */}
+                  <div className="flex justify-between items-center text-xs mt-2">
+                    <span className="text-slate-500">
+                      {prompt.length.toLocaleString()} / {LIMITS.PROMPT_HARD_LIMIT.toLocaleString()} characters
+                    </span>
+                    {promptWarning && (
+                      <span className={prompt.length > LIMITS.PROMPT_HARD_LIMIT ? 'text-red-600 font-medium' : 'text-orange-600 font-medium'}>
+                        {promptWarning}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* File Upload */}
+                <div>
+                  <FileUploadZone
+                    files={uploadedFiles}
+                    onFilesChange={setUploadedFiles}
+                  />
+                </div>
+
+                {/* Continue Button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setStoryStep(3)}
+                    disabled={!prompt.trim()}
+                    className={`px-6 py-2 rounded-full text-sm font-medium shadow-sm transition ${
+                      prompt.trim()
+                        ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    }`}
+                  >
+                    Choose Engines →
+                  </button>
+                </div>
               </div>
             </div>
           )}
