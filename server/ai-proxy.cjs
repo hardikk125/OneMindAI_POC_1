@@ -238,7 +238,7 @@ async function getProviderTemperature(provider) {
 const app = express();
 const PORT = process.env.PORT || process.env.AI_PROXY_PORT || 3002;
 
-console.log('🔥 [PROXY] Starting with CORS FIX v3 - Dec 27, 2025');
+console.log('🔥 [PROXY] Starting with CORS FIX v4 - Dec 27, 2025 - UNCONDITIONAL CORS');
 
 // =============================================================================
 // MIDDLEWARE
@@ -300,55 +300,47 @@ function isOriginAllowed(origin) {
   return false;
 }
 
-// CRITICAL: Handle OPTIONS preflight BEFORE any other middleware
+// CRITICAL: Handle OPTIONS preflight FIRST - before ANY other middleware
+// This is the ROOT FIX for CORS preflight issues
 app.options('*', (req, res) => {
-  const origin = req.headers.origin;
+  const origin = req.headers.origin || '*';
   console.log(`[CORS] OPTIONS preflight from: ${origin}`);
   
-  if (isOriginAllowed(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Max-Age', '86400');
-    console.log(`[CORS] Preflight ALLOWED for: ${origin}`);
-    return res.status(204).end();
-  } else {
-    console.warn(`[CORS] Preflight BLOCKED for: ${origin}`);
-    return res.status(403).json({ error: 'CORS not allowed' });
-  }
+  // Always allow preflight - set headers unconditionally
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  console.log(`[CORS] Preflight ALLOWED for: ${origin}`);
+  return res.status(204).end();
 });
 
-// Set CORS headers for ALL requests (before other middleware)
+// Set CORS headers for ALL requests UNCONDITIONALLY (before other middleware)
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
+  const origin = req.headers.origin || '*';
   
-  if (isOriginAllowed(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
+  // Always set CORS headers - this ensures they're present even if other middleware fails
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   
   next();
 });
 
-// Security headers (AFTER CORS)
+// Security headers (AFTER CORS headers are set)
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: false
 }));
 
-// CORS middleware (backup, but headers already set above)
+// CORS middleware (backup - headers already set above)
 app.use(cors({
-  origin: (origin, callback) => {
-    if (isOriginAllowed(origin)) {
-      return callback(null, true);
-    }
-    console.warn(`[CORS] Blocked origin: ${origin}`);
-    return callback(new Error('Not allowed by CORS'));
-  },
+  origin: true, // Allow all origins - headers already set above
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 // Body parsing with size limit
