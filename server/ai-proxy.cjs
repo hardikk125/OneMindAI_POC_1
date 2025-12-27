@@ -3342,6 +3342,42 @@ app.delete('/api/feedback/:id', async (req, res) => {
 });
 
 // =============================================================================
+// GRACEFUL SHUTDOWN HANDLING (for Railway deployments)
+// =============================================================================
+
+let isShuttingDown = false;
+
+// Handle SIGTERM (Railway graceful shutdown)
+process.on('SIGTERM', () => {
+  console.log('');
+  console.log('╔═══════════════════════════════════════════════════════════╗');
+  console.log('║   ⚠️  SIGTERM RECEIVED - GRACEFUL SHUTDOWN                ║');
+  console.log('╚═══════════════════════════════════════════════════════════╝');
+  isShuttingDown = true;
+  
+  // Stop accepting new requests
+  server.close(() => {
+    console.log('[SHUTDOWN] Server closed gracefully');
+    process.exit(0);
+  });
+  
+  // Force exit after 30 seconds
+  setTimeout(() => {
+    console.error('[SHUTDOWN] Forced exit after 30 seconds');
+    process.exit(1);
+  }, 30000);
+});
+
+// Middleware to reject requests during shutdown
+app.use((req, res, next) => {
+  if (isShuttingDown) {
+    res.status(503).json({ error: 'Server is shutting down' });
+    return;
+  }
+  next();
+});
+
+// =============================================================================
 // START SERVER
 // =============================================================================
 
@@ -3353,6 +3389,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`║   📡 Running on port ${PORT}                               ║`);
   console.log('║   🛡️  Crash Protection: ENABLED                           ║');
   console.log('║   ⏱️  Server Timeout: 10 minutes                          ║');
+  console.log('║   🔄 Graceful Shutdown: ENABLED                           ║');
   console.log('║                                                           ║');
   console.log('╠═══════════════════════════════════════════════════════════╣');
   console.log('║   Endpoints:                                              ║');
