@@ -255,19 +255,25 @@ app.use(helmet({
 }));
 
 // CORS configuration
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
-  'http://localhost:5173',
-  'http://localhost:5176',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5176'
-];
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS
+      .split(',')
+      .map(origin => origin.trim())
+      .filter(Boolean)
+  : [
+      'http://localhost:5173',
+      'http://localhost:5176',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5176'
+    ];
 
 // Production domains that are always allowed
 const PRODUCTION_DOMAINS = [
   'one-mind-ai-poc.vercel.app',
   'onemindai.vercel.app',
   'vercel.app',  // Allow all Vercel preview deployments
+  'formula2gx.com',
 ];
 
 app.use(cors({
@@ -282,10 +288,14 @@ app.use(cors({
     
     // Allow production domains (Vercel deployments)
     if (origin) {
-      const originHost = new URL(origin).hostname;
-      if (PRODUCTION_DOMAINS.some(domain => originHost === domain || originHost.endsWith('.' + domain))) {
-        console.log(`[CORS] Allowed production origin: ${origin}`);
-        return callback(null, true);
+      try {
+        const originHost = new URL(origin).hostname;
+        if (PRODUCTION_DOMAINS.some(domain => originHost === domain || originHost.endsWith('.' + domain))) {
+          console.log(`[CORS] Allowed production origin: ${origin}`);
+          return callback(null, true);
+        }
+      } catch {
+        // Fall through to explicit allowedOrigins check
       }
     }
     
