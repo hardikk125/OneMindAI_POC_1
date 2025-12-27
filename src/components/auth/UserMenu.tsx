@@ -2,6 +2,7 @@
  * User Menu Component
  * 
  * Dropdown menu showing user info, credits, and auth actions.
+ * Updated: Shows only first name from database (Dec 27, 2025)
  */
 
 import React, { useState, useRef, useEffect } from 'react';
