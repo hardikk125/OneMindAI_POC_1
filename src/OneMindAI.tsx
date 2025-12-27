@@ -6244,8 +6244,8 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             </div>
           )}
 
-          {/* Focus Areas & Prompts Section */}
-          {selectedRole && (
+          {/* Focus Areas & Prompts Section - Only show in persona tab */}
+          {step1Tab === 'persona' && selectedRole && (
             <div className="grid md:grid-cols-[1fr_3fr] gap-4 animate-fade-in">
               {/* Focus Areas Column */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -6393,7 +6393,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-transparent'
                 }`}
               >
-                <span>Add Outside-In Perspective</span>
+                <span>Amend Outside-In Perspective</span>
                 {showPerspective && (
                   <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t"></div>
                 )}
