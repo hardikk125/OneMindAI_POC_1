@@ -834,7 +834,10 @@ export default function OneMindAI_v14Mobile({ onOpenAdmin }: OneMindAIProps) {
   const [priceOverrides, setPriceOverrides] = useState<Record<string, Record<string, { in: number; out: number }>>>({});
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [storyMode, setStoryMode] = useState(true);
-  const [storyStep, setStoryStep] = useState<0 | 1 | 2 | 3 | 4>(0);
+  // TEMPORARILY BYPASSING COMPANY SELECTION - Start at step 1 (Role Selection)
+  // TO REACTIVATE: Change initial value back to 0
+  // const [storyStep, setStoryStep] = useState<0 | 1 | 2 | 3 | 4>(0); // Original - Company Selection first
+  const [storyStep, setStoryStep] = useState<0 | 1 | 2 | 3 | 4>(1); // Temporary - Skip to Role Selection
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [compiledDoc, setCompiledDoc] = useState<string>("");
   const [showCombinedResponse, setShowCombinedResponse] = useState(false);
@@ -5857,10 +5860,20 @@ My specific issue: [describe - losing clients after first project, can't grow ac
         </div>
       )}
 
-      {/* Story Mode Step 0: Company Selection */}
-      {storyMode && storyStep === 0 && (
+      {/* ============================================================================
+       * COMPANY SELECTION STEP - TEMPORARILY DISABLED
+       * ============================================================================
+       * REACTIVATION PLAN:
+       * 1. In OneMindAI.tsx line ~837, change storyStep initial value from 1 back to 0:
+       *    const [storyStep, setStoryStep] = useState<0 | 1 | 2 | 3 | 4>(0);
+       * 2. Change the condition below from "false &&" back to just the original condition
+       * 3. Test company selection flow works correctly
+       * 4. Deploy to production
+       * ============================================================================
+       */}
+      {/* DISABLED: Company Selection - Change "false &&" to enable */}
+      {false && storyMode && storyStep === 0 && (
         <div className={`${panel} p-4 sm:p-6 border-t-4 border-blue-600`}>
-          {/* Header */}
           <div className="space-y-3 mb-6">
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">
               Select Your Company
@@ -5869,9 +5882,7 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               <p className="text-sm text-slate-600 max-w-2xl">
                 Choose the company you're working with to get tailored insights and recommendations.
               </p>
-              {/* Layout Toggle & Search */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                {/* Search Button */}
                 <button
                   onClick={() => setShowCompanySearch(!showCompanySearch)}
                   className={`rounded-md p-2 transition-all ${
@@ -5885,7 +5896,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
                   <Search className="h-4 w-4" />
                 </button>
                 
-                {/* Layout Toggle */}
                 <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
                   {[
                     { mode: 'list', icon: LayoutList, label: 'List view' },
@@ -5910,7 +5920,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
               </div>
             </div>
             
-            {/* Search Field */}
             {showCompanySearch && (
               <div className="mt-3 animate-fade-in">
                 <input
@@ -5925,7 +5934,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             )}
           </div>
 
-          {/* Company Banner */}
           <div className="mb-6">
             <CompanyBanner 
               companies={COMPANIES}
@@ -5939,7 +5947,6 @@ My specific issue: [describe - losing clients after first project, can't grow ac
             />
           </div>
 
-          {/* Next Button */}
           <div className="mt-6 flex justify-end">
             <button
               onClick={() => {
